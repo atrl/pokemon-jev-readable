@@ -1,0 +1,192 @@
+
+> minecraft-jev-readable@1.0.0 test
+> node --test tests/*.test.mjs
+
+TAP version 13
+# Subtest: 库存将多个同名物品槽相加
+ok 1 - 库存将多个同名物品槽相加
+  ---
+  duration_ms: 1.437221
+  type: 'test'
+  ...
+# Subtest: 完成必须同时拥有木镐和附近工作台
+ok 2 - 完成必须同时拥有木镐和附近工作台
+  ---
+  duration_ms: 0.217649
+  type: 'test'
+  ...
+# Subtest: 候选包含观察到的原木和合法配方，不包含任意命令
+ok 3 - 候选包含观察到的原木和合法配方，不包含任意命令
+  ---
+  duration_ms: 0.418111
+  type: 'test'
+  ...
+# Subtest: 无原木、无配方时不会凭空提供采集和合成
+ok 4 - 无原木、无配方时不会凭空提供采集和合成
+  ---
+  duration_ms: 0.134844
+  type: 'test'
+  ...
+# Subtest: 备足材料后不再提供采木
+ok 5 - 备足材料后不再提供采木
+  ---
+  duration_ms: 0.220032
+  type: 'test'
+  ...
+# Subtest: 已有工作台和木棍不会继续生产同类物资
+ok 6 - 已有工作台和木棍不会继续生产同类物资
+  ---
+  duration_ms: 0.188284
+  type: 'test'
+  ...
+# Subtest: 放置只发生在拥有工作台且存在已观测落点时
+ok 7 - 放置只发生在拥有工作台且存在已观测落点时
+  ---
+  duration_ms: 0.517301
+  type: 'test'
+  ...
+# Subtest: 实际请求只有一道动作选择题，state 是真实观察的入参
+ok 8 - 实际请求只有一道动作选择题，state 是真实观察的入参
+  ---
+  duration_ms: 0.19864
+  type: 'test'
+  ...
+# Subtest: 重复候选编号被拒绝
+ok 9 - 重复候选编号被拒绝
+  ---
+  duration_ms: 0.626336
+  type: 'test'
+  ...
+# Subtest: 答案只映射回本地动作对象
+ok 10 - 答案只映射回本地动作对象
+  ---
+  duration_ms: 0.607036
+  type: 'test'
+  ...
+# Subtest: 非法动作编号被拒绝
+ok 11 - 非法动作编号被拒绝
+  ---
+  duration_ms: 0.177508
+  type: 'test'
+  ...
+# Subtest: 缺失概率、NaN、总和错误和非最大值选择均被拒绝
+ok 12 - 缺失概率、NaN、总和错误和非最大值选择均被拒绝
+  ---
+  duration_ms: 0.21886
+  type: 'test'
+  ...
+# Subtest: 缺少 API key 时失败，不回退模拟结果
+ok 13 - 缺少 API key 时失败，不回退模拟结果
+  ---
+  duration_ms: 0.339563
+  type: 'test'
+  ...
+# Subtest: HTTP 请求/响应链路：本地测试服务器，不是真实 Jev
+ok 14 - HTTP 请求/响应链路：本地测试服务器，不是真实 Jev
+  ---
+  duration_ms: 32.479176
+  type: 'test'
+  ...
+# Subtest: 401 不返回伪造成功
+ok 15 - 401 不返回伪造成功
+  ---
+  duration_ms: 0.752046
+  type: 'test'
+  ...
+# Subtest: 预先取消时不会调用模型
+ok 16 - 预先取消时不会调用模型
+  ---
+  duration_ms: 0.259422
+  type: 'test'
+  ...
+# Subtest: 动作超时调用取消器，拒绝继续
+ok 17 - 动作超时调用取消器，拒绝继续
+  ---
+  duration_ms: 9.693966
+  type: 'test'
+  ...
+# Subtest: 已取消时不执行动作体
+ok 18 - 已取消时不执行动作体
+  ---
+  duration_ms: 0.313433
+  type: 'test'
+  ...
+# Subtest: 执行器白名单拒绝任意命令
+ok 19 - 执行器白名单拒绝任意命令
+  ---
+  duration_ms: 1.594909
+  type: 'test'
+  ...
+# Subtest: 主循环：执行后重新观察；真实条件成立才完成（测试世界替身）
+ok 20 - 主循环：执行后重新观察；真实条件成立才完成（测试世界替身）
+  ---
+  duration_ms: 0.480045
+  type: 'test'
+  ...
+# Subtest: 主循环不接受响应注入的动作参数
+ok 21 - 主循环不接受响应注入的动作参数
+  ---
+  duration_ms: 0.227674
+  type: 'test'
+  ...
+# Subtest: stop 不是完成，也不执行游戏动作
+ok 22 - stop 不是完成，也不执行游戏动作
+  ---
+  duration_ms: 0.256507
+  type: 'test'
+  ...
+# Subtest: Jev 请求失败不触发任何游戏动作
+ok 23 - Jev 请求失败不触发任何游戏动作
+  ---
+  duration_ms: 0.17851
+  type: 'test'
+  ...
+# Subtest: 最后一个预算动作完成后仍可正确验收
+ok 24 - 最后一个预算动作完成后仍可正确验收
+  ---
+  duration_ms: 0.435308
+  type: 'test'
+  ...
+# Subtest: 合成执行器：真正调用 bot.craft(recipe, 1, table)，并校验库存增量
+ok 25 - 合成执行器：真正调用 bot.craft(recipe, 1, table)，并校验库存增量
+  ---
+  duration_ms: 200.940977
+  type: 'test'
+  ...
+# Subtest: 合成 API 返回成功但库存未增加，执行器仍报失败
+ok 26 - 合成 API 返回成功但库存未增加，执行器仍报失败
+  ---
+  duration_ms: 201.558021
+  type: 'test'
+  ...
+# Subtest: 执行前配方失效不调用 bot.craft
+ok 27 - 执行前配方失效不调用 bot.craft
+  ---
+  duration_ms: 0.428347
+  type: 'test'
+  ...
+# Subtest: 掉落物消失不把“走过去”算作拾取成功
+ok 28 - 掉落物消失不把“走过去”算作拾取成功
+  ---
+  duration_ms: 0.30419
+  type: 'test'
+  ...
+# Subtest: 超时关闭世界后主循环不发起下一次模型调用
+ok 29 - 超时关闭世界后主循环不发起下一次模型调用
+  ---
+  duration_ms: 0.248636
+  type: 'test'
+  ...
+1..29
+# tests 29
+# suites 0
+# pass 29
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 536.33948
+
+> minecraft-jev-readable@1.0.0 check
+> node --check agent.mjs && node --check minecraft.mjs && node --check jev.mjs
+

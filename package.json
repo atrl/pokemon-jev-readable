@@ -1,0 +1,19 @@
+{
+  "name": "minecraft-jev-readable",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "真实 Minecraft 状态 → Jev 选择 → Mineflayer 执行；可逐行阅读的完整示例",
+  "engines": { "node": ">=22.16.0" },
+  "scripts": {
+    "start": "node --env-file-if-exists=.env agent.mjs",
+    "manual": "node --env-file-if-exists=.env agent.mjs --manual",
+    "test": "node --test tests/*.test.mjs",
+    "check": "node --check agent.mjs && node --check minecraft.mjs && node --check jev.mjs"
+  },
+  "dependencies": {
+    "mineflayer": "4.39.0",
+    "mineflayer-pathfinder": "2.4.5",
+    "vec3": "0.1.10"
+  }
+}

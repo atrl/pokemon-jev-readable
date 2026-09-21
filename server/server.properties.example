@@ -1,0 +1,11 @@
+# 仅用于自己的本地测试服，不要暴露到公网。
+server-ip=127.0.0.1
+server-port=25565
+online-mode=false
+gamemode=survival
+difficulty=peaceful
+spawn-protection=0
+level-name=jev-learning-world
+max-players=4
+view-distance=8
+motd=Local Jev learning world
