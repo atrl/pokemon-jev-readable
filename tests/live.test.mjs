@@ -87,6 +87,8 @@ async function stream(t, port, lastId) {
 }
 
 test('JSONL tail waits for newline, replays history once, and does not duplicate on repeated polls', t => {
+  // Replaying identical events also produces identical timing at one sampled instant.
+  t.mock.timers.enable({ apis: ['Date'], now: Date.parse('2026-09-22T03:00:00.000Z') });
   const { root, file } = fixture(t);
   const seen = [];
   const store = new EventStore(root, { onEvent: value => seen.push(value) });
@@ -105,6 +107,66 @@ test('JSONL tail waits for newline, replays history once, and does not duplicate
   const rebuilt = new EventStore(root);
   rebuilt.poll();
   assert.deepEqual(rebuilt.detail(run.id), store.detail(run.id));
+});
+
+test('timing totals survive event retention and count each HTTP attempt once', t => {
+  t.mock.timers.enable({ apis: ['Date'], now: Date.parse('2026-09-22T01:01:00.000Z') });
+  const { root, pokemon } = fixture(t);
+  const rows = [line('started', { time: '2026-09-22T01:00:00.000Z', elapsed_ms: 0, maxSteps: 5000 })];
+  for (let step = 1; step <= 5; step++) {
+    const time = `2026-09-22T01:00:0${step}.000Z`;
+    const common = { step, time, elapsed_ms: step * 1000 };
+    rows.push(line('jev_request', { ...common, attempt: 1 }));
+    if (step === 1) {
+      rows.push(line('jev_response', { ...common, attempt: 1, httpStatus: 503, latency_ms: 100 }));
+      rows.push(line('jev_error', { ...common, attempt: 1, httpStatus: 503, latency_ms: 100 }));
+      rows.push(line('jev_request', { ...common, attempt: 2 }));
+      rows.push(line('jev_response', { ...common, attempt: 2, httpStatus: 200, latency_ms: 200 }));
+    } else rows.push(line('jev_response', { ...common, attempt: 1, httpStatus: 200, latency_ms: 300 }));
+    rows.push(line('result', { ...common, success: true, game_frames: step * 60 }));
+  }
+  rows.push(line('finished', { time: '2026-09-22T01:00:10.000Z', elapsed_ms: 10000, status: 'budget_reached' }));
+  fs.writeFileSync(pokemon, rows.join(''));
+  const store = new EventStore(root, { maxEvents: 3 });
+  store.poll();
+  const first = store.list()[0];
+  assert.equal(first.retainedEvents, 3);
+  assert.equal(first.truncated, true);
+  assert.equal(first.results, 5);
+  assert.equal(first.timing.http_attempts, 6);
+  assert.equal(first.timing.model_ms, 1500);
+  assert.equal(first.timing.avg_latency_ms, 250);
+  assert.equal(first.timing.elapsed_ms, 10000);
+  assert.equal(first.timing.steps_per_minute, 30);
+  assert.equal(first.timing.game_seconds, 5);
+  assert.equal(first.timing.estimated_remaining_ms, null);
+  t.mock.timers.tick(60000);
+  const later = store.detail(first.id).run;
+  assert.notEqual(later.timing.sampled_at, first.timing.sampled_at);
+  assert.deepEqual({ ...later.timing, sampled_at: first.timing.sampled_at }, first.timing);
+});
+
+test('active elapsed time advances from the last monotonic event using its wall time reference', t => {
+  t.mock.timers.enable({ apis: ['Date'], now: Date.parse('2026-09-22T01:00:10.000Z') });
+  const { root, pokemon } = fixture(t);
+  fs.writeFileSync(pokemon,
+    line('started', { time: '2026-09-22T01:00:00.000Z', elapsed_ms: 0, maxSteps: 10, pid: process.pid }) +
+    Array.from({ length: 5 }, (_, index) => line('result', {
+      step: index + 1, time: '2026-09-22T01:00:06.000Z', elapsed_ms: 6000, success: true,
+    })).join(''));
+  const store = new EventStore(root);
+  store.poll();
+  const first = store.list()[0];
+  assert.equal(first.timing.sampled_at, '2026-09-22T01:00:10.000Z');
+  assert.equal(first.timing.elapsed_ms, 10000);
+  assert.equal(first.timing.remaining_steps, 5);
+  assert.equal(first.timing.steps_per_minute, 30);
+  assert.equal(first.timing.estimated_remaining_ms, 10000);
+  t.mock.timers.tick(2000);
+  const later = store.detail(first.id).run;
+  assert.equal(later.timing.elapsed_ms, 12000);
+  assert.equal(later.timing.steps_per_minute, 25);
+  assert.equal(later.timing.estimated_remaining_ms, 12000);
 });
 
 test('JSONL decoder preserves a UTF-8 character split between polls and skips corrupt/invalid rows', t => {
@@ -261,6 +323,84 @@ test('HTTP serves only explicit assets and redacted run APIs, and rejects writes
   }
   assert.equal((await request(live.port, 'http://[invalid-host')).status, 400);
   assert.equal((await request(live.port, '/health')).status, 200);
+});
+
+test('video HTTP serves whitelisted HLS files and honors valid byte ranges', async t => {
+  const { root, pokemon } = fixture(t);
+  fs.writeFileSync(pokemon, line('started', { video_enabled: true }));
+  const directory = path.join(path.dirname(pokemon), 'video');
+  fs.mkdirSync(directory);
+  fs.writeFileSync(path.join(directory, 'index.m3u8'), '#EXTM3U\nsegment-000001.m4s\n');
+  fs.writeFileSync(path.join(directory, 'init.mp4'), 'fixture-init');
+  fs.writeFileSync(path.join(directory, 'segment-000001.m4s'), '0123456789');
+  fs.writeFileSync(path.join(directory, 'private.txt'), 'must-not-be-served');
+  const live = await start(t, root);
+  const run = live.store.list()[0];
+  assert.equal(run.video.enabled, true);
+  assert.equal(run.video.available, true);
+  const prefix = `/api/runs/${run.id}/video/`;
+  const playlist = await request(live.port, run.video.url);
+  assert.equal(playlist.status, 200);
+  assert.equal(playlist.headers['content-type'], 'application/vnd.apple.mpegurl');
+  assert.equal(playlist.body, '#EXTM3U\nsegment-000001.m4s\n');
+  assert.equal((await request(live.port, prefix + 'init.mp4')).headers['content-type'], 'video/mp4');
+  const complete = await request(live.port, prefix + 'segment-000001.m4s');
+  assert.equal(complete.status, 200);
+  assert.equal(complete.headers['content-type'], 'video/iso.segment');
+  assert.equal(complete.headers['accept-ranges'], 'bytes');
+  assert.equal(complete.body, '0123456789');
+  for (const [range, expected, contentRange] of [
+    ['bytes=2-5', '2345', 'bytes 2-5/10'],
+    ['bytes=7-', '789', 'bytes 7-9/10'],
+    ['bytes=-3', '789', 'bytes 7-9/10'],
+    ['bytes=7-99', '789', 'bytes 7-9/10'],
+  ]) {
+    const partial = await request(live.port, prefix + 'segment-000001.m4s', 'GET', { Range: range });
+    assert.equal(partial.status, 206, range);
+    assert.equal(partial.headers['content-range'], contentRange);
+    assert.equal(Number(partial.headers['content-length']), expected.length);
+    assert.equal(partial.body, expected);
+  }
+  for (const range of ['bytes=', 'bytes=0-1,4-5', 'bytes=10-', 'bytes=8-2', 'bytes=-0']) {
+    assert.equal((await request(live.port, prefix + 'segment-000001.m4s', 'GET', { Range: range })).status, 416, range);
+  }
+  for (const name of ['private.txt', 'segment-1.m4s', 'segment-000002.m4s', '../events.jsonl', '%2e%2e%2fevents.jsonl']) {
+    const denied = await request(live.port, prefix + name);
+    assert.equal(denied.status, 404, name);
+    assert.ok(!denied.body.includes('must-not-be-served'));
+  }
+});
+
+test('video HTTP refuses symlink files, symlink directories, and non-Pokémon runs', async t => {
+  const { root, file, pokemon } = fixture(t);
+  fs.writeFileSync(pokemon, line('started', { video_enabled: true }));
+  fs.writeFileSync(file, line('started', { video_enabled: true }));
+  const privateFile = path.join(root, 'private-fixture');
+  fs.writeFileSync(privateFile, 'private-fixture-must-not-leak');
+  const directory = path.join(path.dirname(pokemon), 'video');
+  fs.mkdirSync(directory);
+  fs.symlinkSync(privateFile, path.join(directory, 'index.m3u8'));
+  fs.symlinkSync(privateFile, path.join(directory, 'segment-000001.m4s'));
+  const live = await start(t, root);
+  const pokemonRun = live.store.list().find(run => run.game === 'pokemon');
+  const minecraftRun = live.store.list().find(run => run.game === 'minecraft');
+  const prefix = `/api/runs/${pokemonRun.id}/video/`;
+  assert.equal(pokemonRun.video.available, false);
+  for (const name of ['index.m3u8', 'segment-000001.m4s']) {
+    const denied = await request(live.port, prefix + name);
+    assert.equal(denied.status, 404);
+    assert.ok(!denied.body.includes('private-fixture-must-not-leak'));
+  }
+  fs.rmSync(directory, { recursive: true });
+  const outside = path.join(root, 'private-video');
+  fs.mkdirSync(outside);
+  fs.writeFileSync(path.join(outside, 'index.m3u8'), 'private-fixture-must-not-leak');
+  fs.symlinkSync(outside, directory);
+  assert.equal((await request(live.port, prefix + 'index.m3u8')).status, 404);
+  assert.equal(live.store.detail(pokemonRun.id).run.video.available, false);
+  fs.mkdirSync(path.join(root, 'logs/video'));
+  fs.writeFileSync(path.join(root, 'logs/video/index.m3u8'), '#EXTM3U');
+  assert.equal((await request(live.port, `/api/runs/${minecraftRun.id}/video/index.m3u8`)).status, 404);
 });
 
 test('SSE delivers a Jev request immediately, before response/result records exist', async t => {

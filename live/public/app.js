@@ -2,7 +2,11 @@ const $ = (id) => document.getElementById(id);
 const state = {
   runs: new Map(), events: new Map(), config: {}, selected: null, autoFollow: true,
   generation: 0, visibleGroups: 30, expanded: new Set(), connection: false,
+  timingAnchors: new Map(), eventRevision: 0, renderedEvents: '',
 };
+const MAX_EVENTS = 2000;
+const MAX_EXPANDED = 250;
+const videoState = { key: null, hls: null, attached: false, retry: null, retries: 0, token: 0, hasPicture: false };
 const statusNames = {
   running: '正在运行', started: '正在运行', active: '正在运行', completed: '已完成',
   success: '已完成', succeeded: '已完成', finished: '已结束', stopped: '已停止',
@@ -73,12 +77,36 @@ async function fetchJson(url) {
 function upsertRun(run) {
   if (!run?.id) return;
   const existing = state.runs.get(run.id);
+  const incomingSample = dateValue(run.timing?.sampled_at ?? run.updatedAt)?.getTime() ?? Infinity;
+  const existingSample = dateValue(existing?.timing?.sampled_at ?? existing?.updatedAt)?.getTime() ?? 0;
   const newer = typeof run.eventCount === 'number' && typeof existing?.eventCount === 'number'
-    ? run.eventCount >= existing.eventCount
-    : (dateValue(run.updatedAt)?.getTime() ?? Infinity) >= (dateValue(existing?.updatedAt)?.getTime() ?? 0);
+    ? run.eventCount > existing.eventCount || run.eventCount === existing.eventCount && incomingSample >= existingSample
+    : incomingSample >= existingSample;
   if (!existing || newer) {
     state.runs.set(run.id, run);
+    const sample = run.timing?.sampled_at ?? run.updatedAt;
+    const anchor = state.timingAnchors.get(run.id);
+    if (!anchor || anchor.sample !== sample || anchor.terminal !== terminalStatus(run.status)) {
+      const elapsed = Number.isFinite(run.timing?.elapsed_ms) ? run.timing.elapsed_ms
+        : Math.max(0, (dateValue(run.updatedAt)?.getTime() ?? 0) - (dateValue(run.startedAt)?.getTime() ?? 0));
+      state.timingAnchors.set(run.id, { elapsed, received: performance.now(), sample, terminal: terminalStatus(run.status) });
+    }
   }
+}
+function trimEvents() {
+  if (state.events.size > MAX_EVENTS) {
+    state.events = new Map(events().slice(-MAX_EVENTS).map((event) => [event.id, event]));
+  }
+  const kept = new Set([...state.events.keys()].map((id) => `${state.selected}:${id}`));
+  for (const key of state.expanded) {
+    if (key !== 'probabilities' && !key.endsWith(':observation') && !key.endsWith(':decision') && !kept.has(key)) state.expanded.delete(key);
+  }
+  while (state.expanded.size > MAX_EXPANDED) state.expanded.delete(state.expanded.values().next().value);
+}
+function setExpanded(key, open) {
+  if (open) state.expanded.add(key);
+  else state.expanded.delete(key);
+  while (state.expanded.size > MAX_EXPANDED) state.expanded.delete(state.expanded.values().next().value);
 }
 function renderRunSelect() {
   const runs = orderedRuns();
@@ -131,6 +159,7 @@ async function selectRun(id) {
   const generation = ++state.generation;
   state.selected = id;
   state.events = new Map();
+  state.eventRevision++;
   state.expanded.clear();
   state.visibleGroups = 30;
   renderRunSelect();
@@ -143,6 +172,8 @@ async function selectRun(id) {
     const receivedDuringFetch = state.events;
     state.events = new Map((data.events ?? []).filter((event) => event?.id).map((event) => [event.id, event]));
     for (const [key, event] of receivedDuringFetch) state.events.set(key, event);
+    trimEvents();
+    state.eventRevision++;
     notice();
     renderRunSelect();
     render();
@@ -157,8 +188,7 @@ function jsonDetails(label, value, key) {
   details.open = state.expanded.has(key);
   details.append(node('summary', '', label), node('pre', '', stringify(value) ?? 'null'));
   details.addEventListener('toggle', () => {
-    if (details.open) state.expanded.add(key);
-    else state.expanded.delete(key);
+    if (details.isConnected) setExpanded(key, details.open);
   });
   return details;
 }
@@ -166,6 +196,7 @@ function render() {
   const run = state.runs.get(state.selected);
   $('empty-state').hidden = Boolean(run);
   $('run-content').hidden = !run;
+  renderVideo(run);
   if (!run) return;
   const list = events();
   const start = list.find((event) => event.type === 'started');
@@ -190,17 +221,181 @@ function render() {
   const steps = new Set(list.filter((event) => event.step !== null && event.step !== undefined).map((event) => event.step));
   $('metric-steps').textContent = run.steps ?? steps.size;
   $('metric-step-note').textContent = (start?.maxSteps ?? run.maxSteps) ? `本次上限 ${start?.maxSteps ?? run.maxSteps} 步` : '实际记录';
-  $('metric-calls').textContent = run.calls ?? list.filter((event) => event.type === 'jev_request').length;
+  $('metric-calls').textContent = run.timing?.http_attempts ?? run.calls ?? list.filter((event) => event.type === 'jev_request').length;
   $('metric-results').textContent = run.results ?? results.length;
   $('metric-result-note').textContent = failures ? `其中 ${failures} 次执行失败` : '执行后返回';
   const latency = response?.latency_ms;
   $('metric-latency').textContent = typeof latency === 'number' ? latency >= 1000 ? `${(latency / 1000).toFixed(2)}s` : `${Math.round(latency)}ms` : '—';
   $('metric-latency-note').textContent = response ? `HTTP ${response.httpStatus ?? '未知'} · ${dateFormat(response.time)}` : '等待 Jev 响应';
-  renderTimeline(list);
-  renderObservation(list, run);
-  renderDecision(list);
+  const signature = `${state.selected}:${state.eventRevision}:${state.visibleGroups}`;
+  if (state.renderedEvents !== signature) {
+    renderTimeline(list);
+    renderObservation(list, run);
+    renderDecision(list);
+    state.renderedEvents = signature;
+  }
+  renderTiming();
+  renderComparison();
+  const phase = run.status === 'calling' ? 'JEV 正在思考 · 等待响应时，游戏停在当前画面，视频流继续播放。'
+    : terminalStatus(run.status) ? '本轮运行已结束 · 可查看已保留的视频片段与决策记录。'
+      : `${statusNames[run.status] ?? '游戏运行中'} · 每次按键与执行结果会同步到下方时间线。`;
+  $('game-phase').textContent = phase;
   const last = list.at(-1);
   if (last) $('last-update').textContent = `最近事件 ${dateFormat(last.time, true)} · ${eventNames[last.type] ?? last.type}`;
+}
+function duration(value) {
+  if (!Number.isFinite(value)) return '—';
+  const seconds = Math.max(0, Math.floor(value / 1000));
+  return [Math.floor(seconds / 3600), Math.floor(seconds / 60) % 60, seconds % 60].map((part) => String(part).padStart(2, '0')).join(':');
+}
+function latencyLabel(value) {
+  return Number.isFinite(value) ? value >= 1000 ? `${(value / 1000).toFixed(2)} 秒` : `${Math.round(value)} ms` : '—';
+}
+function elapsedFor(run) {
+  const anchor = state.timingAnchors.get(run.id);
+  if (!anchor) return run.timing?.elapsed_ms;
+  return anchor.elapsed + (anchor.terminal ? 0 : Math.max(0, performance.now() - anchor.received));
+}
+function renderTiming() {
+  const run = state.runs.get(state.selected);
+  if (!run) return;
+  const timing = run.timing ?? {};
+  const elapsed = elapsedFor(run);
+  const completed = run.results ?? run.steps ?? 0;
+  const budget = run.maxSteps ?? 0;
+  const speed = elapsed > 0 && completed > 0 ? completed * 60000 / elapsed : timing.steps_per_minute;
+  const remaining = Math.max(0, budget - completed);
+  const ended = terminalStatus(run.status);
+  $('timing-elapsed').textContent = duration(elapsed);
+  $('timing-clock-note').textContent = ended ? '本轮已结束 · 耗时已固定' : state.connection ? '本轮计时中 · 包含模型等待' : '按最后记录继续计时 · 事件连接中断';
+  $('timing-speed').textContent = Number.isFinite(speed) ? `${speed.toFixed(2)} 步 / 分钟` : '—';
+  $('timing-average').textContent = latencyLabel(timing.avg_latency_ms);
+  $('timing-model').textContent = duration(timing.model_ms);
+  $('timing-game').textContent = Number.isFinite(timing.game_seconds) ? duration(timing.game_seconds * 1000) : '—';
+  $('budget-label').textContent = budget ? `${completed.toLocaleString('zh-CN')} / ${budget.toLocaleString('zh-CN')} 步` : `${completed.toLocaleString('zh-CN')} 步`;
+  $('budget-progress').max = Math.max(1, budget);
+  $('budget-progress').value = Math.min(completed, budget);
+  $('budget-estimate').textContent = ended ? `本轮停止于 ${completed.toLocaleString('zh-CN')} 步；耗时 ${duration(elapsed)}。`
+    : completed >= 5 && budget > 0 && speed > 0
+      ? `按本轮均速，剩余 ${remaining.toLocaleString('zh-CN')} 步约需 ${duration(remaining * 60000 / speed)}。`
+      : '完成至少 5 步后，按本轮实际速度估算剩余耗时。';
+}
+function renderComparison() {
+  const runs = orderedRuns().slice(0, 20);
+  const signature = runs.map((run) => `${run.id}:${run.status}:${run.results}:${run.timing?.elapsed_ms}:${run.timing?.avg_latency_ms}`).join('|') + state.selected;
+  const target = $('timing-comparison');
+  if (target.dataset.signature === signature) return;
+  const fragment = document.createDocumentFragment();
+  for (const run of runs) {
+    const row = node('tr', run.id === state.selected ? 'selected-run' : '');
+    const title = node('td');
+    const label = run.maxSteps === 20 ? `${run.id === state.selected ? '当前所选 · ' : ''}本地试跑基线` : run.id === state.selected ? '当前所选运行' : '本机运行记录';
+    title.append(node('strong', '', label), node('span', '', dateFormat(run.startedAt, true)));
+    title.title = run.id;
+    const steps = run.results ?? run.steps ?? 0;
+    const elapsed = run.timing?.elapsed_ms;
+    const speed = run.timing?.steps_per_minute ?? (elapsed > 0 ? steps * 60000 / elapsed : null);
+    row.append(title, node('td', '', steps), node('td', 'mono', duration(elapsed)), node('td', 'mono', Number.isFinite(speed) ? speed.toFixed(2) : '—'), node('td', 'mono', latencyLabel(run.timing?.avg_latency_ms)));
+    fragment.append(row);
+  }
+  target.replaceChildren(fragment);
+  target.dataset.signature = signature;
+}
+function videoStatus(message, kind = '') {
+  $('video-status').textContent = message;
+  $('video-status').className = kind;
+}
+function videoPlaceholder(title, message) {
+  $('video-placeholder').hidden = false;
+  $('video-placeholder-title').textContent = title;
+  $('video-placeholder-note').textContent = message;
+}
+function releaseVideo() {
+  videoState.token++;
+  clearTimeout(videoState.retry);
+  videoState.retry = null;
+  videoState.hls?.destroy();
+  videoState.hls = null;
+  videoState.attached = false;
+  videoState.hasPicture = false;
+  const video = $('game-video');
+  video.pause();
+  video.removeAttribute('src');
+  video.load();
+}
+function scheduleVideoRetry(message) {
+  if (videoState.retry) return;
+  const run = state.runs.get(state.selected);
+  if (!run?.video?.enabled) return;
+  const seconds = Math.min(15, 2 ** Math.min(4, ++videoState.retries));
+  videoStatus(`${message} · ${seconds} 秒后重连`, 'video-error');
+  if (!videoState.hasPicture) videoPlaceholder('画面暂时不可用', '视频连接正在自动重试，调用记录仍独立更新。');
+  const key = videoState.key;
+  videoState.retry = setTimeout(() => {
+    videoState.retry = null;
+    if (videoState.key === key) attachVideo(state.runs.get(state.selected));
+  }, seconds * 1000);
+}
+function playVideo(token) {
+  const promise = $('game-video').play();
+  promise?.catch((error) => {
+    if (token !== videoState.token) return;
+    if (error.name === 'NotAllowedError') videoStatus('浏览器暂停了自动播放，请点击画面上的播放按钮。', 'video-pending');
+    else if (error.name !== 'AbortError') scheduleVideoRetry('视频播放暂不可用');
+  });
+}
+function attachVideo(run) {
+  if (!run?.video?.url || !run.video.enabled) return;
+  releaseVideo();
+  videoState.attached = true;
+  const token = videoState.token;
+  const video = $('game-video');
+  video.muted = true;
+  videoStatus('正在缓冲游戏视频…', 'video-pending');
+  videoPlaceholder('连接游戏画面', '首次播放需要等待视频片段就绪。');
+  // Some Chrome builds report native HLS as "maybe" without playing it.
+  // Prefer the verified MSE implementation; Safari can use native fallback.
+  if (window.Hls?.isSupported()) {
+    const hls = new window.Hls({ enableWorker: true, lowLatencyMode: false, backBufferLength: 15, maxBufferLength: 10, liveSyncDurationCount: 2, liveMaxLatencyDurationCount: 5 });
+    videoState.hls = hls;
+    hls.on(window.Hls.Events.MANIFEST_PARSED, () => { if (token === videoState.token) playVideo(token); });
+    hls.on(window.Hls.Events.ERROR, (_, data) => {
+      if (token !== videoState.token) return;
+      if (data.fatal) scheduleVideoRetry('视频连接中断');
+      else if (data.details === 'bufferStalledError') videoStatus('视频缓冲中 · 模型事件仍独立更新', 'video-pending');
+    });
+    hls.loadSource(run.video.url);
+    hls.attachMedia(video);
+  } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+    video.src = run.video.url;
+    playVideo(token);
+  } else {
+    videoStatus('此浏览器不支持 HLS 视频，请使用当前版本的 Safari、Chrome 或 Edge。', 'video-error');
+    videoPlaceholder('浏览器暂不支持此视频', '可继续查看下方实时调用与执行记录。');
+  }
+}
+function renderVideo(run) {
+  const key = run ? `${run.id}:${run.video?.url ?? ''}` : null;
+  if (videoState.key !== key) {
+    releaseVideo();
+    videoState.key = key;
+    videoState.retries = 0;
+  }
+  if (!run) return;
+  if (!run.video?.enabled) {
+    $('video-badge').textContent = '无录像';
+    $('video-retry').disabled = true;
+    videoStatus('这轮运行只保留了调用与执行记录。');
+    videoPlaceholder('这轮没有录制游戏画面', '选择最新的视频直播运行，即可观看 Pokémon 界面。');
+    return;
+  }
+  $('video-retry').disabled = false;
+  $('video-badge').textContent = terminalStatus(run.status) ? '已结束 · 视频片段' : 'LIVE · 游戏画面';
+  if (!videoState.attached && run.video.available) attachVideo(run);
+  else if (!videoState.attached) {
+    videoStatus('等待游戏视频流就绪…', 'video-pending');
+    videoPlaceholder('视频直播正在启动', '画面就绪后会自动播放，无需刷新页面。');
+  }
 }
 function eventSummary(event) {
   switch (event.type) {
@@ -382,7 +577,7 @@ function renderDecision(list) {
       details.open = state.expanded.has('probabilities');
       details.append(node('summary', '', `查看其余 ${probabilities.length - 6} 个选项`));
       for (const entry of probabilities.slice(6)) details.append(probabilityRow(entry, answer.choice));
-      details.addEventListener('toggle', () => details.open ? state.expanded.add('probabilities') : state.expanded.delete('probabilities'));
+      details.addEventListener('toggle', () => { if (details.isConnected) setExpanded('probabilities', details.open); });
       target.append(details);
     }
   }
@@ -399,7 +594,40 @@ $('follow-button').addEventListener('click', () => {
   if (newest && newest.id !== state.selected) void selectRun(newest.id);
   else renderRunSelect();
 });
-$('more-button').addEventListener('click', () => { state.visibleGroups += 30; renderTimeline(events()); });
+$('more-button').addEventListener('click', () => { state.visibleGroups = Math.min(MAX_EVENTS, state.visibleGroups + 30); render(); });
+$('video-retry').addEventListener('click', () => {
+  videoState.retries = 0;
+  attachVideo(state.runs.get(state.selected));
+});
+$('game-video').addEventListener('loadeddata', () => {
+  if (!videoState.attached) return;
+  videoState.hasPicture = true;
+  $('video-placeholder').hidden = true;
+});
+$('game-video').addEventListener('playing', () => {
+  if (!videoState.attached) return;
+  clearTimeout(videoState.retry);
+  videoState.retry = null;
+  videoState.retries = 0;
+  videoState.hasPicture = true;
+  $('video-placeholder').hidden = true;
+  videoStatus('视频正在播放 · 游戏动作会随 JEV 决策推进', 'video-playing');
+});
+$('game-video').addEventListener('waiting', () => {
+  if (videoState.attached && !videoState.retry) videoStatus('视频缓冲中…', 'video-pending');
+});
+$('game-video').addEventListener('stalled', () => {
+  if (videoState.attached) scheduleVideoRetry('视频数据暂时中断');
+});
+$('game-video').addEventListener('error', () => {
+  if (videoState.attached) scheduleVideoRetry('视频连接暂不可用');
+});
+$('game-video').addEventListener('pause', () => {
+  if (videoState.attached && videoState.hasPicture && !$('game-video').ended) videoStatus('画面已暂停 · 点击播放可继续观看');
+});
+$('game-video').addEventListener('ended', () => {
+  if (videoState.attached) videoStatus('已播放到本轮保留视频的结尾');
+});
 $('refresh-button').addEventListener('click', async () => {
   $('refresh-button').disabled = true;
   try {
@@ -438,6 +666,8 @@ stream.addEventListener('update', (message) => {
     }
     if (data.run.id === state.selected) {
       state.events.set(data.event.id, data.event);
+      trimEvents();
+      state.eventRevision++;
       render();
     }
     renderRunSelect();
@@ -445,6 +675,7 @@ stream.addEventListener('update', (message) => {
 });
 renderSetup();
 render();
+setInterval(renderTiming, 1000);
 void refreshRuns().catch((error) => notice(`无法读取运行列表：${error.message}。可点击刷新重试。`));
 let metadataRefreshing = false;
 setInterval(async () => {

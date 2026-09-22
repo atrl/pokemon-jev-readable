@@ -13,6 +13,8 @@ import json
 import os
 from pathlib import Path
 import sys
+import signal
+import time
 
 from emulator import Emulator
 from memory import Reader, load_profile
@@ -26,31 +28,56 @@ def write_json(path: Path, data: dict) -> None:
 
 
 def run(rom: Path, output: Path, *, goal: str, steps: int, state_file: Path | None = None,
-        visible: bool = False, allow_missing_key: bool = False, screenshots: bool = False) -> dict:
-    if type(steps) is not int or not 1 <= steps <= 1000:
-        raise ValueError("steps must be an integer in 1..1000")
+        visible: bool = False, allow_missing_key: bool = False, screenshots: bool = False,
+        video: bool = False, checkpoint_every: int = 50) -> dict:
+    if type(steps) is not int or not 1 <= steps <= 100_000:
+        raise ValueError("steps must be an integer in 1..100000")
+    if type(checkpoint_every) is not int or not 1 <= checkpoint_every <= 1000:
+        raise ValueError("checkpoint_every must be an integer in 1..1000")
     if not goal.strip():
         raise ValueError("goal cannot be empty")
     output.mkdir(parents=True,exist_ok=True)
     if any(output.iterdir()):
         raise ValueError("Choose a new empty output directory; no previous run will be overwritten")
-    report = {"jev_calls":0,"jev_http_attempts":0,"executed_actions":0,"goal":goal,"status":"starting",
+    started = time.monotonic()
+    world = None
+    reader = None
+    first_frame = None
+    report = {"started_at":datetime.now(timezone.utc).isoformat(),"model_ms":0,"video_enabled":video,"jev_calls":0,"jev_http_attempts":0,"executed_actions":0,"goal":goal,"status":"starting",
               "game_completed":False,"policy":"jev_only","resume_from_user_state":state_file is not None}
+
+    def elapsed_ms() -> int:
+        return round((time.monotonic() - started) * 1000)
+
+    def game_frames() -> int | None:
+        frame = getattr(getattr(world,"game",None),"frame_count",None)
+        return max(0,frame - first_frame) if type(frame) is int and type(first_frame) is int else None
 
     def emit(event_type: str, **payload) -> None:
         event = redact_secrets({"time":datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-                                "type":event_type,"game":"pokemon",**payload})
+                                "type":event_type,"game":"pokemon","elapsed_ms":elapsed_ms(),"game_frames":game_frames(),**payload})
         with (output/'events.jsonl').open('a',encoding='utf-8') as stream:
             stream.write(json.dumps(event,ensure_ascii=False,allow_nan=False)+"\n")
             stream.flush()
 
     def save_report() -> None:
+        report['elapsed_ms'] = elapsed_ms()
+        report['game_frames'] = game_frames()
         write_json(output/'report.json',report)
 
+    def save_checkpoint() -> None:
+        state = world.save()
+        state_path = output/'last.state'
+        temp = output/'last.state.tmp'
+        temp.write_bytes(state)
+        temp.replace(state_path)
+        write_json(output/'last.state.json',{'rom_sha1':load_profile()['rom_sha1'],
+                   'state_sha256':hashlib.sha256(state).hexdigest(),'step':report['executed_actions'],
+                   'saved_at':datetime.now(timezone.utc).isoformat()})
+
     save_report()
-    emit('started',goal=goal,maxSteps=steps,status=report['status'],pid=os.getpid())
-    world = None
-    reader = None
+    emit('started',goal=goal,maxSteps=steps,status=report['status'],pid=os.getpid(),
+         video_enabled=video,checkpoint_every=checkpoint_every,resume_from_user_state=state_file is not None)
     history = []
     try:
         if not os.environ.get("TYPESAFE_API_KEY", "").strip():
@@ -68,7 +95,11 @@ def run(rom: Path, output: Path, *, goal: str, steps: int, state_file: Path | No
             if manifest['rom_sha1'] != profile['rom_sha1'] or hashlib.sha256(state_file.read_bytes()).hexdigest()!=manifest['state_sha256']:
                 raise ValueError("State identity mismatch")
             world.load(state_file.read_bytes())
-        else:
+        first_frame = getattr(world.game,'frame_count',None) if hasattr(world,'game') else None
+        if video:
+            metadata = world.enable_video(output)
+            emit('video_started',video=metadata)
+        if not state_file:
             world.tick(600)
         report['status']='running'
         save_report()
@@ -83,13 +114,19 @@ def run(rom: Path, output: Path, *, goal: str, steps: int, state_file: Path | No
             emit('observation',step=step,observation=verified_before)
             screenshot_hash = world.screenshot(output/f'{i:04d}-before.png') if screenshots else None
 
+            measured_attempts = set()
             def decision_event(event: dict) -> None:
+                if event['type'] in ('jev_response','jev_error') and type(event.get('latency_ms')) in (int,float) and event.get('attempt') not in measured_attempts:
+                    measured_attempts.add(event.get('attempt'))
+                    report['model_ms'] += event['latency_ms']
                 if event['type'] == 'jev_request':
                     report['jev_http_attempts'] += 1
                     save_report()
                 emit(event['type'],step=step,**{key:value for key,value in event.items() if key != 'type'})
 
             decision = choose(before,goal,history,on_event=decision_event)
+            if video:
+                world.video_status()
             report['jev_calls'] += 1
             button = decision['answer']['choice']
             # Keep legacy artifact indexing; streamed step numbers are 1-based.
@@ -119,6 +156,10 @@ def run(rom: Path, output: Path, *, goal: str, steps: int, state_file: Path | No
             verified_after = observation_for_model(after)
             emit('result',step=step,button=button,success=True,observation=verified_after,
                  result={'button':button,'before':verified_before,'after':verified_after})
+            if report['executed_actions'] % checkpoint_every == 0:
+                save_checkpoint()
+                emit('checkpoint',step=step,saved_step=report['executed_actions'])
+            history = history[-12:]
         report['status']='budget_reached'
     except KeyboardInterrupt:
         report['status']='interrupted'
@@ -134,9 +175,7 @@ def run(rom: Path, output: Path, *, goal: str, steps: int, state_file: Path | No
         try:
             if world:
                 try:
-                    state=world.save()
-                    (output/'last.state').write_bytes(state)
-                    write_json(output/'last.state.json',{'rom_sha1':load_profile()['rom_sha1'],'state_sha256':hashlib.sha256(state).hexdigest()})
+                    save_checkpoint()
                     if screenshots:
                         world.screenshot(output/'last.png')
                     if reader is not None:
@@ -164,13 +203,18 @@ def main():
     ap.add_argument('--rom',type=Path,default=Path('red-star-2020-08-18.gb'))
     ap.add_argument('--output',type=Path,default=Path('pokemon/runs/session'))
     ap.add_argument('--state',type=Path)
-    ap.add_argument('--steps',type=int,default=20)
+    ap.add_argument('--steps',type=int,default=5000)
+    ap.add_argument('--video',action=argparse.BooleanOptionalAction,default=True,help='Stream direct emulator video through FFmpeg HLS (enabled by default)')
+    ap.add_argument('--checkpoint-every',type=int,default=50)
     ap.add_argument('--visible',action='store_true')
     ap.add_argument('--screenshots',action='store_true',help='Explicitly save optional screenshot evidence; the live stream never uses images')
     ap.add_argument('--allow-missing-key',action='store_true',help='CI records blocked, never substitutes a fake decision')
     ap.add_argument('--goal',default='Explore Pokemon Red Star and progress through the adventure. Infer your route from dialog and observations.')
     a=ap.parse_args()
+    def stop(_signum,_frame):
+        raise KeyboardInterrupt
+    signal.signal(signal.SIGTERM,stop)
     print(json.dumps(run(a.rom,a.output,goal=a.goal,steps=a.steps,state_file=a.state,visible=a.visible,
-                         allow_missing_key=a.allow_missing_key,screenshots=a.screenshots),indent=2))
+                         allow_missing_key=a.allow_missing_key,screenshots=a.screenshots,video=a.video,checkpoint_every=a.checkpoint_every),indent=2))
 
 if __name__=='__main__':main()

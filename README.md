@@ -9,7 +9,7 @@
 它保留 `rmalde/minecraft-agent` 的核心机制：真实结构化状态 → 可用动作集合 → Jev 选择 → Mineflayer 执行 → 新状态。
 省去原仓库的大模型高层规划、固定种子路线、龙战斗、原生录屏和状态叠加。任务目标明确写在代码中，不让另外一个模型规划。
 
-Pokémon 直播入口：准备 Python 环境及 `.env` 中的 `TYPESAFE_API_KEY` 后，运行 `npm run pokemon:live -- --steps 20`，打开 http://127.0.0.1:18766 。网页实时展示结构化请求、响应、按键与结果；不使用截图。详见 [直播流程](pokemon/README.md#实时网页直播)。
+Pokémon 直播入口：准备 Python 环境及 `.env` 中的 `TYPESAFE_API_KEY` 后，运行 `npm run pokemon:live -- --steps 5000`，打开 http://127.0.0.1:18766 。网页播放 Pokémon 实时游戏视频，并展示请求、响应、按键、结果与耗时；不使用截图轮询。详见 [直播流程](pokemon/README.md#游戏画面与-jev-实时直播)。
 
 以下说明针对 Minecraft。
 

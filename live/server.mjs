@@ -42,7 +42,7 @@ export class EventStore {
         const id = crypto.createHash('sha256').update(path.relative(this.root, file) + ':' + stat.birthtimeMs).digest('hex').slice(0, 20);
         cursor = { id, ino: stat.ino, offset: 0, pending: Buffer.alloc(0), number: 0, dropping: false };
         this.files.set(file, cursor);
-        this.runs.set(id, { id, game, startedAt: stat.birthtime.toISOString(), updatedAt: stat.mtime.toISOString(), status: 'waiting', steps: 0, calls: 0, results: 0, events: [] });
+        this.runs.set(id, { id, game, startedAt: stat.birthtime.toISOString(), updatedAt: stat.mtime.toISOString(), status: 'waiting', steps: 0, calls: 0, results: 0, events: [], _file: file, _modelMs: 0, _latencyCount: 0, _lastLatencyKey: null });
       }
       if (stat.size <= cursor.offset) continue;
       // One bounded chunk per pass also prevents a large historical log blocking SSE.
@@ -77,7 +77,14 @@ export class EventStore {
     run.updatedAt = event.time || run.updatedAt;
     run.steps = Math.max(run.steps, Number.isInteger(event.step) ? event.step : 0);
     run.lastEvent = event.type;
-    if (event.type === 'started') { run.startedAt = event.time || run.startedAt; run.goal = event.goal; run.maxSteps = event.maxSteps; run.pid = event.pid; run.status = 'starting'; }
+    if (event.type === 'started') { run.startedAt = event.time || run.startedAt; run.goal = event.goal; run.maxSteps = event.maxSteps; run.pid = event.pid; run.videoEnabled = event.video_enabled === true; run.status = 'starting'; }
+    if (typeof event.elapsed_ms === 'number' && Number.isFinite(event.elapsed_ms) && event.elapsed_ms >= 0) run._elapsedMs = event.elapsed_ms;
+    if (typeof event.game_frames === 'number' && Number.isFinite(event.game_frames)) run.gameFrames = event.game_frames;
+    if (event.type === 'video_started') { run.videoEnabled = true; run._videoMetadata = event.video; }
+    if (['jev_response','jev_error'].includes(event.type) && Number.isFinite(event.latency_ms) && event.latency_ms >= 0) {
+      const latencyKey = `${event.step}:${event.attempt ?? 1}`;
+      if (latencyKey !== run._lastLatencyKey) { run._modelMs += event.latency_ms; run._latencyCount++; run._lastLatencyKey = latencyKey; }
+    }
     if (event.type === 'observation') run.status = 'observing';
     if (event.type === 'jev_request') { run.calls++; run.status = 'calling'; }
     if (event.type === 'jev_response') run.status = 'received';
@@ -91,11 +98,34 @@ export class EventStore {
     this.onEvent({ run: this.summary(run), event });
   }
   summary(run) {
-    const { events, pid, ...summary } = run;
+    const { events, pid, _file, _elapsedMs, _modelMs, _latencyCount, _lastLatencyKey, _videoMetadata, ...summary } = run;
     if (pid && !TERMINAL.has(summary.status)) {
       try { process.kill(pid, 0); } catch (error) { if (error.code === 'ESRCH') { summary.status = 'interrupted'; summary.reason = '运行进程已退出，未收到结束事件。'; } }
     }
+    const sampledAt = new Date();
+    let elapsed = _elapsedMs ?? Math.max(0, Date.parse(run.updatedAt) - Date.parse(run.startedAt));
+    if (!TERMINAL.has(summary.status)) elapsed += Math.max(0, sampledAt.getTime() - Date.parse(run.updatedAt));
+    const rate = elapsed > 0 ? run.results * 60000 / elapsed : 0;
+    const remaining = Math.max(0, (run.maxSteps || 0) - run.results);
+    const playlist = this.videoFile(run.id, 'index.m3u8');
+    summary.video = { enabled: run.videoEnabled === true, available: !!playlist, url: `/api/runs/${run.id}/video/index.m3u8`,
+      fps: _videoMetadata?.fps ?? 30, width: _videoMetadata?.width ?? 160, height: _videoMetadata?.height ?? 144, format: 'hls-h264' };
+    summary.timing = { sampled_at: sampledAt.toISOString(), elapsed_ms: Math.round(elapsed), model_ms: _modelMs, http_attempts: run.calls,
+      avg_latency_ms: _latencyCount ? _modelMs / _latencyCount : null, steps_per_minute: rate, remaining_steps: remaining,
+      estimated_remaining_ms: run.results >= 5 && rate > 0 && !TERMINAL.has(summary.status) ? remaining * 60000 / rate : null,
+      game_seconds: typeof run.gameFrames === 'number' ? run.gameFrames / 60 : null };
     return { ...summary, retainedEvents: events.length, truncated: events.length > 0 && !events[0].id.endsWith(':1') };
+  }
+  videoFile(id, name) {
+    const run = this.runs.get(id);
+    if (!run || run.game !== 'pokemon' || !/^(?:index\.m3u8|init\.mp4|segment-\d{6,10}\.m4s)$/.test(name)) return null;
+    const directory = path.join(path.dirname(run._file), 'video');
+    const file = path.join(directory, name);
+    try {
+      if (!fs.lstatSync(directory).isDirectory() || fs.lstatSync(directory).isSymbolicLink()) return null;
+      const stat = fs.lstatSync(file);
+      return stat.isFile() && !stat.isSymbolicLink() ? { file, size: stat.size } : null;
+    } catch { return null; }
   }
   list() { return [...this.runs.values()].map(run => this.summary(run)).sort((a, b) => b.startedAt.localeCompare(a.startedAt)); }
   detail(id) { const run = this.runs.get(id); return run ? { run: this.summary(run), events: run.events } : null; }
@@ -122,9 +152,9 @@ export function createLiveServer({ root = process.cwd(), config = {}, pollMs = 5
     response.setHeader('Cache-Control', 'no-store');
     response.setHeader('X-Content-Type-Options', 'nosniff');
     response.setHeader('Referrer-Policy', 'no-referrer');
-    response.setHeader('Content-Security-Policy', "default-src 'self'; connect-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'none'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'");
+    response.setHeader('Content-Security-Policy', "default-src 'self'; connect-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'none'; media-src 'self' blob:; worker-src 'self' blob:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'");
     const json = (code, value) => { response.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8' }); response.end(JSON.stringify(value)); };
-    if (request.method !== 'GET') return json(405, { error: 'Read-only live feed' });
+    if (!['GET', 'HEAD'].includes(request.method)) return json(405, { error: 'Read-only live feed' });
     let url;
     try { url = new URL(request.url, 'http://localhost'); } catch { return json(400, { error: 'Invalid URL' }); }
     if (url.pathname === '/health') return json(200, { status: 'ok', serverTime: new Date().toISOString() });
@@ -132,6 +162,32 @@ export function createLiveServer({ root = process.cwd(), config = {}, pollMs = 5
     if (/^\/api\/runs\/[a-f0-9]{20}$/.test(url.pathname)) {
       const detail = store.detail(url.pathname.split('/').at(-1));
       return json(detail ? 200 : 404, detail || { error: 'Unknown run' });
+    }
+    const videoRoute = url.pathname.match(/^\/api\/runs\/([a-f0-9]{20})\/video\/(index\.m3u8|init\.mp4|segment-\d{6,10}\.m4s)$/);
+    if (videoRoute) {
+      const asset = store.videoFile(videoRoute[1], videoRoute[2]);
+      if (!asset) return json(404, { error: 'Video segment is not available yet or has expired' });
+      let fd;
+      try { fd = fs.openSync(asset.file, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW); }
+      catch { return json(404, { error: 'Video segment expired' }); }
+      const size = fs.fstatSync(fd).size;
+      let start = 0, end = size - 1, code = 200;
+      if (request.headers.range) {
+        const range = request.headers.range.match(/^bytes=(\d*)-(\d*)$/);
+        if (!range || (!range[1] && !range[2])) { fs.closeSync(fd); return json(416, { error: 'Invalid range' }); }
+        start = range[1] ? Number(range[1]) : Math.max(0, size - Number(range[2]));
+        end = range[1] && range[2] ? Math.min(size - 1, Number(range[2])) : size - 1;
+        if (start > end || start >= size) { fs.closeSync(fd); response.setHeader('Content-Range', `bytes */${size}`); return json(416, { error: 'Range out of bounds' }); }
+        code = 206; response.setHeader('Content-Range', `bytes ${start}-${end}/${size}`);
+      }
+      const contentType = videoRoute[2].endsWith('.m3u8') ? 'application/vnd.apple.mpegurl' : videoRoute[2].endsWith('.mp4') ? 'video/mp4' : 'video/iso.segment';
+      response.writeHead(code, { 'Content-Type': contentType, 'Content-Length': Math.max(0,end - start + 1), 'Accept-Ranges': 'bytes' });
+      if (size === 0) { fs.closeSync(fd); response.end(); return; }
+      const stream = fs.createReadStream(asset.file, { fd, autoClose: true, start, end });
+      stream.on('error', () => response.destroy());
+      response.on('close', () => stream.destroy());
+      stream.pipe(response);
+      return;
     }
     if (url.pathname === '/api/events') {
       if (clients.size >= 50) return json(503, { error: 'Viewer limit reached; retry later' });
@@ -148,7 +204,7 @@ export function createLiveServer({ root = process.cwd(), config = {}, pollMs = 5
       response.on('close', () => clients.delete(response));
       return;
     }
-    const assets = { '/': ['index.html', 'text/html'], '/app.js': ['app.js', 'text/javascript'], '/style.css': ['style.css', 'text/css'] };
+    const assets = { '/': ['index.html', 'text/html'], '/app.js': ['app.js', 'text/javascript'], '/style.css': ['style.css', 'text/css'], '/vendor/hls.min.js': ['vendor/hls.min.js', 'text/javascript'] };
     const asset = assets[url.pathname];
     if (!asset) return json(404, { error: 'Not found' });
     try { const body = fs.readFileSync(path.join(PUBLIC, asset[0])); response.writeHead(200, { 'Content-Type': `${asset[1]}; charset=utf-8` }); response.end(body); }
