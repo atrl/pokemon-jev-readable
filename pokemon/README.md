@@ -206,3 +206,31 @@ npm run check
 队伍补给任务由已验证 HP/PP/异常状态触发，保持到完整恢复得到确认；源码护士柜台位置提供交互站位，实时面对方向决定导航建议。每个主线/补给任务变化在直播时间线和状态面板中显示。
 
 战斗输入还包含 `game.battle.strategy`：用独立验证的当前攻击/防御/特殊、招式 PP/数值和 ROM 属性表，比较可用招式的条件伤害估计，再依据可见菜单槽位给出一次游标/确认建议。第一世代物理/特殊分类、同属性加成和属性相克都参与计算；未观察到的命中阶段、暴击等限制明确随建议提供。实际按键仍由 JEV 选择，程序不替换模型答案。
+
+## Actions 回归与历史回放
+
+[最近一次已发布的 Actions 归档](results/README.md) · [历史结果](results/runs/) · [工作流](https://github.com/atrl/minecraft-jev-readable/actions/workflows/redstar-memory.yml)。这些归档与本机当前直播是独立会话。
+
+历史运行 [35681979746](https://github.com/atrl/minecraft-jev-readable/actions/runs/35681979746) 实际调用 JEV 12 次：3 次 wait、9 次 A，角色停留在出生房间并重复 N64 对话，以 `budget_reached` 结束。归档保留原始失败表现，不代表后续直播版本的当前进度。
+
+在 GitHub 查看归档 README 中的统计和已有 GIF；交互回放需从 Actions 的 Artifacts 下载 `pokemon-results-运行号-尝试号`，解压并打开根目录 `index.html`。历史 GIF 来自归档截图；实时直播使用独立 H.264 视频流。`render_results.py` 可呈现已有 JSON/截图，未提供截图的新运行不会因此生成真实游戏画面。
+
+普通 push/PR 只触发回归，不调用 JEV。手动运行工作流时，`mode=play` 使用仓库 Secret `TYPESAFE_API_KEY`，`mode=verify` 仅验证内存；`steps` 默认 12，仍受 runner 参数范围及作业 12 分钟时限限制。每次从回归建立的出生房间开始，长时间续玩请使用上文的本机直播入口。`publish=true` 将结果写入仓库 `pokemon/results/`；发布器不会重新上传 ROM、二进制存档或密钥。Artifacts 保留 30 天，Git 中已发布结果持续保留。
+
+旧 FireRed/ROM 分支及工作流见 [归档说明](archive/README.md)。
+
+## `current_focus` 的来源
+
+它由本地 `jev.py:build_request()` 在发送请求前生成，是提供给 JEV 的当前操作提示。主线意图来自预先编写的任务规则库，RAM 事实用于选择/完成任务；它不记录模型自己的推理。
+
+按从基础到最高优先级的覆盖顺序：
+
+1. 使用 `campaign.active_objective.intent`。`CampaignPlanner.context()` 先按已验证剧情事实选择第一个未完成任务；需要补给时由 `heal_party` 暂时覆盖。
+2. 没有 campaign 意图时，使用 `ProgressTracker.context()` 根据场景和循环信号给出的焦点；再无则使用通用兜底文字。
+3. 战斗激活时，覆盖为先处理当前战斗界面的提示。
+4. 已验证的训练师挑战文字 `wants to fight!` 出现时，覆盖为按 A 确认的游戏规则提示。
+5. 战斗策略模块能给出当前菜单的可靠建议时，覆盖为包含推荐招式、槽位和下一按键的动态文字。建议依据当前攻防/特殊、类型、招式 PP 与条件伤害估计。
+
+普通走路时，`current_focus` 可以连续多步保持相同任务；逐步路线建议另在 `campaign.navigation` 更新。恢复信息位于 `campaign.recovery`，也进入提示词，但不会单独覆写这个字段。所有九个输入保持可选，最终执行按键仍来自经过校验的 JEV 回答。
+
+直播页面显示已记录请求中的原值，不从当前代码重建历史 `current_focus`。

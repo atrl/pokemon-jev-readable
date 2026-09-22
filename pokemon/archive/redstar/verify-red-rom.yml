@@ -1,0 +1,155 @@
+name: Verify uploaded Red ROM
+on:
+  push:
+    branches: [verify/red-star-rom-20260922]
+    paths: [.github/workflows/verify-red-rom.yml]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    env:
+      SDL_VIDEODRIVER: dummy
+      SDL_AUDIODRIVER: dummy
+      PIP_DISABLE_PIP_VERSION_CHECK: '1'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Read complete ROM and verify identity
+        run: |
+          python3 - <<'PY'
+          import hashlib, json, os
+          from pathlib import Path
+          p = Path('red-star-2020-08-18.gb')
+          data = p.read_bytes()
+          if len(data) < 0x150:
+              raise RuntimeError('Not a complete Game Boy cartridge header')
+          expected = 'ea9bcae617fdf159b045185467ae58b2e4a48b9a'
+          sha1 = hashlib.sha1(data).hexdigest()
+          header_sum = 0
+          for b in data[0x134:0x14d]:
+              header_sum = (header_sum - b - 1) & 255
+          global_sum = (sum(data) - data[0x14e] - data[0x14f]) & 65535
+          cgb = data[0x143]
+          title = data[0x134:(0x143 if cgb in (0x80, 0xc0) else 0x144)].split(b'\0')[0].decode('ascii', errors='replace')
+          report = {
+              'file': p.name,
+              'tested_commit': os.environ.get('GITHUB_SHA'),
+              'bytes': len(data),
+              'sha1': sha1,
+              'sha256': hashlib.sha256(data).hexdigest(),
+              'git_blob_sha1': hashlib.sha1(f'blob {len(data)}\0'.encode() + data).hexdigest(),
+              'expected_red_sha1': expected,
+              'matches_original_red': sha1 == expected,
+              'header': {
+                  'title': title,
+                  'cgb_flag': hex(cgb),
+                  'cartridge_type': hex(data[0x147]),
+                  'rom_size_code': hex(data[0x148]),
+                  'ram_size_code': hex(data[0x149]),
+                  'region_code': data[0x14a],
+                  'revision': data[0x14c],
+                  'header_checksum_valid': header_sum == data[0x14d],
+                  'global_checksum_valid': global_sum == int.from_bytes(data[0x14e:0x150], 'big'),
+              },
+              'emulator_smoke': {'status': 'not_run'},
+              'jev_called': False,
+              'gameplay_completion_tested': False,
+          }
+          Path('rom-verification').mkdir(exist_ok=True)
+          Path('rom-verification/report.json').write_text(json.dumps(report, indent=2))
+          print('ROM_IDENTITY_REPORT')
+          print(json.dumps(report, indent=2))
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as out:
+              out.write('## ROM identity\n```json\n' + json.dumps(report, indent=2) + '\n```\n')
+          PY
+      - name: Install PyBoy in an isolated environment
+        run: |
+          python3 -m venv /tmp/red-rom-venv
+          /tmp/red-rom-venv/bin/python -m pip install --timeout 30 --retries 1 pyboy==2.7.0 Pillow
+      - name: Boot, compare Start against no input, and verify state replay
+        run: |
+          /tmp/red-rom-venv/bin/python - <<'PY'
+          import hashlib, io, json, os, traceback
+          from pathlib import Path
+          from importlib.metadata import version
+          folder = Path('rom-verification')
+          report = json.loads((folder / 'report.json').read_text())
+          game = None
+          code = 0
+          try:
+              from pyboy import PyBoy
+              game = PyBoy(report['file'], window='null', sound_emulated=False)
+              game.set_emulation_speed(0)
+              def tick(frames):
+                  if not game.tick(frames, render=True, sound=False):
+                      raise RuntimeError('Emulator stopped')
+              def pixels():
+                  return game.screen.image.convert('RGB').tobytes()
+              def save():
+                  stream = io.BytesIO()
+                  game.save_state(stream)
+                  return stream.getvalue()
+              def restore(data):
+                  game.load_state(io.BytesIO(data))
+              tick(600)
+              boot = pixels()
+              game.screen.image.save(folder / '01-boot.png')
+              initial = save()
+              tick(188)
+              without_input = pixels()
+              game.screen.image.save(folder / '02-without-input.png')
+              restore(initial)
+              game.button_press('start')
+              try:
+                  tick(8)
+              finally:
+                  game.button_release('start')
+              tick(180)
+              with_start = pixels()
+              game.screen.image.save(folder / '03-after-start.png')
+              replay = save()
+              tick(60)
+              first = pixels()
+              restore(replay)
+              tick(60)
+              second = pixels()
+              report['emulator_smoke'] = {
+                  'status': 'passed',
+                  'pyboy_version': version('pyboy'),
+                  'cartridge_title': game.cartridge_title,
+                  'screen_size': list(game.screen.image.size),
+                  'boot_nonuniform': len(set(zip(*(iter(boot),) * 3))) > 1,
+                  'start_changes_screen_vs_wait': with_start != without_input,
+                  'state_replay_pixels_identical': first == second,
+                  'boot_pixels_sha256': hashlib.sha256(boot).hexdigest(),
+                  'after_start_pixels_sha256': hashlib.sha256(with_start).hexdigest(),
+                  'policy': 'deterministic_smoke_test_not_jev',
+              }
+              if not report['emulator_smoke']['boot_nonuniform'] or first != second:
+                  report['emulator_smoke']['status'] = 'failed'
+                  code = 1
+          except Exception as exc:
+              code = 1
+              report['emulator_smoke'] = {'status': 'failed', 'error': str(exc), 'traceback': traceback.format_exc()}
+          finally:
+              if game is not None:
+                  game.stop(save=False)
+              (folder / 'report.json').write_text(json.dumps(report, indent=2))
+              print('ROM_COMPLETE_REPORT')
+              print(json.dumps(report, indent=2))
+              with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as out:
+                  out.write('## PyBoy smoke test\n```json\n' + json.dumps(report['emulator_smoke'], indent=2) + '\n```\n')
+          raise SystemExit(code)
+          PY
+      - name: Keep reports and screenshots only (no ROM or save-state)
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: red-rom-verification
+          path: |
+            rom-verification/report.json
+            rom-verification/*.png
+          retention-days: 7
