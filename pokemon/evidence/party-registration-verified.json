@@ -1,0 +1,260 @@
+{
+  "created_at": "2026-09-22T09:39:51.121361+00:00",
+  "input_sha256": "af45c8c94029023164d10d43891dc9fe258b06e26683daeaf956c5e4aa006d82",
+  "fixture": "actual_JEV_run1_step108_failure_checkpoint_copy",
+  "jev_calls": 0,
+  "production_actions": 0,
+  "ram_writes": 0,
+  "source_commit": "08deafad427f0904f285e515c360003efc19d3dc",
+  "rom_sha1": "e2d564a5172d38e44b4f4b8f7d9db92f644cf5e9",
+  "checks": [
+    {
+      "label": "original_failure_frame",
+      "frame": 0,
+      "party_state": {
+        "ready": false,
+        "quality": "verified_interactive_initialization",
+        "phase": "nickname_interaction_before_party_structure",
+        "pending_slot": 0,
+        "pending_species_internal_id": 176,
+        "pending_species_name_prior": "CHARMANDER",
+        "count_raw": 1,
+        "registered_usable_count": null,
+        "source": "Exact-ROM AddPartyMon/AskName return address on live CPU stack; new party species list/count and naming context agree; last 44-byte structure remains all zero",
+        "next_observation": "Finish the visible nickname question/name entry, then wait for valid party fields; do not infer a usable team or completed starter receipt from the raw count."
+      },
+      "party": null,
+      "party_count_fact": {
+        "value": null,
+        "verified": false,
+        "quality": "initializing",
+        "source": "AddPartyMon is awaiting nickname interaction; raw count is not a usable party"
+      },
+      "has_party_fact": {
+        "value": null,
+        "verified": false,
+        "quality": "initializing",
+        "source": "AddPartyMon is awaiting nickname interaction; raw count is not a usable party"
+      },
+      "starter_received_fact": {
+        "value": false,
+        "verified": true,
+        "quality": "verified",
+        "source": "RAM wEventFlags+4 bit 2; pinned source EVENT_GOT_STARTER"
+      },
+      "scene": {
+        "mode": "dialog",
+        "verified": true,
+        "quality": "verified_pattern",
+        "source": "RAM font flag, battle exclusion, tile borders/menu labels, ROM0 background and player alignment",
+        "validation_scope": "Exact ROM starting room, N64 dialog, main menu; battle requires correlated party/combatant structures",
+        "limitations": "Conservative pattern classification; unrecognized scenes remain unknown. Blank text alone does not identify a scene."
+      },
+      "dialog": {
+        "open": true,
+        "awaiting_input": null,
+        "text": "Do",
+        "choices": [],
+        "quality": "verified_text_box_partial_text_possible",
+        "source": "RAM wTileMap dialog border/interior and visible down arrow",
+        "awaiting_input_reason": "arrow_absent_or_blinking; printing_or_waiting_unknown"
+      },
+      "errors": {}
+    },
+    {
+      "label": "waiting_alone_does_not_finish_registration",
+      "frame": 240,
+      "party_state": {
+        "ready": false,
+        "quality": "verified_interactive_initialization",
+        "phase": "nickname_interaction_before_party_structure",
+        "pending_slot": 0,
+        "pending_species_internal_id": 176,
+        "pending_species_name_prior": "CHARMANDER",
+        "count_raw": 1,
+        "registered_usable_count": null,
+        "source": "Exact-ROM AddPartyMon/AskName return address on live CPU stack; new party species list/count and naming context agree; last 44-byte structure remains all zero",
+        "next_observation": "Finish the visible nickname question/name entry, then wait for valid party fields; do not infer a usable team or completed starter receipt from the raw count."
+      },
+      "party": null,
+      "party_count_fact": {
+        "value": null,
+        "verified": false,
+        "quality": "initializing",
+        "source": "AddPartyMon is awaiting nickname interaction; raw count is not a usable party"
+      },
+      "has_party_fact": {
+        "value": null,
+        "verified": false,
+        "quality": "initializing",
+        "source": "AddPartyMon is awaiting nickname interaction; raw count is not a usable party"
+      },
+      "starter_received_fact": {
+        "value": false,
+        "verified": true,
+        "quality": "verified",
+        "source": "RAM wEventFlags+4 bit 2; pinned source EVENT_GOT_STARTER"
+      },
+      "scene": {
+        "mode": "dialog",
+        "verified": true,
+        "quality": "verified_pattern",
+        "source": "RAM font flag, battle exclusion, tile borders/menu labels, ROM0 background and player alignment",
+        "validation_scope": "Exact ROM starting room, N64 dialog, main menu; battle requires correlated party/combatant structures",
+        "limitations": "Conservative pattern classification; unrecognized scenes remain unknown. Blank text alone does not identify a scene."
+      },
+      "dialog": {
+        "open": true,
+        "awaiting_input": true,
+        "text": "Do you want to\ngive a nickname",
+        "choices": [],
+        "quality": "verified_text_box_partial_text_possible",
+        "source": "RAM wTileMap dialog border/interior and visible down arrow",
+        "awaiting_input_reason": "visible_down_arrow"
+      },
+      "errors": {}
+    },
+    {
+      "label": "nickname_dialog_b_0",
+      "frame": 272,
+      "party_state": {
+        "ready": false,
+        "quality": "verified_interactive_initialization",
+        "phase": "nickname_interaction_before_party_structure",
+        "pending_slot": 0,
+        "pending_species_internal_id": 176,
+        "pending_species_name_prior": "CHARMANDER",
+        "count_raw": 1,
+        "registered_usable_count": null,
+        "source": "Exact-ROM AddPartyMon/AskName return address on live CPU stack; new party species list/count and naming context agree; last 44-byte structure remains all zero",
+        "next_observation": "Finish the visible nickname question/name entry, then wait for valid party fields; do not infer a usable team or completed starter receipt from the raw count."
+      },
+      "party": null,
+      "party_count_fact": {
+        "value": null,
+        "verified": false,
+        "quality": "initializing",
+        "source": "AddPartyMon is awaiting nickname interaction; raw count is not a usable party"
+      },
+      "has_party_fact": {
+        "value": null,
+        "verified": false,
+        "quality": "initializing",
+        "source": "AddPartyMon is awaiting nickname interaction; raw count is not a usable party"
+      },
+      "starter_received_fact": {
+        "value": false,
+        "verified": true,
+        "quality": "verified",
+        "source": "RAM wEventFlags+4 bit 2; pinned source EVENT_GOT_STARTER"
+      },
+      "scene": {
+        "mode": "dialog",
+        "verified": true,
+        "quality": "verified_pattern",
+        "source": "RAM font flag, battle exclusion, tile borders/menu labels, ROM0 background and player alignment",
+        "validation_scope": "Exact ROM starting room, N64 dialog, main menu; battle requires correlated party/combatant structures",
+        "limitations": "Conservative pattern classification; unrecognized scenes remain unknown. Blank text alone does not identify a scene."
+      },
+      "dialog": {
+        "open": true,
+        "awaiting_input": null,
+        "text": "give a nickname\nto CHARMANDER?",
+        "choices": [
+          "YES",
+          "NO"
+        ],
+        "quality": "verified_text_box_partial_text_possible",
+        "source": "RAM wTileMap dialog border/interior and visible down arrow",
+        "awaiting_input_reason": "arrow_absent_or_blinking; printing_or_waiting_unknown"
+      },
+      "errors": {}
+    },
+    {
+      "label": "nickname_dialog_b_1",
+      "frame": 304,
+      "party_state": {
+        "ready": true,
+        "quality": "verified"
+      },
+      "party": [
+        {
+          "slot": 0,
+          "nickname": "CHARMANDER",
+          "species_internal_id": 176,
+          "level": 5,
+          "hp": 18,
+          "max_hp": 18,
+          "species_name_prior": "CHARMANDER",
+          "status_bits": 0,
+          "moves": [
+            {
+              "slot": 0,
+              "move_id": 10,
+              "pp": 35,
+              "knowledge": {
+                "name": "SCRATCH",
+                "effect": "NO_ADDITIONAL_EFFECT",
+                "power": 40,
+                "type": "NORMAL",
+                "accuracy_percent": 100,
+                "base_pp": 35,
+                "quality": "source_prior"
+              }
+            },
+            {
+              "slot": 1,
+              "move_id": 45,
+              "pp": 40,
+              "knowledge": {
+                "name": "GROWL",
+                "effect": "ATTACK_DOWN1_EFFECT",
+                "power": 0,
+                "type": "NORMAL",
+                "accuracy_percent": 100,
+                "base_pp": 40,
+                "quality": "source_prior"
+              }
+            }
+          ]
+        }
+      ],
+      "party_count_fact": {
+        "value": 1,
+        "verified": true,
+        "quality": "verified",
+        "source": "validated wPartyCount"
+      },
+      "has_party_fact": {
+        "value": true,
+        "verified": true,
+        "quality": "verified",
+        "source": "validated current party count and structures"
+      },
+      "starter_received_fact": {
+        "value": false,
+        "verified": true,
+        "quality": "verified",
+        "source": "RAM wEventFlags+4 bit 2; pinned source EVENT_GOT_STARTER"
+      },
+      "scene": {
+        "mode": "overworld",
+        "verified": true,
+        "quality": "verified_pattern",
+        "source": "RAM font flag, battle exclusion, tile borders/menu labels, ROM0 background and player alignment",
+        "validation_scope": "Exact ROM starting room, N64 dialog, main menu; battle requires correlated party/combatant structures",
+        "limitations": "Conservative pattern classification; unrecognized scenes remain unknown. Blank text alone does not identify a scene."
+      },
+      "dialog": {
+        "open": false,
+        "awaiting_input": false,
+        "text": "",
+        "quality": "verified_closed",
+        "source": "Verified scene pattern"
+      },
+      "errors": {}
+    }
+  ],
+  "result": "PASS: identified interactive initialization, preserved nickname dialogue, completed valid Charmander structure without changing source state",
+  "original_state_unchanged": true
+}

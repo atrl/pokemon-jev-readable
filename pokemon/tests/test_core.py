@@ -72,7 +72,10 @@ class CoreTests(unittest.TestCase):
         m.memory[a['wPartyMonNicks']:a['wPartyMonNicks']+4]=bytes([0x91,0x84,0x83,0x50])
         mon=Reader(m,p).party()[0]
         self.assertEqual((mon['level'],mon['hp'],mon['max_hp']),(5,18,20))
-        self.assertEqual(mon['moves'],[{'move_id':10,'pp':35}])
+        self.assertEqual([{key: move[key] for key in ('move_id','pp')} for move in mon['moves']],
+                         [{'move_id':10,'pp':35}])
+        self.assertEqual(mon['moves'][0]['knowledge']['name'], 'SCRATCH')
+        self.assertEqual(mon['moves'][0]['knowledge']['quality'], 'source_prior')
     def test_invalid_party_count_rejected(self):
         m=FakeMemory();p=load_profile();m.memory[p['addresses']['wPartyCount']]=7
         with self.assertRaises(ValueError):Reader(m,p).party()

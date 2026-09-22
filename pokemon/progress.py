@@ -16,6 +16,9 @@ MAX_TRANSITIONS = 3
 
 
 def _position(observation):
+    world = observation.get("world") or {}
+    if world.get("source_match") is False or world.get("player_position_valid") is False:
+        return None
     player = observation.get("player") or {}
     values = tuple(player.get(key) for key in ("map_id", "x", "y"))
     return values if all(type(value) is int and value >= 0 for value in values) else None
@@ -66,7 +69,7 @@ def _compact_observation(observation):
     position = _position(observation)
     scene = observation.get("scene") or {}
     verified = (scene.get("verified") is True
-                and scene.get("mode") in ("overworld", "dialog", "main_menu"))
+                and scene.get("mode") in ("overworld", "dialog", "main_menu", "battle", "name_entry", "species_preview"))
     dialog = _dialog(observation) if verified else {}
     opened = dialog.get("open")
     awaiting_input = dialog.get("awaiting_input")

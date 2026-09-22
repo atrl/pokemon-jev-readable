@@ -56,6 +56,20 @@
           <div class="metric"><span class="metric-label">动作结果<span>RESULTS</span></span><strong id="metric-results">—</strong><span id="metric-result-note" class="metric-note">执行后返回</span></div>
           <div class="metric"><span class="metric-label">最近响应<span>LATENCY</span></span><strong id="metric-latency">—</strong><span id="metric-latency-note" class="metric-note">等待 Jev 响应</span></div>
         </section>
+        <section id="campaign-panel" class="campaign-panel" aria-labelledby="campaign-title">
+          <div class="section-header"><div><span class="eyebrow">STORY & MAP MEMORY</span><h2 id="campaign-title">主线目标与地图记忆</h2></div><span id="campaign-status" class="status-pill">尚无任务记录</span></div>
+          <p id="campaign-empty" class="empty-copy">本轮尚无 campaign 记录；历史运行的主线目标与完成情况不会从步数或画面推测补齐。</p>
+          <div id="campaign-body" hidden>
+            <div class="campaign-goal"><span>长期通关目标</span><strong id="campaign-goal"></strong></div>
+            <p id="campaign-source" class="campaign-source mono"></p>
+            <div class="campaign-columns">
+              <section class="campaign-objective"><div class="campaign-mini-heading"><h3>正在推进</h3><span id="campaign-objective-id" class="mono"></span></div><h4 id="campaign-intent"></h4><p id="campaign-why" class="campaign-copy"></p><div class="campaign-evidence-state"><span>完成条件</span><strong id="campaign-completion"></strong></div><div class="campaign-unknown"><span>尚未验证的事实</span><div id="campaign-unknown"></div></div><details class="campaign-details"><summary>查看完成证据与知识来源</summary><div class="campaign-table-scroll"><table><thead><tr><th>事实</th><th>记录值</th><th>验证状态 / 来源</th></tr></thead><tbody id="campaign-evidence"></tbody></table></div><p id="campaign-evidence-empty" class="empty-copy" hidden>此目标尚未提供完成证据。</p><ul id="campaign-knowledge" class="campaign-knowledge"></ul><p id="campaign-knowledge-source" class="campaign-copy"></p></details></section>
+              <section class="campaign-navigation"><div class="campaign-mini-heading"><h3>当前导航</h3><span id="campaign-navigation-status"></span></div><div class="campaign-guidance"><span>建议下一按键</span><strong id="campaign-next-button"></strong></div><p class="campaign-guidance-note">这是导航建议；实际按键以 JEV 决策事件为准。</p><dl class="campaign-navigation-facts"><div><dt>目标</dt><dd id="campaign-target"></dd></div><div><dt>地图路线</dt><dd id="campaign-route"></dd></div><div><dt>已规划路径</dt><dd id="campaign-path"></dd></div></dl><p id="campaign-navigation-source" class="campaign-copy"></p></section>
+            </div>
+            <details class="campaign-memory"><summary>已完成目标与持久地图记忆 <span id="campaign-memory-counts"></span></summary><div class="campaign-memory-grid"><section><h3>已完成目标</h3><div id="campaign-completed" class="campaign-chips"></div><h3>到访地图</h3><div id="campaign-visited" class="campaign-chips"></div></section><section><h3>已观察的地图连接</h3><p id="campaign-connections-note" class="campaign-copy"></p><div id="campaign-connections" class="campaign-connections"></div></section></div></details>
+            <p class="campaign-footnote">地图、对象与攻略知识可能来自源码先验；只有已验证的游戏事实能确认主线目标完成。步数预算不代表通关百分比。</p>
+          </div>
+        </section>
         <section id="input-inspector" class="input-inspector" aria-labelledby="input-title">
           <div class="section-header"><div><span class="eyebrow">ACTUAL JEV INPUT</span><h2 id="input-title">JEV 实际收到什么？</h2></div><span class="input-readonly">只读 · 来自请求事件</span></div>
           <p class="input-intro">查看这一刻实际发送的提示词、候选按键与状态。中文是网页导航；英文正文保留请求原文，不是模型内部思考。切换请求不会操作游戏。</p>

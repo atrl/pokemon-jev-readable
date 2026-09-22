@@ -68,6 +68,23 @@ class DecisionContextTests(unittest.TestCase):
         self.assertIsNone(model['local_map'])
         self.assertNotIn('facing',model['player'])
 
+    def test_battle_intro_pauses_navigation_without_inventing_combatants(self):
+        raw=world_state(mode='battle')
+        raw['screen_text']['rows']=['Wild PIDGEY','appeared!']
+        raw['battle']={'active':True,'verified':False,'phase_verified':True,
+                      'phase':'text_before_combatants_ready','combatants_ready':False,
+                      'menu':'text_or_animation','visible_text':'Wild PIDGEY appeared!',
+                      'player':{'uninitialized':True}}
+        raw['campaign']={'active_objective':{'intent':'Deliver the parcel'}}
+        request=build_request(raw,'Complete the story',[])
+        game=request['state']['game']
+        self.assertEqual(game['scene']['mode'],'battle')
+        self.assertTrue(game['battle']['phase_verified'])
+        self.assertEqual(game['battle']['menu'],'text_or_animation')
+        self.assertNotIn('player',game['battle'])
+        self.assertTrue(request['state']['current_focus'].startswith('Resolve the current battle'))
+        self.assertEqual(set(request['questions']['button']['criteria']),set(BUTTONS))
+
     def test_checkpoint_memory_requires_the_same_state_identity(self):
         with tempfile.TemporaryDirectory() as directory:
             state=Path(directory)/'last.state';state.write_bytes(b'offline state')

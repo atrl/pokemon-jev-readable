@@ -20,6 +20,7 @@ from emulator import Emulator
 from memory import Reader, load_profile
 from jev import choose, observation_for_model, redact_secrets, DEFAULT_GAME_GOAL
 from progress import ProgressTracker
+from campaign import CampaignPlanner
 
 
 def write_json(path: Path, data: dict) -> None:
@@ -79,9 +80,10 @@ def run(rom: Path, output: Path, *, goal: str, steps: int, state_file: Path | No
     first_frame = None
     video_restarts = 0
     tracker = ProgressTracker()
+    campaign = CampaignPlanner()
     stalled_steps = 0
     report = {"started_at":datetime.now(timezone.utc).isoformat(),"model_ms":0,"video_enabled":video,"jev_calls":0,"jev_http_attempts":0,"executed_actions":0,"goal":goal,"status":"starting",
-              "game_completed":False,"policy":"jev_only","new_tiles_this_run":0,"movement_actions":0,"map_changes":0,"progress_memory_source":"new_memory","resume_from_user_state":state_file is not None}
+              "game_completed":False,"policy":"jev_only","new_tiles_this_run":0,"movement_actions":0,"map_changes":0,"progress_memory_source":"new_memory","campaign_memory_source":"new_memory","resume_from_user_state":state_file is not None}
 
     def elapsed_ms() -> int:
         return round((time.monotonic() - started) * 1000)
@@ -111,6 +113,7 @@ def run(rom: Path, output: Path, *, goal: str, steps: int, state_file: Path | No
         identity = {'rom_sha1':load_profile()['rom_sha1'],'state_sha256':hashlib.sha256(state).hexdigest(),
                     'step':report['executed_actions'],'saved_at':datetime.now(timezone.utc).isoformat()}
         write_json(output/'last.progress.json',{**identity,'tracker':tracker.snapshot()})
+        write_json(output/'last.campaign.json',{**identity,'campaign':campaign.snapshot()})
         write_json(output/'last.state.json',identity)
 
     save_report()
@@ -134,6 +137,13 @@ def run(rom: Path, output: Path, *, goal: str, steps: int, state_file: Path | No
                 raise ValueError("State identity mismatch")
             world.load(state_file.read_bytes())
             tracker, report["progress_memory_source"] = restore_progress(state_file,manifest)
+            campaign_file=state_file.parent/'last.campaign.json'
+            if campaign_file.exists():
+                saved_campaign=json.loads(campaign_file.read_text())
+                if all(saved_campaign.get(k)==manifest.get(k) for k in ('rom_sha1','state_sha256','step')):
+                    campaign=CampaignPlanner(saved_campaign['campaign'])
+                    report['campaign_memory_source']='verified_checkpoint'
+
         first_frame = getattr(world.game,'frame_count',None) if hasattr(world,'game') else None
         if video:
             metadata = world.enable_video(output)
@@ -150,7 +160,18 @@ def run(rom: Path, output: Path, *, goal: str, steps: int, state_file: Path | No
             if before['errors']:
                 raise RuntimeError("Memory sanity check failed before action")
             before["progress"] = tracker.context(before)
+            before["campaign"] = campaign.context(before)
+            objective=before['campaign']['active_objective']
+            if report.get('active_objective')!=objective['id']:
+                report['active_objective']=objective['id']
+                if before.get('world'):
+                    emit('objective',step=step,objective=objective,navigation=before['campaign']['navigation'])
+            report['completed_objectives']=objective.get('completed_ids',[])
+            if objective.get('id')=='main_story_complete' and objective.get('completion') is True:
+                report.update(status='completed',game_completed=True,completion_evidence=objective.get('completion_evidence'))
+                break
             verified_before = observation_for_model(before)
+            verified_before["campaign"] = before["campaign"]
             emit('observation',step=step,observation=verified_before)
             screenshot_hash = world.screenshot(output/f'{i:04d}-before.png') if screenshots else None
 
@@ -167,6 +188,9 @@ def run(rom: Path, output: Path, *, goal: str, steps: int, state_file: Path | No
             decision = choose(before,goal,history,on_event=decision_event)
             if video:
                 video_health = world.video_status()
+                if video_health.get('terminal_error'):
+                    emit('video_failed',step=step,error=video_health['terminal_error'])
+                    raise RuntimeError('Video encoder recovery exhausted; game checkpoint will be preserved')
                 if video_health.get('restart_count',0) != video_restarts:
                     video_restarts = video_health['restart_count']
                     report['video_restarts'] = video_restarts
@@ -195,26 +219,44 @@ def run(rom: Path, output: Path, *, goal: str, steps: int, state_file: Path | No
                      error='interrupted' if isinstance(exc,KeyboardInterrupt) else type(exc).__name__,
                      result={'button':button,'before':verified_before,'after':None})
                 raise
+            old_objective=before["campaign"]["active_objective"]["id"]
+            old_verified=set(before["campaign"]["active_objective"].get("completed_ids",[]))
+            campaign_effect=campaign.record(button,before,after)
+            after["campaign"]=campaign.context(after)
+            new_verified=set(after["campaign"]["active_objective"].get("completed_ids",[]))
             outcome = tracker.record(button,before,after)
+            outcome["objective_changed"]=after["campaign"]["active_objective"]["id"]!=old_objective
+            outcome["milestones_completed"]=sorted(new_verified-old_verified)
+            old_enemy=(before.get("battle") or {}).get("enemy") or {}
+            new_enemy=(after.get("battle") or {}).get("enemy") or {}
+            outcome["battle_damage"]=bool(old_enemy and new_enemy and new_enemy.get("hp",9999)<old_enemy.get("hp",0))
+            outcome["new_dialog_clue"]=campaign_effect['new_dialog_clue']
+            outcome["meaningful_progress"]=bool(outcome["world_progress"] or outcome["objective_changed"] or outcome["milestones_completed"] or outcome["battle_damage"] or outcome['new_dialog_clue'])
             after['progress'] = tracker.context(after)
             report['new_tiles_this_run'] += int(outcome['new_tile'])
             report['movement_actions'] += int(outcome['position_changed'])
             report['map_changes'] += int(outcome['map_changed'])
-            stalled_steps = 0 if outcome['world_progress'] else stalled_steps + 1
+            stalled_steps = 0 if outcome['meaningful_progress'] else stalled_steps + 1
             report['steps_without_new_tile_this_run'] = stalled_steps
             report['loop_detected'] = after['progress']['loop_detected']
             history.append({'button':button,'before':before.get('player'),'after':after.get('player'),
                             'text_after':after.get('screen_text',{}).get('rows')})
             verified_after = observation_for_model(after)
+            verified_after["campaign"] = after["campaign"]
+            report["completed_objectives"]=after["campaign"]["active_objective"].get("completed_ids",[])
+            report["active_objective"]=after["campaign"]["active_objective"]["id"]
             emit('result',step=step,button=button,success=True,outcome=outcome,observation=verified_after,
                  result={'button':button,'before':verified_before,'after':verified_after})
+            if outcome['objective_changed'] and after.get('world'):
+                emit('objective',step=step,objective=after['campaign']['active_objective'],
+                     navigation=after['campaign']['navigation'],completed=outcome['milestones_completed'])
             if report['executed_actions'] % checkpoint_every == 0:
                 save_checkpoint()
                 emit('checkpoint',step=step,saved_step=report['executed_actions'])
             history = history[-12:]
             save_report()
             if stalled_steps >= max_stalled_steps and after['progress']['loop_detected'] and (after.get('scene') or {}).get('verified') is True:
-                report.update(status='stalled',reason=f'{stalled_steps} inputs without a new coordinate and a repeated interaction/movement loop; saved for review.')
+                report.update(status='stalled',reason=f'{stalled_steps} inputs without new exploration, unique dialogue, battle damage or verified story progress, with a repeated loop; saved for review.')
                 break
         else:
             report['status']='budget_reached'

@@ -45,7 +45,7 @@ def observation_for_model(observation: dict) -> dict:
     raw_text = observation.get("screen_text") or {}
     rows = [row.rstrip() for row in raw_text.get("rows", []) if isinstance(row,str) and row.strip()]
     scene = observation.get("scene") or {}
-    verified_scene = scene.get("verified") is True and scene.get("mode") in ("overworld", "dialog", "main_menu")
+    verified_scene = scene.get("verified") is True and scene.get("mode") in ("overworld", "dialog", "main_menu", "battle", "name_entry", "species_preview")
     mode = scene["mode"] if verified_scene else "unknown"
     dialog = observation.get("dialog") or {}
     local_map = observation.get("local_map") or {}
@@ -54,6 +54,20 @@ def observation_for_model(observation: dict) -> dict:
     elif mode == "dialog" and isinstance(dialog.get("text"), str):
         rows = [line for line in dialog["text"].splitlines() if line.strip()]
     main_menu_visible = mode == "main_menu" or (not observation.get("scene") and "PACK" in "\n".join(rows) and "SAVE" in "\n".join(rows))
+    facts = observation.get("milestones") or {}
+    party_fact = facts.get("party_count") or {}
+    party = observation.get("party")
+    party_verified = isinstance(party,list) and party_fact.get("verified") is True and party_fact.get("value") == len(party)
+    bag = observation.get("bag")
+    bag_verified = isinstance(bag,list) and (not bag or all(row.get("name_verified") is True for row in bag))
+    battle = observation.get("battle") or {}
+    if battle.get("verified"):
+        battle = dict(battle)
+        if isinstance(battle.get("enemy"),dict):
+            battle["enemy"]={k:v for k,v in battle["enemy"].items() if k!="moves"}
+    else:
+        battle = {**{key:battle.get(key) for key in ('active','phase','phase_verified','combatants_ready','menu','visible_text')},
+                  'verified':False,'quality':'needs_data'}
     return {
         "game": observation.get("game"),
         "scene": {"mode": mode, "verified": verified_scene,
@@ -65,18 +79,36 @@ def observation_for_model(observation: dict) -> dict:
         "player": verified_player(observation.get("player")),
         "local_map": {key:local_map.get(key) for key in ("rows", "player_cell", "neighbors", "legend", "quality", "source", "validation_scope", "limitations")}
                      if mode == "overworld" and local_map.get("verified") is True and local_map.get("quality") == "advisory_background_only" else None,
-        "party": [] if observation.get("party") == [] else None,
-        "bag": [] if observation.get("bag") == [] else None,
+        "party": party if party_verified else ([] if party == [] else None),
+        "party_state": observation.get("party_state"),
+        "bag": bag if bag_verified else None,
+        "world": observation.get("world"),
+        "milestones": facts,
+        "battle": battle,
         "main_menu_cursor": observation.get("menu_cursor_raw") if main_menu_visible else None,
         "progress": observation.get("progress"),
-        "unavailable": ["nonempty party/bag details, money, badges, enemy and battle strategy: not live-validated",
-                        "NPC occupancy, exits, warps and full collision rules: not identified by the background grid"],
+        "unavailable": (["party details: not verified in this observation"] if not party_verified else []) +
+                       (["inventory identities: not verified in this observation"] if not bag_verified else []) +
+                       ["Source-prior story/map facts are labelled separately; unverified event flags do not prove progress.",
+                        "NPCs may move; inferred paths must be checked after each input."],
     }
 
 
 def build_request(observation: dict, goal: str, history: list[dict]) -> dict:
     game = observation_for_model(observation)
+    campaign = observation.get("campaign") or {}
     progress = game.pop("progress", None) or {}
+    if campaign:
+        objective=campaign.get("active_objective") or {}
+        wanted=set((objective.get("completion_evidence") or {})) | {"party_count","badge_count","game_completed"}
+        game["milestones"]={k:v for k,v in (game.get("milestones") or {}).items() if k in wanted}
+        world=game.get("world") or {}
+        game["world"]={k:world.get(k) for k in ("map_id","name","width","height","quality","source_match","player_position_valid","input_lock")}
+        game["world"]["warps"]=[{k:w.get(k) for k in ("x","y","destination_map_id","destination_name","quality")} for w in world.get("warps",[])]
+        game["world"]["objects"]=[{k:o.get(k) for k in ("object_id","sprite","x","y","text_id","active","quality")} for o in world.get("objects",[]) if o.get("active") is not False]
+        game["world"]["connections"]=world.get("connections",[])
+        campaign={**campaign,"active_objective":{k:objective.get(k) for k in ("id","intent","why","status","knowledge","completion","completion_evidence","unknown_facts")},
+                  "observed_map_connections":campaign.get("observed_map_connections",[])[-8:]}
     recent = progress.get("recent_effects")
     if not isinstance(recent, list):
         recent = [{"button": row.get("button"), "before": verified_player(row.get("before")),
@@ -94,6 +126,10 @@ def build_request(observation: dict, goal: str, history: list[dict]) -> dict:
     criteria["a"] = "Press A once. Confirm/advance an OPEN dialog or menu; in OVERWORLD this starts another interaction with the faced object. A does not walk. Reopening a completed repeated interaction is not exploration."
     criteria["wait"] = "Release all buttons and advance a short time for observed printing/animation/transition. In a verified OVERWORLD this stays still; blank text alone is not evidence that waiting is needed."
     neighbors = (game.get("local_map") or {}).get("neighbors") or {}
+    battle_active=(game.get('battle') or {}).get('active') is True
+    current_focus=(campaign.get('active_objective') or {}).get('intent') or progress.get('current_focus', 'Use verified observations to advance the goal.')
+    if battle_active:
+        current_focus='Resolve the current battle UI first. Advancing battle introduction/text usually needs A; choose FIGHT and a usable damaging move when its menu appears. Resume the story objective after battle.'
     visits = feedback.get("neighbor_visits") or {}
     for direction in ("up", "down", "left", "right"):
         criteria[direction] = {"input": BUTTONS[direction],
@@ -104,7 +140,8 @@ def build_request(observation: dict, goal: str, history: list[dict]) -> dict:
         "model": os.environ.get("TYPESAFE_MODEL", "jev-latest"),
         "state": {
             "goal": goal,
-            "current_focus": progress.get("current_focus", "Use the verified UI phase and immediate observations to make local progress toward the goal."),
+            "campaign": campaign,
+            "current_focus": current_focus,
             "game": game,
             "feedback": feedback,
             "recent_actions": recent,
@@ -113,7 +150,14 @@ def build_request(observation: dict, goal: str, history: list[dict]) -> dict:
         "questions": {"button": {
             "type": "choice", "criteria": criteria,
             "instructions": (
-                "Choose ONE physical input to advance state.goal. The overall goal takes priority over current_focus, which is only a local observation hint. New coordinates and movement alone do not establish story progress or completion. "
+                "Choose ONE physical input. First resolve the CURRENT UI: battle, dialogue and naming take precedence over walking toward the story destination. Navigation suggestions apply only in a verified controllable OVERWORLD. "
+                "Then advance campaign.active_objective, which serves state.goal. Story progress takes priority over exploring new coordinates. "
+                "Use campaign.navigation.next_button as an explicit advisory path/interaction suggestion from the disclosed navigation tool, if it agrees with the latest UI and input lock. Do not wander away from the active target merely to visit a new tile. "
+                "When navigation.status is interact, A is purposeful story interaction, not a repetition to avoid. Source-prior knowledge identifies intended targets but live facts verify the result. "
+                "If game.world.input_lock.ignored_buttons_mask is 255, or scripted movement/transition has control and no input-ready dialog is visible, choose wait to let the game script proceed. "
+                "Whenever game.battle.active is true, suspend map navigation, even if combatants are not yet initialized and the scene is unknown. 'Wild ... appeared!', '... sent out ...', and a visible dialogue arrow are battle introduction text to advance with A; directional walking cannot advance it. "
+                "In battle, use game.battle: command menu FIGHT is the upper-left command; select it then a damaging move with remaining PP. Avoid repeatedly using zero-power status moves. Use HP/PP and visible selected_move_slot/selected_command; menu_cursor_raw has different indexing between menus. Text/animation may need A or wait. Trainer battles cannot be fled. "
+                "If an optional nickname question is shown, B declines it. In name_entry, START completes the name rather than endlessly entering letters. In species_preview, A returns to the selection dialogue. "
                 "Use the current verified scene, observed local geometry, temporal_context and recent action effects to decide how to act safely toward that goal. "
                 "Read transitions oldest-to-newest to distinguish opening a dialog, advancing it, closing it, turning, moving, and getting no movement. Earlier states do not override the latest verified phase. "
                 "In OVERWORLD with dialog.open=false, movement/exploration is available even when screen_text is empty; this is not a request to wait or press A. "

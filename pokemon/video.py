@@ -16,6 +16,12 @@ import time
 
 
 class HLSVideo:
+    # This bounds a genuinely blocked encoder, not the time spent on one frame.
+    # A scheduler pause or slow, progressing partial writes are not a failure.
+    WRITE_IDLE_SECONDS = 15.0
+    DEGRADED_AFTER_SECONDS = 3.0
+    SHUTDOWN_DRAIN_SECONDS = 1.0
+
     def __init__(self, output: Path, *, width: int = 160, height: int = 144,
                  fps: int = 30, ffmpeg: str | None = None):
         if any(type(n) is not int or n < 1 for n in (width, height, fps)):
@@ -39,6 +45,8 @@ class HLSVideo:
         self._restarts = 0
         self._restart_times: deque[float] = deque()
         self._last_error: str | None = None
+        self._recovering = False
+        self._last_progress_at: float | None = None
         self._executable = executable
         self._log = self.directory / "ffmpeg.log"
         self._start_encoder()
@@ -107,15 +115,29 @@ class HLSVideo:
         self._ready.set()
 
     def status(self) -> dict:
-        self.check()
+        # Health must remain inspectable after a terminal error so the caller
+        # can checkpoint and pause decisions without losing the diagnostics.
         with self._lock:
+            stalled_for = (max(0, time.monotonic() - self._last_progress_at)
+                           if self._last_progress_at is not None else None)
+            health = ("failed" if self._error is not None else
+                      "closed" if self._closed else
+                      "recovering" if self._recovering else
+                      "starting" if not self._encoded else
+                      "degraded" if stalled_for is not None and stalled_for > self.DEGRADED_AFTER_SECONDS else
+                      "live")
             return {"fps": self.fps, "width": self.width, "height": self.height,
                     "format": "hls-fmp4", "codec": "h264",
                     "playlist": "video/index.m3u8", "published_frames": self._published,
                     "encoded_frames": self._encoded, "restart_count": self._restarts,
-                    "last_error": self._last_error}
+                    "health": health, "healthy": health == "live",
+                    "seconds_without_write_progress": stalled_for,
+                    "write_idle_limit_seconds": self.WRITE_IDLE_SECONDS,
+                    "last_error": self._last_error,
+                    "terminal_error": str(self._error) if self._error is not None else None}
 
     def _recover_encoder(self, error: BaseException) -> None:
+        self._recovering = True
         self._last_error = self._diagnostic(error)
         now = time.monotonic()
         while self._restart_times and self._restart_times[0] < now - 300:
@@ -136,28 +158,42 @@ class HLSVideo:
         with self._lock:
             if not self._stop.is_set():
                 self._start_encoder(resume=True)
+        self._recovering = False
 
     def _write_frame(self, frame: bytes) -> bool:
         assert self._process.stdin is not None
         descriptor = self._process.stdin.fileno()
         remaining = memoryview(frame)
-        write_deadline = time.monotonic() + 2
+        last_progress = time.monotonic()
+        shutdown_deadline: float | None = None
         # A nonblocking pipe prevents a stuck/dead ffmpeg from hanging gameplay
         # or shutdown. At most the current frame and latest frame are retained.
         while remaining:
             # Finish a frame already in the pipe on normal shutdown. Closing
             # halfway through would leave malformed raw video for ffmpeg.
-            if time.monotonic() >= write_deadline:
-                raise RuntimeError("ffmpeg did not accept a video frame within 2 seconds")
+            if self._stop.is_set():
+                if shutdown_deadline is None:
+                    shutdown_deadline = time.monotonic() + self.SHUTDOWN_DRAIN_SECONDS
+                elif time.monotonic() >= shutdown_deadline:
+                    return False
             if self._process.poll() is not None:
                 raise RuntimeError("ffmpeg exited while streaming")
-            if not select.select([], [descriptor], [], 0.1)[1]:
-                continue
-            try:
-                written = os.write(descriptor, remaining)
-            except BlockingIOError:
-                continue
-            remaining = remaining[written:]
+            if select.select([], [descriptor], [], 0.1)[1]:
+                try:
+                    written = os.write(descriptor, remaining)
+                except BlockingIOError:
+                    written = 0
+                if written:
+                    remaining = remaining[written:]
+                    last_progress = time.monotonic()
+                    with self._lock:
+                        self._last_progress_at = last_progress
+                    continue
+            # Check only after trying the pipe: if this thread was suspended
+            # while ffmpeg remained healthy, a successful write above resets
+            # the timer instead of needlessly killing a working encoder.
+            if time.monotonic() - last_progress >= self.WRITE_IDLE_SECONDS:
+                raise RuntimeError(f"ffmpeg accepted no video bytes for {self.WRITE_IDLE_SECONDS:g} seconds")
         return True
 
     def _write_frames(self) -> None:

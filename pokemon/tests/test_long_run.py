@@ -88,6 +88,10 @@ class LongRunTests(unittest.TestCase):
             manifest = json.loads((output / 'last.state.json').read_text())
             self.assertEqual(manifest['step'], 5)
             self.assertEqual(manifest['state_sha256'], hashlib.sha256((output / 'last.state').read_bytes()).hexdigest())
+            campaign = json.loads((output / 'last.campaign.json').read_text())
+            self.assertEqual({key:campaign[key] for key in ('rom_sha1','state_sha256','step')},
+                             {key:manifest[key] for key in ('rom_sha1','state_sha256','step')})
+            self.assertEqual(campaign['campaign']['steps'], 5)
             self.assertEqual(report['executed_actions'], 5)
             self.assertEqual(report['jev_http_attempts'], 10)
             self.assertEqual(report['model_ms'], 1500)
@@ -96,6 +100,30 @@ class LongRunTests(unittest.TestCase):
             self.assertFalse(list(output.glob('*.tmp')))
             world.screenshot.assert_not_called()
             world.close.assert_called_once()
+
+    def test_campaign_memory_resume_requires_matching_checkpoint_identity(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / 'source'; source.mkdir()
+            state = source / 'last.state'; state.write_bytes(b'offline campaign checkpoint')
+            identity = {'rom_sha1':PROFILE['rom_sha1'],'state_sha256':hashlib.sha256(state.read_bytes()).hexdigest(),'step':24}
+            (source / 'last.state.json').write_text(json.dumps(identity))
+            for matching in (True, False):
+                with self.subTest(matching=matching):
+                    sidecar={**identity,'campaign':{'steps':24,'history_facts':{'pokedex_received':{'value':True,'verified':True}}}}
+                    if not matching:sidecar['state_sha256']='different-state'
+                    (source / 'last.campaign.json').write_text(json.dumps(sidecar))
+                    world=Mock();world.save.return_value=b'offline resumed state'
+                    reader=Mock();reader.snapshot.return_value=OBSERVATION
+                    output=Path(directory)/str(matching)
+                    with patch.dict(os.environ, {'TYPESAFE_API_KEY':TEST_KEY}), \
+                         patch('run.Emulator',return_value=world),patch('run.Reader',return_value=reader), \
+                         patch('run.load_profile',return_value=PROFILE), \
+                         patch('run.choose',return_value={'answer':{'choice':'wait'}}):
+                        report=run(Path('NO-ROM.gb'),output,goal='Offline validation',steps=1,state_file=state)
+                    memory=json.loads((output/'last.campaign.json').read_text())['campaign']
+                    self.assertEqual(report['campaign_memory_source'],'verified_checkpoint' if matching else 'new_memory')
+                    self.assertEqual(memory['steps'],25 if matching else 1)
+                    self.assertEqual('pokedex_received' in memory['history_facts'],matching)
 
     @unittest.skipUnless(hasattr(signal, 'SIGTERM'), 'requires POSIX SIGTERM')
     def test_cli_sigterm_finalizes_a_waiting_run_and_saves_state(self):

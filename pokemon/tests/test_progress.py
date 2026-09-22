@@ -121,6 +121,37 @@ class ProgressTests(unittest.TestCase):
         self.assertTrue(out["map_changed"])
         self.assertTrue(out["new_tile"])
 
+    def test_transient_map_header_mismatch_does_not_create_position_or_progress(self):
+        tracker = ProgressTracker()
+        stable = observation(map_id=0, x=12, y=11)
+        stable['world'] = {'source_match': True, 'player_position_valid': True}
+        transition = observation(map_id=40, x=12, y=11)
+        transition['world'] = {'source_match': False, 'player_position_valid': True}
+        outcome = tracker.record('wait', stable, transition)
+        self.assertFalse(outcome['position_changed'])
+        self.assertFalse(outcome['map_changed'])
+        self.assertFalse(outcome['new_tile'])
+        self.assertFalse(outcome['world_progress'])
+        self.assertNotIn('40:12:11', tracker.visited)
+        self.assertIsNone(tracker.recent_transitions[-1]['after']['position'])
+        # Settling to a valid lab position is a new observation, without
+        # inventing a movement delta from the stale-coordinate frame.
+        arrived = observation(map_id=40, x=5, y=11)
+        arrived['world'] = {'source_match': True, 'player_position_valid': True}
+        outcome = tracker.record('wait', transition, arrived)
+        self.assertFalse(outcome['position_changed'])
+        self.assertTrue(outcome['new_tile'])
+        self.assertIn('40:5:11', tracker.visited)
+
+    def test_out_of_bounds_player_cannot_add_an_explored_tile(self):
+        tracker = ProgressTracker()
+        invalid = observation(x=200)
+        invalid['world'] = {'source_match': True, 'player_position_valid': False}
+        result = tracker.record('right', invalid, invalid)
+        self.assertFalse(result['new_tile'])
+        self.assertEqual(len(tracker.visited), 0)
+        self.assertIsNone(tracker.recent_transitions[-1]['after']['position'])
+
     def test_discontinuous_observation_does_not_carry_stationary_streak(self):
         tracker = ProgressTracker()
         state = observation()
