@@ -5,7 +5,7 @@ from pathlib import Path
 import sys
 import tempfile
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, call, patch
 import urllib.error
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -18,6 +18,13 @@ TEST_KEY = 'fixture-only-not-a-real-key'
 def answer():
     return {'answers': {'button': {'type': 'choice', 'choice': 'a', 'confidence': 0.7,
             'probabilities': {button: (1.0 if button == 'a' else 0.0) for button in BUTTONS}}}}
+
+
+def inconsistent_answer():
+    payload = answer()
+    payload['answers']['button'].update(choice='wait', confidence=0.43,
+        probabilities={button: {'a': 0.44, 'wait': 0.43, 'b': 0.13}.get(button, 0.0) for button in BUTTONS})
+    return payload
 
 
 def observation():
@@ -60,17 +67,111 @@ class EventTests(unittest.TestCase):
         for payload in [None, {'answers': []}, {'answers': {'button': 'invalid'}}, {'answers': {'button': {}}}]:
             output = []
             with self.subTest(payload=payload), patch.dict('os.environ', {'TYPESAFE_API_KEY': TEST_KEY}), \
-                 patch('urllib.request.urlopen', return_value=response(payload)):
+                 patch('urllib.request.urlopen', side_effect=lambda *args, **kwargs: response(payload)) as network, \
+                 patch('jev.time.sleep') as sleep:
                 with self.assertRaises(ValueError):
                     choose(observation(), 'Explore', [], on_event=output.append)
+                self.assertEqual(network.call_count, 3)
+                self.assertEqual(sleep.call_args_list, [call(1), call(2)])
                 self.assertEqual(output[-1]['type'], 'jev_error')
                 self.assertEqual(output[-1]['phase'], 'validation')
         output = []
         with patch.dict('os.environ', {'TYPESAFE_API_KEY': TEST_KEY}), \
-             patch('urllib.request.urlopen', side_effect=urllib.error.URLError(TEST_KEY)):
+             patch('urllib.request.urlopen', side_effect=urllib.error.URLError(TEST_KEY)) as network, \
+             patch('jev.time.sleep') as sleep:
             with self.assertRaisesRegex(RuntimeError, 'connection failed'):
                 choose({}, 'Explore', [], on_event=output.append)
+        self.assertEqual(network.call_count, 3)
+        self.assertEqual(sleep.call_args_list, [call(1), call(2)])
         self.assertNotIn(TEST_KEY, json.dumps(output))
+
+    def test_invalid_decision_retries_the_same_observation_before_one_valid_action(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'run'
+            world = Mock()
+            world.save.return_value = b'offline retry test double'
+            reader = Mock()
+            reader.snapshot.return_value = observation()
+            bad = inconsistent_answer()
+            replies = iter([bad, answer()])
+            def next_reply(*args, **kwargs):
+                world.press.assert_not_called()
+                return response(next(replies))
+            with patch.dict('os.environ', {'TYPESAFE_API_KEY': TEST_KEY}), \
+                 patch('run.Emulator', return_value=world), patch('run.Reader', return_value=reader), \
+                 patch('urllib.request.urlopen', side_effect=next_reply) as network, \
+                 patch('jev.time.sleep') as sleep:
+                report = run(Path('TEST-DOUBLE.gb'), path, goal='Explore', steps=1)
+            rows = events(path)
+            requests = [row for row in rows if row['type'] == 'jev_request']
+            self.assertEqual(network.call_count, 2)
+            self.assertEqual([row['attempt'] for row in requests], [1, 2])
+            self.assertEqual(requests[0]['request'], requests[1]['request'])
+            self.assertEqual([row['type'] for row in rows], [
+                'started', 'observation', 'jev_request', 'jev_response', 'jev_error',
+                'jev_request', 'jev_response', 'decision', 'executing', 'result', 'finished'])
+            rejected = next(row for row in rows if row['type'] == 'jev_error')
+            self.assertEqual((rejected['error'], rejected['phase'], rejected['attempt']), ('invalid_response', 'validation', 1))
+            self.assertEqual([row['response'] for row in rows if row['type'] == 'jev_response'], [bad, answer()])
+            self.assertEqual(report['jev_http_attempts'], 2)
+            self.assertEqual(report['jev_calls'], 1)
+            self.assertEqual(report['executed_actions'], 1)
+            self.assertEqual(report['model_ms'], sum(row['latency_ms'] for row in rows if row['type'] == 'jev_response'))
+            world.press.assert_called_once_with('a', held=8, settle=32)
+            sleep.assert_called_once_with(1)
+
+    def test_three_inconsistent_decisions_never_execute_or_become_accepted(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'run'
+            world = Mock()
+            world.save.return_value = b'offline rejected test double'
+            reader = Mock()
+            reader.snapshot.return_value = observation()
+            with patch.dict('os.environ', {'TYPESAFE_API_KEY': TEST_KEY}), \
+                 patch('run.Emulator', return_value=world), patch('run.Reader', return_value=reader), \
+                 patch('urllib.request.urlopen', side_effect=lambda *args, **kwargs: response(inconsistent_answer())) as network, \
+                 patch('jev.time.sleep') as sleep:
+                with self.assertRaisesRegex(ValueError, 'invalid decision'):
+                    run(Path('TEST-DOUBLE.gb'), path, goal='Explore', steps=1)
+            rows = events(path)
+            self.assertEqual(network.call_count, 3)
+            self.assertEqual(sleep.call_args_list, [call(1), call(2)])
+            self.assertEqual([row['attempt'] for row in rows if row['type'] == 'jev_request'], [1, 2, 3])
+            self.assertEqual([row['attempt'] for row in rows if row['type'] == 'jev_error'], [1, 2, 3])
+            self.assertFalse(any(row['type'] in ('decision', 'executing', 'result') for row in rows))
+            report = rows[-1]['report']
+            self.assertEqual(report['status'], 'failed')
+            self.assertEqual(report['jev_http_attempts'], 3)
+            self.assertEqual(report['jev_calls'], 0)
+            self.assertEqual(report['executed_actions'], 0)
+            world.press.assert_not_called()
+
+    def test_transient_connection_and_invalid_json_retry_before_a_valid_response(self):
+        invalid = io.BytesIO(b'{invalid json')
+        invalid.status = 200
+        output = []
+        with patch.dict('os.environ', {'TYPESAFE_API_KEY': TEST_KEY}), \
+             patch('urllib.request.urlopen', side_effect=[urllib.error.URLError(TEST_KEY), invalid, response(answer())]) as network, \
+             patch('jev.time.sleep') as sleep:
+            result = choose(observation(), 'Explore', [], on_event=output.append)
+        self.assertEqual(network.call_count, 3)
+        self.assertEqual(sleep.call_args_list, [call(1), call(2)])
+        self.assertEqual(result['answer']['choice'], 'a')
+        self.assertEqual([row['attempt'] for row in output if row['type'] == 'jev_request'], [1, 2, 3])
+        self.assertEqual([row['error'] for row in output if row['type'] == 'jev_error'], ['connection_failed', 'invalid_json'])
+        self.assertNotIn(TEST_KEY, json.dumps(output))
+
+    def test_nonretryable_http_error_and_interruption_stop_immediately(self):
+        for error, expected in [
+            (urllib.error.HTTPError('https://example.invalid', 401, 'unauthorized', {}, None), RuntimeError),
+            (KeyboardInterrupt(), KeyboardInterrupt),
+        ]:
+            with self.subTest(error=type(error).__name__), patch.dict('os.environ', {'TYPESAFE_API_KEY': TEST_KEY}), \
+                 patch('urllib.request.urlopen', side_effect=error) as network, patch('jev.time.sleep') as sleep:
+                with self.assertRaises(expected):
+                    choose(observation(), 'Explore', [])
+                self.assertEqual(network.call_count, 1)
+                sleep.assert_not_called()
 
     def test_run_streams_decision_before_action_and_never_requires_images(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -137,7 +238,7 @@ class EventTests(unittest.TestCase):
                 reader.snapshot.return_value = observation()
                 with patch.dict('os.environ', {'TYPESAFE_API_KEY': TEST_KEY}), \
                      patch('run.Emulator', return_value=world), patch('run.Reader', return_value=reader), \
-                     patch('urllib.request.urlopen', side_effect=error):
+                     patch('urllib.request.urlopen', side_effect=error), patch('jev.time.sleep'):
                     if expected == 'failed':
                         with self.assertRaises(RuntimeError):
                             run(Path('TEST-DOUBLE.gb'), path, goal='Explore', steps=1)

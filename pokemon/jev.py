@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import http.client
 import math
 import os
 import time
@@ -159,9 +160,12 @@ def choose(observation: dict, goal: str, history: list[dict], *,
         except KeyboardInterrupt:
             emit("jev_error", attempt=attempt, error="interrupted", phase="request")
             raise
-        except Exception:
+        except Exception as exc:
             emit("jev_error", attempt=attempt, error="connection_failed", phase="request",
                  latency_ms=round((time.monotonic() - attempt_started) * 1000))
+            if isinstance(exc, (OSError, http.client.HTTPException)) and attempt < 3:
+                time.sleep(2 ** (attempt - 1))
+                continue
             raise RuntimeError("Jev connection failed; no action executed") from None
         try:
             response = json.loads(raw_response)
@@ -169,14 +173,19 @@ def choose(observation: dict, goal: str, history: list[dict], *,
             emit("jev_response", attempt=attempt, response={"invalid_json": True},
                  httpStatus=status, latency_ms=round((time.monotonic() - attempt_started) * 1000))
             emit("jev_error", attempt=attempt, error="invalid_json", phase="validation", httpStatus=status)
+            if attempt < 3:
+                time.sleep(2 ** (attempt - 1))
+                continue
             raise ValueError("Jev returned invalid JSON; no action executed") from None
         emit("jev_response", attempt=attempt, response=response, httpStatus=status,
              latency_ms=round((time.monotonic() - attempt_started) * 1000))
-        break
-    try:
-        answer = validate_response(response)
-    except (ValueError, TypeError, AttributeError):
-        emit("jev_error", attempt=attempt, error="invalid_response", phase="validation")
-        raise ValueError("Jev returned an invalid decision; no action executed") from None
-    return redact_secrets({"answer": answer, "request": body, "response": response,
-                           "latency_ms": round((time.monotonic() - started) * 1000), "source": "jev"}, (key,))
+        try:
+            answer = validate_response(response)
+        except (ValueError, TypeError, AttributeError):
+            emit("jev_error", attempt=attempt, error="invalid_response", phase="validation")
+            if attempt < 3:
+                time.sleep(2 ** (attempt - 1))
+                continue
+            raise ValueError("Jev returned an invalid decision; no action executed") from None
+        return redact_secrets({"answer": answer, "request": body, "response": response,
+                               "latency_ms": round((time.monotonic() - started) * 1000), "source": "jev"}, (key,))
