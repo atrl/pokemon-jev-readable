@@ -234,6 +234,56 @@ test('invalid retry values cannot produce an invalid wait deadline or a terminal
   assert.equal(run.results, 0);
 });
 
+test('recovery stays nonterminal, records bounded attempts, and resumes normal observation and request states', t => {
+  t.mock.timers.enable({ apis: ['Date'], now: Date.parse('2026-09-22T01:00:10.000Z') });
+  const { root, pokemon } = fixture(t);
+  fs.writeFileSync(pokemon,
+    line('started', { time: '2026-09-22T01:00:00.000Z', elapsed_ms: 0, pid: process.pid, video_enabled: true, maxSteps: 5000 }) +
+    line('recovery', { time: '2026-09-22T01:00:05.000Z', elapsed_ms: 5000, step: 80,
+      attempt: 1, max_attempts: 3, reason: 'no_observable_change', no_effect_steps: 80, loop_kind: 'stationary', failed_button: 'a' }));
+  const store = new EventStore(root, { maxEvents: 1 });
+  store.poll();
+  const initial = store.list()[0];
+  assert.equal(initial.status, 'recovering');
+  assert.equal(initial.recovery_count, 1);
+  assert.equal(initial.recovery.attempt, 1);
+  assert.equal(initial.recovery.max_attempts, 3);
+  assert.equal(initial.recovery.loop_kind, 'stationary');
+  assert.equal(initial.calls, 0);
+  assert.equal(initial.results, 0);
+  assert.equal(initial.video.enabled, true);
+  assert.equal(initial.timing.elapsed_ms, 10000);
+  t.mock.timers.tick(1000);
+  assert.equal(store.detail(initial.id).run.timing.elapsed_ms, 11000);
+  fs.appendFileSync(pokemon, line('checkpoint', { time: '2026-09-22T01:00:11.000Z', elapsed_ms: 11000 }));
+  store.poll();
+  assert.equal(store.detail(initial.id).run.status, 'recovering');
+  assert.equal(store.detail(initial.id).run.recovery.attempt, 1);
+  fs.appendFileSync(pokemon, line('observation', { step: 81 }));
+  store.poll();
+  assert.equal(store.detail(initial.id).run.status, 'observing');
+  fs.appendFileSync(pokemon, line('jev_request', { step: 81, attempt: 1 }));
+  store.poll();
+  assert.equal(store.detail(initial.id).run.status, 'calling');
+  assert.equal(store.detail(initial.id).run.calls, 1);
+  assert.equal(store.detail(initial.id).run.results, 0);
+  for (let attempt = 2; attempt <= 3; attempt++) {
+    fs.appendFileSync(pokemon, line('recovery', { attempt, max_attempts: 3, no_effect_steps: 80, failed_button: 'a' }));
+    store.poll();
+    assert.equal(store.detail(initial.id).run.status, 'recovering');
+  }
+  const lastAttempt = store.detail(initial.id).run;
+  assert.equal(lastAttempt.recovery_count, 3);
+  assert.equal(lastAttempt.recovery.attempt, 3);
+  assert.equal(lastAttempt.status, 'recovering'); // Reaching the attempt count is not an invented finish.
+  fs.appendFileSync(pokemon, line('finished', { status: 'stalled', reason: 'recovery_attempts_exhausted' }));
+  store.poll();
+  const paused = store.detail(initial.id).run;
+  assert.equal(paused.status, 'stalled');
+  assert.equal(paused.recovery_count, 3);
+  assert.equal(paused.recovery.max_attempts, 3);
+});
+
 test('JSONL decoder preserves a UTF-8 character split between polls and skips corrupt/invalid rows', t => {
   const { root, file } = fixture(t);
   const text = '调用中：正在读取真实游戏状态';
@@ -301,6 +351,9 @@ test('an exited process is marked interrupted unless an explicit terminal event 
   assert.equal(store.list()[0].status, 'interrupted');
   assert.match(store.list()[0].reason, /退出/);
   fs.appendFileSync(file, line('jev_wait', { retry_after_seconds: 300, reason: 'temporarily_unavailable', consecutive_windows: 2 }));
+  store.poll();
+  assert.equal(store.list()[0].status, 'interrupted');
+  fs.appendFileSync(file, line('recovery', { attempt: 1, max_attempts: 3, reason: 'no_observable_change' }));
   store.poll();
   assert.equal(store.list()[0].status, 'interrupted');
   fs.appendFileSync(file, line('finished', { status: 'completed' }));

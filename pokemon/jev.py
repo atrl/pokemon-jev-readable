@@ -9,6 +9,7 @@ import time
 import urllib.error
 import urllib.request
 from typing import Callable
+from battle_strategy import plan_battle
 
 BUTTONS = {
     "up": "Press UP: walk north, turn north, or move a menu cursor up.",
@@ -68,6 +69,8 @@ def observation_for_model(observation: dict) -> dict:
     battle = observation.get("battle") or {}
     if battle.get("verified"):
         battle = dict(battle)
+        if battle.get('active') is True:
+            battle['strategy']=plan_battle(observation)
         if isinstance(battle.get("enemy"),dict):
             battle["enemy"]={k:v for k,v in battle["enemy"].items() if k!="moves"}
     else:
@@ -152,6 +155,18 @@ def build_request(observation: dict, goal: str, history: list[dict]) -> dict:
                                "background_neighbor": neighbors.get(direction),
                                "observed_neighbor_visits": visits.get(direction),
                                "meaning": "One physical directional input; may first turn, move if possible, or move a menu cursor. Background is advisory, not proof of a clear path."}
+    strategy=(game.get('battle') or {}).get('strategy') or {}
+    recommended=strategy.get('next_button')
+    if recommended in BUTTONS:
+        selected=(game.get('battle') or {}).get('selected_move_slot')
+        current_focus=f"Current battle menu: use the disclosed damage estimate to select {strategy.get('recommended_move')} (slot {strategy.get('recommended_slot')}); visible selected move slot is {selected}. Suggested next input is {recommended}; inspect the result before another input."
+        advice={'source':'verified combatants and ROM move/type data; conditional noncritical damage estimate',
+                'recommended_move':strategy.get('recommended_move'),'recommended_slot':strategy.get('recommended_slot'),
+                'suggested_input':recommended,'actual_input_owner':'JEV'}
+        if isinstance(criteria[recommended],dict):criteria[recommended]={**criteria[recommended],'current_battle_advice':advice}
+        else:criteria[recommended]+=' CURRENT BATTLE ADVICE: '+json.dumps(advice,ensure_ascii=False)
+        if (game.get('battle') or {}).get('menu')=='move' and selected!=strategy.get('recommended_slot'):
+            criteria['a']+=' CURRENT MENU: A would use the currently selected move; move the cursor to the recommended move first if the estimate applies.'
     return {
         "model": os.environ.get("TYPESAFE_MODEL", "jev-latest"),
         "state": {
@@ -173,6 +188,8 @@ def build_request(observation: dict, goal: str, history: list[dict]) -> dict:
                 "In OVERWORLD, if game.world.input_lock.ignored_buttons_mask is 255, or scripted movement/transition has control and no input-ready dialog is visible, choose wait to let the game script proceed. Overworld movement locks do not determine battle text input readiness. "
                 "Whenever game.battle.active is true, suspend map navigation, even if combatants are not yet initialized and the scene is unknown. '... wants to fight!', 'Wild ... appeared!', and '... sent out ...' are battle introduction text to advance with A; an absent/blinking arrow or null overworld dialog is not a reason to wait forever. Directional walking cannot advance this text. "
                 "In battle, use game.battle: command menu FIGHT is the upper-left command; select it then a damaging move with remaining PP. Avoid repeatedly using zero-power status moves. Use HP/PP and visible selected_move_slot/selected_command; menu_cursor_raw has different indexing between menus. Text/animation may need A or wait. Trainer battles cannot be fled. "
+                "Use game.battle.strategy to compare currently usable moves, including physical versus special defense, same-type bonus and current opponent type effects. It is conditional tool advice, not guaranteed damage. Do not keep confirming the default move when a better evaluated move requires moving the menu cursor. "
+                "If campaign.recovery is present, the previous repeated inputs had no effect or formed a cycle. Use its diagnostic and the refreshed battle/UI/navigation advice to reconsider the input; do not simply replay the failed pattern. Recovery itself has not pressed any buttons. "
                 "If an optional nickname question is shown, B declines it. In name_entry, START completes the name rather than endlessly entering letters. In species_preview, A returns to the selection dialogue. "
                 "Use the current verified scene, observed local geometry, temporal_context and recent action effects to decide how to act safely toward that goal. "
                 "Read transitions oldest-to-newest to distinguish opening a dialog, advancing it, closing it, turning, moving, and getting no movement. Earlier states do not override the latest verified phase. "

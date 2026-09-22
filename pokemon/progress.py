@@ -255,6 +255,10 @@ class ProgressTracker:
         loop = stationary_loop or moving_cycle
         scene = observation.get("scene") or {}
         mode = scene.get("mode") if scene.get("verified") is True else "unknown"
+        loop_kind=('position_cycle' if moving_cycle and mode=='overworld' else
+                   'repeated_interaction' if stationary_loop and repeated_interactions and mode in ('overworld','dialog') else
+                   'menu_cycle' if stationary_loop and mode=='main_menu' else
+                   'stationary_repetition' if stationary_loop else None)
         if mode == "dialog" and loop:
             focus = "Resolve the repeated dialog, then explore an untried neighbor when the dialog is closed."
         elif mode == "dialog":
@@ -273,7 +277,7 @@ class ProgressTracker:
             neighbors = {direction: self.visited.get(_key((map_id, x + dx, y + dy)), 0)
                          for direction, (dx, dy) in DIRECTIONS.items()}
         return {
-            "loop_detected": loop, "same_position_steps": same_position,
+            "loop_detected": loop, "loop_kind":loop_kind, "same_position_steps": same_position,
             "steps_since_new_tile": self.steps_since_new_tile,
             "untried_directions": [direction for direction in DIRECTIONS if direction not in info["directions"]],
             "direction_outcomes": deepcopy(info["directions"]),

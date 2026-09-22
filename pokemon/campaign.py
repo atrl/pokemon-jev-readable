@@ -42,6 +42,7 @@ class CampaignPlanner:
         self.history_facts=deepcopy(data.get('history_facts',{}))
         self.active=deepcopy(data.get('active'))
         self.support=deepcopy(data.get('support'))
+        self.recovery=deepcopy(data.get('recovery'))
         self.objective_history=deepcopy(data.get('objective_history',[]))[-80:]
         self.failed_edges=deepcopy(data.get('failed_edges',{}))
         self.failed_edge_steps=deepcopy(data.get('failed_edge_steps',{}))
@@ -226,8 +227,27 @@ class CampaignPlanner:
                 'path_preview':path[:8],'target':target,'source':'deterministic BFS guidance over observed background; JEV independently selects the actual input',
                 'limitations':'Unknown terrain and moving NPCs may invalidate this guidance; inspect every result.'}
 
+    def recover(self,observation,*,attempt,reason,failed_button):
+        p=position(observation)
+        if p and (observation.get('scene') or {}).get('mode')=='overworld':
+            # Discard only the current map's advisory terrain cache. Story
+            # evidence, visited positions and inter-map connections remain.
+            self.tiles.pop(str(p[0]),None)
+            for key in list(self.failed_edges):
+                if key.startswith(f'{p[0]}:'):
+                    self.failed_edges.pop(key,None);self.failed_edge_steps.pop(key,None)
+            self._observe(observation)
+        self.recovery={'attempt':attempt,'reason':reason,'failed_button':failed_button,
+            'position':list(p) if p else None,'phase':(observation.get('scene') or {}).get('mode'),
+            'expires_after_action':self.steps+12,
+            'instruction':'Re-read the current UI and refreshed path. Repeating the failed input without a changed state was ineffective. Compare alternative inputs against current battle/UI/navigation guidance. All physical inputs still require a JEV decision.'}
+
     def context(self,observation):
         self._observe(observation)
+        if self.recovery and (self.steps>self.recovery['expires_after_action'] or
+                self.recovery.get('position')!=(list(position(observation)) if position(observation) else None) or
+                self.recovery.get('phase')!=(observation.get('scene') or {}).get('mode')):
+            self.recovery=None
         world=observation.get('world') or {}
         facts=dict(observation.get('milestones') or {})
         completed=facts.get('game_completed') or self.history_facts.get('game_completed')
@@ -253,7 +273,7 @@ class CampaignPlanner:
         target,route=self._target_for(observation,objective)
         navigation=self._navigation(observation,target)
         return {'overall_goal':'Defeat the League Champion and register in the Hall of Fame',
-                'active_objective':objective,'navigation':navigation,
+                'active_objective':objective,'navigation':navigation,'recovery':deepcopy(self.recovery),
                 'story_objective':{'id':story_objective.get('id'),'intent':story_objective.get('intent')},
                 'visited_map_ids':sorted(int(mid) for mid,cells in self.tiles.items() if cells),
                 'recorded_action_count':self.steps,
@@ -266,6 +286,6 @@ class CampaignPlanner:
 
     def snapshot(self):
         return deepcopy({'version':1,'tiles':self.tiles,'visits':self.visits,'transitions':self.transitions,
-            'clues':self.clues,'seen_clues':self.seen_clues,'history_facts':self.history_facts,'active':self.active,'support':self.support,'objective_history':self.objective_history,
+            'clues':self.clues,'seen_clues':self.seen_clues,'history_facts':self.history_facts,'active':self.active,'support':self.support,'recovery':self.recovery,'objective_history':self.objective_history,
             'failed_edges':self.failed_edges,'failed_edge_steps':self.failed_edge_steps,
             'steps':self.steps,'last_position':self._last_position})

@@ -95,3 +95,9 @@ flowchart LR
 - 视频改按连续无写入进展判断超时，短暂系统调度停顿不再直接终止游戏。
 
 实机观察与流程适配回归：[campaign-observation-verified.json](../evidence/campaign-observation-verified.json)、[party-registration-verified.json](../evidence/party-registration-verified.json)。这些脚本回归不是模型行为成绩。
+
+## 停滞恢复与战斗建议
+
+旧保护曾在战败返程后将已走过的路线和已读过的对白累计为 80 步无新探索，误停下一场正在初始化的战斗。现在保留主线证据统计，但另用可观察状态变化识别局部停滞；无变化或确切循环先进行有界重新观察/规划，不把已知路线等同于卡住。完整 101 步失败日志已压缩为回归样本，验证同样的过程不再被截停。
+
+战斗建议基于当前验证过的双方数值、招式 PP 与实际 ROM 属性表，提供有条件的伤害比较和菜单建议。它不等于完整战斗搜索，不宣称精确胜率；未支持的特殊机制和未观察修正明确列出。JEV 仍选择每个实际输入。

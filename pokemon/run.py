@@ -21,6 +21,7 @@ from memory import Reader, load_profile
 from jev import choose, observation_for_model, redact_secrets, DEFAULT_GAME_GOAL, JevUnavailable
 from progress import ProgressTracker
 from campaign import CampaignPlanner
+from activity import StallMonitor
 
 
 def write_json(path: Path, data: dict) -> None:
@@ -62,13 +63,16 @@ def restore_progress(state_file: Path, manifest: dict) -> tuple[ProgressTracker,
 
 def run(rom: Path, output: Path, *, goal: str, steps: int, state_file: Path | None = None,
         visible: bool = False, allow_missing_key: bool = False, screenshots: bool = False,
-        video: bool = False, checkpoint_every: int = 50, max_stalled_steps: int = 80) -> dict:
+        video: bool = False, checkpoint_every: int = 50, max_stalled_steps: int = 80,
+        max_recovery_attempts: int = 3) -> dict:
     if type(steps) is not int or not 1 <= steps <= 100_000:
         raise ValueError("steps must be an integer in 1..100000")
     if type(checkpoint_every) is not int or not 1 <= checkpoint_every <= 1000:
         raise ValueError("checkpoint_every must be an integer in 1..1000")
     if type(max_stalled_steps) is not int or not 12 <= max_stalled_steps <= 10000:
         raise ValueError("max_stalled_steps must be an integer in 12..10000")
+    if type(max_recovery_attempts) is not int or not 0 <= max_recovery_attempts <= 10:
+        raise ValueError('max_recovery_attempts must be an integer in 0..10')
     if not goal.strip():
         raise ValueError("goal cannot be empty")
     output.mkdir(parents=True,exist_ok=True)
@@ -81,9 +85,10 @@ def run(rom: Path, output: Path, *, goal: str, steps: int, state_file: Path | No
     video_restarts = 0
     tracker = ProgressTracker()
     campaign = CampaignPlanner()
-    stalled_steps = 0
+    stall_monitor=StallMonitor(max_stalled_steps,max_recovery_attempts)
     report = {"started_at":datetime.now(timezone.utc).isoformat(),"model_ms":0,"video_enabled":video,"jev_calls":0,"jev_http_attempts":0,"executed_actions":0,"goal":goal,"status":"starting",
-              "game_completed":False,"policy":"jev_only","new_tiles_this_run":0,"movement_actions":0,"map_changes":0,"progress_memory_source":"new_memory","campaign_memory_source":"new_memory","resume_from_user_state":state_file is not None}
+              "game_completed":False,"policy":"jev_only","new_tiles_this_run":0,"movement_actions":0,"map_changes":0,"progress_memory_source":"new_memory","campaign_memory_source":"new_memory","resume_from_user_state":state_file is not None,
+              'max_recovery_attempts':max_recovery_attempts,'recovery_attempts':0,'recovery_count':0}
 
     def elapsed_ms() -> int:
         return round((time.monotonic() - started) * 1000)
@@ -118,7 +123,8 @@ def run(rom: Path, output: Path, *, goal: str, steps: int, state_file: Path | No
 
     save_report()
     emit('started',goal=goal,maxSteps=steps,status=report['status'],pid=os.getpid(),
-         video_enabled=video,checkpoint_every=checkpoint_every,max_stalled_steps=max_stalled_steps,resume_from_user_state=state_file is not None)
+         video_enabled=video,checkpoint_every=checkpoint_every,max_stalled_steps=max_stalled_steps,
+         max_recovery_attempts=max_recovery_attempts,resume_from_user_state=state_file is not None)
     history = []
     try:
         if not os.environ.get("TYPESAFE_API_KEY", "").strip():
@@ -262,11 +268,16 @@ def run(rom: Path, output: Path, *, goal: str, steps: int, state_file: Path | No
             outcome["new_dialog_clue"]=campaign_effect['new_dialog_clue']
             outcome["meaningful_progress"]=bool(outcome["world_progress"] or outcome["objective_changed"] or outcome["milestones_completed"] or outcome["battle_damage"] or outcome['new_dialog_clue'])
             after['progress'] = tracker.context(after)
+            activity=stall_monitor.observe(before,after,outcome,after['progress'])
+            outcome['observable_changes']=activity['observable_changes']
+            outcome['observable_activity']=bool(activity['observable_changes'])
             report['new_tiles_this_run'] += int(outcome['new_tile'])
             report['movement_actions'] += int(outcome['position_changed'])
             report['map_changes'] += int(outcome['map_changed'])
-            stalled_steps = 0 if outcome['meaningful_progress'] else stalled_steps + 1
-            report['steps_without_new_tile_this_run'] = stalled_steps
+            report['steps_without_strategic_progress']=activity['no_strategic_progress_steps']
+            report['steps_without_observable_change']=activity['no_effect_steps']
+            report['recovery_attempts']=stall_monitor.recovery_attempts
+            report['steps_without_new_tile_this_run']=after['progress']['steps_since_new_tile']
             report['loop_detected'] = after['progress']['loop_detected']
             history.append({'button':button,'before':before.get('player'),'after':after.get('player'),
                             'text_after':after.get('screen_text',{}).get('rows')})
@@ -284,8 +295,16 @@ def run(rom: Path, output: Path, *, goal: str, steps: int, state_file: Path | No
                 emit('checkpoint',step=step,saved_step=report['executed_actions'])
             history = history[-12:]
             save_report()
-            if stalled_steps >= max_stalled_steps and after['progress']['loop_detected'] and (after.get('scene') or {}).get('verified') is True:
-                report.update(status='stalled',reason=f'{stalled_steps} inputs without new exploration, unique dialogue, battle damage or verified story progress, with a repeated loop; saved for review.')
+            if activity['should_recover']:
+                attempt=stall_monitor.begin_recovery()
+                campaign.recover(after,attempt=attempt,reason=activity['reason'],failed_button=button)
+                report.update(status='recovering',recovery_attempts=attempt,recovery_count=stall_monitor.total_recoveries)
+                save_checkpoint();save_report()
+                emit('recovery',step=step,attempt=attempt,max_attempts=max_recovery_attempts,
+                     reason=activity['reason'],no_effect_steps=activity['no_effect_steps'],
+                     loop_kind=after['progress'].get('loop_kind'),failed_button=button)
+            elif activity['exhausted']:
+                report.update(status='stalled',reason=f'{activity["reason"]} persisted after {stall_monitor.recovery_attempts} bounded recovery attempts; saved for review.')
                 break
         else:
             report['status']='budget_reached'
@@ -335,6 +354,7 @@ def main():
     ap.add_argument('--video',action=argparse.BooleanOptionalAction,default=True,help='Stream direct emulator video through FFmpeg HLS (enabled by default)')
     ap.add_argument('--checkpoint-every',type=int,default=50)
     ap.add_argument('--max-stalled-steps',type=int,default=80)
+    ap.add_argument('--max-recovery-attempts',type=int,default=3,help='Re-observe and revise guidance before pausing a persistent loop; 0 disables recovery')
     ap.add_argument('--visible',action='store_true')
     ap.add_argument('--screenshots',action='store_true',help='Explicitly save optional screenshot evidence; the live stream never uses images')
     ap.add_argument('--allow-missing-key',action='store_true',help='CI records blocked, never substitutes a fake decision')
@@ -344,6 +364,7 @@ def main():
         raise KeyboardInterrupt
     signal.signal(signal.SIGTERM,stop)
     print(json.dumps(run(a.rom,a.output,goal=a.goal,steps=a.steps,state_file=a.state,visible=a.visible,
-                         allow_missing_key=a.allow_missing_key,screenshots=a.screenshots,video=a.video,checkpoint_every=a.checkpoint_every,max_stalled_steps=a.max_stalled_steps),indent=2))
+                         allow_missing_key=a.allow_missing_key,screenshots=a.screenshots,video=a.video,checkpoint_every=a.checkpoint_every,max_stalled_steps=a.max_stalled_steps,
+                         max_recovery_attempts=a.max_recovery_attempts),indent=2))
 
 if __name__=='__main__':main()

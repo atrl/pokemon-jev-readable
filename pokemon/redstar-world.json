@@ -27913,7 +27913,8 @@
       "type": "NORMAL",
       "accuracy_percent": 100,
       "base_pp": 35,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 0
     },
     "2": {
       "name": "KARATE_CHOP",
@@ -27922,7 +27923,8 @@
       "type": "NORMAL",
       "accuracy_percent": 100,
       "base_pp": 25,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 0
     },
     "3": {
       "name": "DOUBLESLAP",
@@ -27931,7 +27933,8 @@
       "type": "NORMAL",
       "accuracy_percent": 85,
       "base_pp": 10,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 0
     },
     "4": {
       "name": "COMET_PUNCH",
@@ -27940,7 +27943,8 @@
       "type": "NORMAL",
       "accuracy_percent": 85,
       "base_pp": 15,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 0
     },
     "5": {
       "name": "MEGA_PUNCH",
@@ -27949,7 +27953,8 @@
       "type": "NORMAL",
       "accuracy_percent": 85,
       "base_pp": 20,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 0
     },
     "6": {
       "name": "PAY_DAY",
@@ -27958,7 +27963,8 @@
       "type": "NORMAL",
       "accuracy_percent": 100,
       "base_pp": 20,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 0
     },
     "7": {
       "name": "FIRE_PUNCH",
@@ -27967,7 +27973,8 @@
       "type": "FIRE",
       "accuracy_percent": 100,
       "base_pp": 15,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 20
     },
     "8": {
       "name": "ICE_PUNCH",
@@ -27976,7 +27983,8 @@
       "type": "ICE",
       "accuracy_percent": 100,
       "base_pp": 15,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 25
     },
     "9": {
       "name": "THUNDERPUNCH",
@@ -27985,7 +27993,8 @@
       "type": "ELECTRIC",
       "accuracy_percent": 100,
       "base_pp": 15,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 23
     },
     "10": {
       "name": "SCRATCH",
@@ -27994,7 +28003,8 @@
       "type": "NORMAL",
       "accuracy_percent": 100,
       "base_pp": 35,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 0
     },
     "11": {
       "name": "VICEGRIP",
@@ -28003,7 +28013,8 @@
       "type": "NORMAL",
       "accuracy_percent": 100,
       "base_pp": 30,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 0
     },
     "12": {
       "name": "GUILLOTINE",
@@ -28012,7 +28023,8 @@
       "type": "NORMAL",
       "accuracy_percent": 30,
       "base_pp": 5,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 0
     },
     "13": {
       "name": "RAZOR_WIND",
@@ -28021,7 +28033,8 @@
       "type": "NORMAL",
       "accuracy_percent": 75,
       "base_pp": 10,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 0
     },
     "14": {
       "name": "SWORDS_DANCE",
@@ -28030,7 +28043,8 @@
       "type": "NORMAL",
       "accuracy_percent": 100,
       "base_pp": 30,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 0
     },
     "15": {
       "name": "CUT",
@@ -28039,7 +28053,8 @@
       "type": "NORMAL",
       "accuracy_percent": 95,
       "base_pp": 30,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 0
     },
     "16": {
       "name": "GUST",
@@ -28048,7 +28063,8 @@
       "type": "NORMAL",
       "accuracy_percent": 100,
       "base_pp": 35,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 0
     },
     "17": {
       "name": "WING_ATTACK",
@@ -28057,7 +28073,8 @@
       "type": "FLYING",
       "accuracy_percent": 100,
       "base_pp": 35,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 2
     },
     "18": {
       "name": "WHIRLWIND",
@@ -28066,7 +28083,8 @@
       "type": "NORMAL",
       "accuracy_percent": 85,
       "base_pp": 20,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 0
     },
     "19": {
       "name": "FLY",
@@ -28075,7 +28093,8 @@
       "type": "FLYING",
       "accuracy_percent": 95,
       "base_pp": 15,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 2
     },
     "20": {
       "name": "BIND",
@@ -28084,7 +28103,8 @@
       "type": "NORMAL",
       "accuracy_percent": 75,
       "base_pp": 20,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 0
     },
     "21": {
       "name": "SLAM",
@@ -28093,7 +28113,8 @@
       "type": "NORMAL",
       "accuracy_percent": 75,
       "base_pp": 20,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 0
     },
     "22": {
       "name": "VINE_WHIP",
@@ -28102,7 +28123,8 @@
       "type": "GRASS",
       "accuracy_percent": 100,
       "base_pp": 10,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 22
     },
     "23": {
       "name": "STOMP",
@@ -28111,7 +28133,8 @@
       "type": "NORMAL",
       "accuracy_percent": 100,
       "base_pp": 20,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 0
     },
     "24": {
       "name": "DOUBLE_KICK",
@@ -28120,7 +28143,8 @@
       "type": "FIGHTING",
       "accuracy_percent": 100,
       "base_pp": 30,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 1
     },
     "25": {
       "name": "MEGA_KICK",
@@ -28129,7 +28153,8 @@
       "type": "NORMAL",
       "accuracy_percent": 75,
       "base_pp": 5,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 0
     },
     "26": {
       "name": "JUMP_KICK",
@@ -28138,7 +28163,8 @@
       "type": "FIGHTING",
       "accuracy_percent": 95,
       "base_pp": 25,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 1
     },
     "27": {
       "name": "ROLLING_KICK",
@@ -28147,7 +28173,8 @@
       "type": "FIGHTING",
       "accuracy_percent": 85,
       "base_pp": 15,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 1
     },
     "28": {
       "name": "SAND_ATTACK",
@@ -28156,7 +28183,8 @@
       "type": "NORMAL",
       "accuracy_percent": 100,
       "base_pp": 15,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 0
     },
     "29": {
       "name": "HEADBUTT",
@@ -28165,7 +28193,8 @@
       "type": "NORMAL",
       "accuracy_percent": 100,
       "base_pp": 15,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 0
     },
     "30": {
       "name": "HORN_ATTACK",
@@ -28174,7 +28203,8 @@
       "type": "NORMAL",
       "accuracy_percent": 100,
       "base_pp": 25,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 0
     },
     "31": {
       "name": "FURY_ATTACK",
@@ -28183,7 +28213,8 @@
       "type": "NORMAL",
       "accuracy_percent": 85,
       "base_pp": 20,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 0
     },
     "32": {
       "name": "HORN_DRILL",
@@ -28192,7 +28223,8 @@
       "type": "NORMAL",
       "accuracy_percent": 30,
       "base_pp": 5,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 0
     },
     "33": {
       "name": "TACKLE",
@@ -28201,7 +28233,8 @@
       "type": "NORMAL",
       "accuracy_percent": 95,
       "base_pp": 35,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 0
     },
     "34": {
       "name": "BODY_SLAM",
@@ -28210,7 +28243,8 @@
       "type": "NORMAL",
       "accuracy_percent": 100,
       "base_pp": 15,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 0
     },
     "35": {
       "name": "WRAP",
@@ -28219,7 +28253,8 @@
       "type": "NORMAL",
       "accuracy_percent": 85,
       "base_pp": 20,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 0
     },
     "36": {
       "name": "TAKE_DOWN",
@@ -28228,7 +28263,8 @@
       "type": "NORMAL",
       "accuracy_percent": 85,
       "base_pp": 20,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 0
     },
     "37": {
       "name": "THRASH",
@@ -28237,7 +28273,8 @@
       "type": "NORMAL",
       "accuracy_percent": 100,
       "base_pp": 20,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 0
     },
     "38": {
       "name": "DOUBLE_EDGE",
@@ -28246,7 +28283,8 @@
       "type": "NORMAL",
       "accuracy_percent": 100,
       "base_pp": 15,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 0
     },
     "39": {
       "name": "TAIL_WHIP",
@@ -28255,7 +28293,8 @@
       "type": "NORMAL",
       "accuracy_percent": 100,
       "base_pp": 30,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 0
     },
     "40": {
       "name": "POISON_STING",
@@ -28264,7 +28303,8 @@
       "type": "POISON",
       "accuracy_percent": 100,
       "base_pp": 35,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 3
     },
     "41": {
       "name": "TWINEEDLE",
@@ -28273,7 +28313,8 @@
       "type": "BUG",
       "accuracy_percent": 100,
       "base_pp": 20,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 7
     },
     "42": {
       "name": "PIN_MISSILE",
@@ -28282,7 +28323,8 @@
       "type": "BUG",
       "accuracy_percent": 85,
       "base_pp": 20,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 7
     },
     "43": {
       "name": "LEER",
@@ -28291,7 +28333,8 @@
       "type": "NORMAL",
       "accuracy_percent": 100,
       "base_pp": 30,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 0
     },
     "44": {
       "name": "BITE",
@@ -28300,7 +28343,8 @@
       "type": "NORMAL",
       "accuracy_percent": 100,
       "base_pp": 25,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 0
     },
     "45": {
       "name": "GROWL",
@@ -28309,7 +28353,8 @@
       "type": "NORMAL",
       "accuracy_percent": 100,
       "base_pp": 40,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 0
     },
     "46": {
       "name": "ROAR",
@@ -28318,7 +28363,8 @@
       "type": "NORMAL",
       "accuracy_percent": 100,
       "base_pp": 20,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 0
     },
     "47": {
       "name": "SING",
@@ -28327,7 +28373,8 @@
       "type": "NORMAL",
       "accuracy_percent": 55,
       "base_pp": 15,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 0
     },
     "48": {
       "name": "SUPERSONIC",
@@ -28336,7 +28383,8 @@
       "type": "NORMAL",
       "accuracy_percent": 55,
       "base_pp": 20,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 0
     },
     "49": {
       "name": "SONICBOOM",
@@ -28345,7 +28393,8 @@
       "type": "NORMAL",
       "accuracy_percent": 90,
       "base_pp": 20,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 0
     },
     "50": {
       "name": "DISABLE",
@@ -28354,7 +28403,8 @@
       "type": "NORMAL",
       "accuracy_percent": 55,
       "base_pp": 20,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 0
     },
     "51": {
       "name": "ACID",
@@ -28363,7 +28413,8 @@
       "type": "POISON",
       "accuracy_percent": 100,
       "base_pp": 30,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 3
     },
     "52": {
       "name": "EMBER",
@@ -28372,7 +28423,8 @@
       "type": "FIRE",
       "accuracy_percent": 100,
       "base_pp": 25,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 20
     },
     "53": {
       "name": "FLAMETHROWER",
@@ -28381,7 +28433,8 @@
       "type": "FIRE",
       "accuracy_percent": 100,
       "base_pp": 15,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 20
     },
     "54": {
       "name": "MIST",
@@ -28390,7 +28443,8 @@
       "type": "ICE",
       "accuracy_percent": 100,
       "base_pp": 30,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 25
     },
     "55": {
       "name": "WATER_GUN",
@@ -28399,7 +28453,8 @@
       "type": "WATER",
       "accuracy_percent": 100,
       "base_pp": 25,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 21
     },
     "56": {
       "name": "HYDRO_PUMP",
@@ -28408,7 +28463,8 @@
       "type": "WATER",
       "accuracy_percent": 80,
       "base_pp": 5,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 21
     },
     "57": {
       "name": "SURF",
@@ -28417,7 +28473,8 @@
       "type": "WATER",
       "accuracy_percent": 100,
       "base_pp": 15,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 21
     },
     "58": {
       "name": "ICE_BEAM",
@@ -28426,7 +28483,8 @@
       "type": "ICE",
       "accuracy_percent": 100,
       "base_pp": 10,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 25
     },
     "59": {
       "name": "BLIZZARD",
@@ -28435,7 +28493,8 @@
       "type": "ICE",
       "accuracy_percent": 90,
       "base_pp": 5,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 25
     },
     "60": {
       "name": "PSYBEAM",
@@ -28444,7 +28503,8 @@
       "type": "PSYCHIC",
       "accuracy_percent": 100,
       "base_pp": 20,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 24
     },
     "61": {
       "name": "BUBBLEBEAM",
@@ -28453,7 +28513,8 @@
       "type": "WATER",
       "accuracy_percent": 100,
       "base_pp": 20,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 21
     },
     "62": {
       "name": "AURORA_BEAM",
@@ -28462,7 +28523,8 @@
       "type": "ICE",
       "accuracy_percent": 100,
       "base_pp": 20,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 25
     },
     "63": {
       "name": "HYPER_BEAM",
@@ -28471,7 +28533,8 @@
       "type": "NORMAL",
       "accuracy_percent": 90,
       "base_pp": 5,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 0
     },
     "64": {
       "name": "PECK",
@@ -28480,7 +28543,8 @@
       "type": "FLYING",
       "accuracy_percent": 100,
       "base_pp": 35,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 2
     },
     "65": {
       "name": "DRILL_PECK",
@@ -28489,7 +28553,8 @@
       "type": "FLYING",
       "accuracy_percent": 100,
       "base_pp": 20,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 2
     },
     "66": {
       "name": "SUBMISSION",
@@ -28498,7 +28563,8 @@
       "type": "FIGHTING",
       "accuracy_percent": 80,
       "base_pp": 25,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 1
     },
     "67": {
       "name": "LOW_KICK",
@@ -28507,7 +28573,8 @@
       "type": "FIGHTING",
       "accuracy_percent": 90,
       "base_pp": 20,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 1
     },
     "68": {
       "name": "COUNTER",
@@ -28516,7 +28583,8 @@
       "type": "FIGHTING",
       "accuracy_percent": 100,
       "base_pp": 20,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 1
     },
     "69": {
       "name": "SEISMIC_TOSS",
@@ -28525,7 +28593,8 @@
       "type": "FIGHTING",
       "accuracy_percent": 100,
       "base_pp": 20,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 1
     },
     "70": {
       "name": "STRENGTH",
@@ -28534,7 +28603,8 @@
       "type": "NORMAL",
       "accuracy_percent": 100,
       "base_pp": 15,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 0
     },
     "71": {
       "name": "ABSORB",
@@ -28543,7 +28613,8 @@
       "type": "GRASS",
       "accuracy_percent": 100,
       "base_pp": 20,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 22
     },
     "72": {
       "name": "MEGA_DRAIN",
@@ -28552,7 +28623,8 @@
       "type": "GRASS",
       "accuracy_percent": 100,
       "base_pp": 10,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 22
     },
     "73": {
       "name": "LEECH_SEED",
@@ -28561,7 +28633,8 @@
       "type": "GRASS",
       "accuracy_percent": 90,
       "base_pp": 10,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 22
     },
     "74": {
       "name": "GROWTH",
@@ -28570,7 +28643,8 @@
       "type": "NORMAL",
       "accuracy_percent": 100,
       "base_pp": 40,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 0
     },
     "75": {
       "name": "RAZOR_LEAF",
@@ -28579,7 +28653,8 @@
       "type": "GRASS",
       "accuracy_percent": 95,
       "base_pp": 25,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 22
     },
     "76": {
       "name": "SOLARBEAM",
@@ -28588,7 +28663,8 @@
       "type": "GRASS",
       "accuracy_percent": 100,
       "base_pp": 10,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 22
     },
     "77": {
       "name": "POISONPOWDER",
@@ -28597,7 +28673,8 @@
       "type": "POISON",
       "accuracy_percent": 75,
       "base_pp": 35,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 3
     },
     "78": {
       "name": "STUN_SPORE",
@@ -28606,7 +28683,8 @@
       "type": "GRASS",
       "accuracy_percent": 75,
       "base_pp": 30,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 22
     },
     "79": {
       "name": "SLEEP_POWDER",
@@ -28615,7 +28693,8 @@
       "type": "GRASS",
       "accuracy_percent": 75,
       "base_pp": 15,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 22
     },
     "80": {
       "name": "PETAL_DANCE",
@@ -28624,7 +28703,8 @@
       "type": "GRASS",
       "accuracy_percent": 100,
       "base_pp": 20,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 22
     },
     "81": {
       "name": "STRING_SHOT",
@@ -28633,7 +28713,8 @@
       "type": "BUG",
       "accuracy_percent": 95,
       "base_pp": 40,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 7
     },
     "82": {
       "name": "DRAGON_RAGE",
@@ -28642,7 +28723,8 @@
       "type": "DRAGON",
       "accuracy_percent": 100,
       "base_pp": 10,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 26
     },
     "83": {
       "name": "FIRE_SPIN",
@@ -28651,7 +28733,8 @@
       "type": "FIRE",
       "accuracy_percent": 70,
       "base_pp": 15,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 20
     },
     "84": {
       "name": "THUNDERSHOCK",
@@ -28660,7 +28743,8 @@
       "type": "ELECTRIC",
       "accuracy_percent": 100,
       "base_pp": 30,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 23
     },
     "85": {
       "name": "THUNDERBOLT",
@@ -28669,7 +28753,8 @@
       "type": "ELECTRIC",
       "accuracy_percent": 100,
       "base_pp": 15,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 23
     },
     "86": {
       "name": "THUNDER_WAVE",
@@ -28678,7 +28763,8 @@
       "type": "ELECTRIC",
       "accuracy_percent": 100,
       "base_pp": 20,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 23
     },
     "87": {
       "name": "THUNDER",
@@ -28687,7 +28773,8 @@
       "type": "ELECTRIC",
       "accuracy_percent": 70,
       "base_pp": 10,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 23
     },
     "88": {
       "name": "ROCK_THROW",
@@ -28696,7 +28783,8 @@
       "type": "ROCK",
       "accuracy_percent": 65,
       "base_pp": 15,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 5
     },
     "89": {
       "name": "EARTHQUAKE",
@@ -28705,7 +28793,8 @@
       "type": "GROUND",
       "accuracy_percent": 100,
       "base_pp": 10,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 4
     },
     "90": {
       "name": "FISSURE",
@@ -28714,7 +28803,8 @@
       "type": "GROUND",
       "accuracy_percent": 30,
       "base_pp": 5,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 4
     },
     "91": {
       "name": "DIG",
@@ -28723,7 +28813,8 @@
       "type": "GROUND",
       "accuracy_percent": 100,
       "base_pp": 10,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 4
     },
     "92": {
       "name": "TOXIC",
@@ -28732,7 +28823,8 @@
       "type": "POISON",
       "accuracy_percent": 85,
       "base_pp": 10,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 3
     },
     "93": {
       "name": "CONFUSION",
@@ -28741,7 +28833,8 @@
       "type": "PSYCHIC",
       "accuracy_percent": 100,
       "base_pp": 25,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 24
     },
     "94": {
       "name": "PSYCHIC_M",
@@ -28750,7 +28843,8 @@
       "type": "PSYCHIC",
       "accuracy_percent": 100,
       "base_pp": 10,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 24
     },
     "95": {
       "name": "HYPNOSIS",
@@ -28759,7 +28853,8 @@
       "type": "PSYCHIC",
       "accuracy_percent": 60,
       "base_pp": 20,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 24
     },
     "96": {
       "name": "MEDITATE",
@@ -28768,7 +28863,8 @@
       "type": "PSYCHIC",
       "accuracy_percent": 100,
       "base_pp": 40,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 24
     },
     "97": {
       "name": "AGILITY",
@@ -28777,7 +28873,8 @@
       "type": "PSYCHIC",
       "accuracy_percent": 100,
       "base_pp": 30,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 24
     },
     "98": {
       "name": "QUICK_ATTACK",
@@ -28786,7 +28883,8 @@
       "type": "NORMAL",
       "accuracy_percent": 100,
       "base_pp": 30,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 0
     },
     "99": {
       "name": "RAGE",
@@ -28795,7 +28893,8 @@
       "type": "NORMAL",
       "accuracy_percent": 100,
       "base_pp": 20,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 0
     },
     "100": {
       "name": "TELEPORT",
@@ -28804,7 +28903,8 @@
       "type": "PSYCHIC",
       "accuracy_percent": 100,
       "base_pp": 20,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 24
     },
     "101": {
       "name": "NIGHT_SHADE",
@@ -28813,7 +28913,8 @@
       "type": "GHOST",
       "accuracy_percent": 100,
       "base_pp": 15,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 8
     },
     "102": {
       "name": "MIMIC",
@@ -28822,7 +28923,8 @@
       "type": "NORMAL",
       "accuracy_percent": 100,
       "base_pp": 10,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 0
     },
     "103": {
       "name": "SCREECH",
@@ -28831,7 +28933,8 @@
       "type": "NORMAL",
       "accuracy_percent": 85,
       "base_pp": 40,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 0
     },
     "104": {
       "name": "DOUBLE_TEAM",
@@ -28840,7 +28943,8 @@
       "type": "NORMAL",
       "accuracy_percent": 100,
       "base_pp": 15,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 0
     },
     "105": {
       "name": "RECOVER",
@@ -28849,7 +28953,8 @@
       "type": "NORMAL",
       "accuracy_percent": 100,
       "base_pp": 20,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 0
     },
     "106": {
       "name": "HARDEN",
@@ -28858,7 +28963,8 @@
       "type": "NORMAL",
       "accuracy_percent": 100,
       "base_pp": 30,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 0
     },
     "107": {
       "name": "MINIMIZE",
@@ -28867,7 +28973,8 @@
       "type": "NORMAL",
       "accuracy_percent": 100,
       "base_pp": 20,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 0
     },
     "108": {
       "name": "SMOKESCREEN",
@@ -28876,7 +28983,8 @@
       "type": "NORMAL",
       "accuracy_percent": 100,
       "base_pp": 20,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 0
     },
     "109": {
       "name": "CONFUSE_RAY",
@@ -28885,7 +28993,8 @@
       "type": "GHOST",
       "accuracy_percent": 100,
       "base_pp": 10,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 8
     },
     "110": {
       "name": "WITHDRAW",
@@ -28894,7 +29003,8 @@
       "type": "WATER",
       "accuracy_percent": 100,
       "base_pp": 40,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 21
     },
     "111": {
       "name": "DEFENSE_CURL",
@@ -28903,7 +29013,8 @@
       "type": "NORMAL",
       "accuracy_percent": 100,
       "base_pp": 40,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 0
     },
     "112": {
       "name": "BARRIER",
@@ -28912,7 +29023,8 @@
       "type": "PSYCHIC",
       "accuracy_percent": 100,
       "base_pp": 30,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 24
     },
     "113": {
       "name": "LIGHT_SCREEN",
@@ -28921,7 +29033,8 @@
       "type": "PSYCHIC",
       "accuracy_percent": 100,
       "base_pp": 30,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 24
     },
     "114": {
       "name": "HAZE",
@@ -28930,7 +29043,8 @@
       "type": "ICE",
       "accuracy_percent": 100,
       "base_pp": 30,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 25
     },
     "115": {
       "name": "REFLECT",
@@ -28939,7 +29053,8 @@
       "type": "PSYCHIC",
       "accuracy_percent": 100,
       "base_pp": 20,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 24
     },
     "116": {
       "name": "FOCUS_ENERGY",
@@ -28948,7 +29063,8 @@
       "type": "NORMAL",
       "accuracy_percent": 100,
       "base_pp": 30,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 0
     },
     "117": {
       "name": "BIDE",
@@ -28957,7 +29073,8 @@
       "type": "NORMAL",
       "accuracy_percent": 100,
       "base_pp": 10,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 0
     },
     "118": {
       "name": "METRONOME",
@@ -28966,7 +29083,8 @@
       "type": "NORMAL",
       "accuracy_percent": 100,
       "base_pp": 10,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 0
     },
     "119": {
       "name": "MIRROR_MOVE",
@@ -28975,7 +29093,8 @@
       "type": "FLYING",
       "accuracy_percent": 100,
       "base_pp": 20,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 2
     },
     "120": {
       "name": "SELFDESTRUCT",
@@ -28984,7 +29103,8 @@
       "type": "NORMAL",
       "accuracy_percent": 100,
       "base_pp": 5,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 0
     },
     "121": {
       "name": "EGG_BOMB",
@@ -28993,7 +29113,8 @@
       "type": "NORMAL",
       "accuracy_percent": 75,
       "base_pp": 10,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 0
     },
     "122": {
       "name": "LICK",
@@ -29002,7 +29123,8 @@
       "type": "GHOST",
       "accuracy_percent": 100,
       "base_pp": 30,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 8
     },
     "123": {
       "name": "SMOG",
@@ -29011,7 +29133,8 @@
       "type": "POISON",
       "accuracy_percent": 70,
       "base_pp": 20,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 3
     },
     "124": {
       "name": "SLUDGE",
@@ -29020,7 +29143,8 @@
       "type": "POISON",
       "accuracy_percent": 100,
       "base_pp": 20,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 3
     },
     "125": {
       "name": "BONE_CLUB",
@@ -29029,7 +29153,8 @@
       "type": "GROUND",
       "accuracy_percent": 85,
       "base_pp": 20,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 4
     },
     "126": {
       "name": "FIRE_BLAST",
@@ -29038,7 +29163,8 @@
       "type": "FIRE",
       "accuracy_percent": 85,
       "base_pp": 5,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 20
     },
     "127": {
       "name": "WATERFALL",
@@ -29047,7 +29173,8 @@
       "type": "WATER",
       "accuracy_percent": 100,
       "base_pp": 15,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 21
     },
     "128": {
       "name": "CLAMP",
@@ -29056,7 +29183,8 @@
       "type": "WATER",
       "accuracy_percent": 75,
       "base_pp": 10,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 21
     },
     "129": {
       "name": "SWIFT",
@@ -29065,7 +29193,8 @@
       "type": "NORMAL",
       "accuracy_percent": 100,
       "base_pp": 20,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 0
     },
     "130": {
       "name": "SKULL_BASH",
@@ -29074,7 +29203,8 @@
       "type": "NORMAL",
       "accuracy_percent": 100,
       "base_pp": 15,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 0
     },
     "131": {
       "name": "SPIKE_CANNON",
@@ -29083,7 +29213,8 @@
       "type": "NORMAL",
       "accuracy_percent": 100,
       "base_pp": 15,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 0
     },
     "132": {
       "name": "CONSTRICT",
@@ -29092,7 +29223,8 @@
       "type": "NORMAL",
       "accuracy_percent": 100,
       "base_pp": 35,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 0
     },
     "133": {
       "name": "AMNESIA",
@@ -29101,7 +29233,8 @@
       "type": "PSYCHIC",
       "accuracy_percent": 100,
       "base_pp": 20,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 24
     },
     "134": {
       "name": "KINESIS",
@@ -29110,7 +29243,8 @@
       "type": "PSYCHIC",
       "accuracy_percent": 80,
       "base_pp": 15,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 24
     },
     "135": {
       "name": "SOFTBOILED",
@@ -29119,7 +29253,8 @@
       "type": "NORMAL",
       "accuracy_percent": 100,
       "base_pp": 10,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 0
     },
     "136": {
       "name": "HI_JUMP_KICK",
@@ -29128,7 +29263,8 @@
       "type": "FIGHTING",
       "accuracy_percent": 90,
       "base_pp": 20,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 1
     },
     "137": {
       "name": "GLARE",
@@ -29137,7 +29273,8 @@
       "type": "NORMAL",
       "accuracy_percent": 75,
       "base_pp": 30,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 0
     },
     "138": {
       "name": "DREAM_EATER",
@@ -29146,7 +29283,8 @@
       "type": "PSYCHIC",
       "accuracy_percent": 100,
       "base_pp": 15,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 24
     },
     "139": {
       "name": "POISON_GAS",
@@ -29155,7 +29293,8 @@
       "type": "POISON",
       "accuracy_percent": 55,
       "base_pp": 40,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 3
     },
     "140": {
       "name": "BARRAGE",
@@ -29164,7 +29303,8 @@
       "type": "NORMAL",
       "accuracy_percent": 85,
       "base_pp": 20,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 0
     },
     "141": {
       "name": "LEECH_LIFE",
@@ -29173,7 +29313,8 @@
       "type": "BUG",
       "accuracy_percent": 100,
       "base_pp": 15,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 7
     },
     "142": {
       "name": "LOVELY_KISS",
@@ -29182,7 +29323,8 @@
       "type": "NORMAL",
       "accuracy_percent": 75,
       "base_pp": 10,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 0
     },
     "143": {
       "name": "SKY_ATTACK",
@@ -29191,7 +29333,8 @@
       "type": "FLYING",
       "accuracy_percent": 90,
       "base_pp": 5,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 2
     },
     "144": {
       "name": "TRANSFORM",
@@ -29200,7 +29343,8 @@
       "type": "NORMAL",
       "accuracy_percent": 100,
       "base_pp": 10,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 0
     },
     "145": {
       "name": "BUBBLE",
@@ -29209,7 +29353,8 @@
       "type": "WATER",
       "accuracy_percent": 100,
       "base_pp": 30,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 21
     },
     "146": {
       "name": "DIZZY_PUNCH",
@@ -29218,7 +29363,8 @@
       "type": "NORMAL",
       "accuracy_percent": 100,
       "base_pp": 10,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 0
     },
     "147": {
       "name": "SPORE",
@@ -29227,7 +29373,8 @@
       "type": "GRASS",
       "accuracy_percent": 100,
       "base_pp": 15,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 22
     },
     "148": {
       "name": "FLASH",
@@ -29236,7 +29383,8 @@
       "type": "NORMAL",
       "accuracy_percent": 70,
       "base_pp": 20,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 0
     },
     "149": {
       "name": "PSYWAVE",
@@ -29245,7 +29393,8 @@
       "type": "PSYCHIC",
       "accuracy_percent": 80,
       "base_pp": 15,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 24
     },
     "150": {
       "name": "SPLASH",
@@ -29254,7 +29403,8 @@
       "type": "NORMAL",
       "accuracy_percent": 100,
       "base_pp": 40,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 0
     },
     "151": {
       "name": "ACID_ARMOR",
@@ -29263,7 +29413,8 @@
       "type": "POISON",
       "accuracy_percent": 100,
       "base_pp": 40,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 3
     },
     "152": {
       "name": "CRABHAMMER",
@@ -29272,7 +29423,8 @@
       "type": "WATER",
       "accuracy_percent": 85,
       "base_pp": 10,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 21
     },
     "153": {
       "name": "EXPLOSION",
@@ -29281,7 +29433,8 @@
       "type": "NORMAL",
       "accuracy_percent": 100,
       "base_pp": 5,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 0
     },
     "154": {
       "name": "FURY_SWIPES",
@@ -29290,7 +29443,8 @@
       "type": "NORMAL",
       "accuracy_percent": 80,
       "base_pp": 15,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 0
     },
     "155": {
       "name": "BONEMERANG",
@@ -29299,7 +29453,8 @@
       "type": "GROUND",
       "accuracy_percent": 90,
       "base_pp": 10,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 4
     },
     "156": {
       "name": "REST",
@@ -29308,7 +29463,8 @@
       "type": "PSYCHIC",
       "accuracy_percent": 100,
       "base_pp": 10,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 24
     },
     "157": {
       "name": "ROCK_SLIDE",
@@ -29317,7 +29473,8 @@
       "type": "ROCK",
       "accuracy_percent": 90,
       "base_pp": 10,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 5
     },
     "158": {
       "name": "HYPER_FANG",
@@ -29326,7 +29483,8 @@
       "type": "NORMAL",
       "accuracy_percent": 90,
       "base_pp": 15,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 0
     },
     "159": {
       "name": "SHARPEN",
@@ -29335,7 +29493,8 @@
       "type": "NORMAL",
       "accuracy_percent": 100,
       "base_pp": 30,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 0
     },
     "160": {
       "name": "CONVERSION",
@@ -29344,7 +29503,8 @@
       "type": "NORMAL",
       "accuracy_percent": 100,
       "base_pp": 30,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 0
     },
     "161": {
       "name": "TRI_ATTACK",
@@ -29353,7 +29513,8 @@
       "type": "NORMAL",
       "accuracy_percent": 100,
       "base_pp": 10,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 0
     },
     "162": {
       "name": "SUPER_FANG",
@@ -29362,7 +29523,8 @@
       "type": "NORMAL",
       "accuracy_percent": 90,
       "base_pp": 10,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 0
     },
     "163": {
       "name": "SLASH",
@@ -29371,7 +29533,8 @@
       "type": "NORMAL",
       "accuracy_percent": 100,
       "base_pp": 20,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 0
     },
     "164": {
       "name": "SUBSTITUTE",
@@ -29380,7 +29543,8 @@
       "type": "NORMAL",
       "accuracy_percent": 100,
       "base_pp": 10,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 0
     },
     "165": {
       "name": "STRUGGLE",
@@ -29389,7 +29553,8 @@
       "type": "NORMAL",
       "accuracy_percent": 100,
       "base_pp": 10,
-      "quality": "source_prior"
+      "quality": "source_prior",
+      "type_id": 0
     }
   },
   "events": {
@@ -31413,6 +31578,505 @@
       "offset": 315,
       "bit": 2
     }
+  },
+  "types": {
+    "0": {
+      "name": "NORMAL",
+      "name_quality": "source_prior",
+      "source": "constants/type_constants.asm"
+    },
+    "1": {
+      "name": "FIGHTING",
+      "name_quality": "source_prior",
+      "source": "constants/type_constants.asm"
+    },
+    "2": {
+      "name": "FLYING",
+      "name_quality": "source_prior",
+      "source": "constants/type_constants.asm"
+    },
+    "3": {
+      "name": "POISON",
+      "name_quality": "source_prior",
+      "source": "constants/type_constants.asm"
+    },
+    "4": {
+      "name": "GROUND",
+      "name_quality": "source_prior",
+      "source": "constants/type_constants.asm"
+    },
+    "5": {
+      "name": "ROCK",
+      "name_quality": "source_prior",
+      "source": "constants/type_constants.asm"
+    },
+    "6": {
+      "name": "BIRD",
+      "name_quality": "source_prior",
+      "source": "constants/type_constants.asm"
+    },
+    "7": {
+      "name": "BUG",
+      "name_quality": "source_prior",
+      "source": "constants/type_constants.asm"
+    },
+    "8": {
+      "name": "GHOST",
+      "name_quality": "source_prior",
+      "source": "constants/type_constants.asm"
+    },
+    "20": {
+      "name": "FIRE",
+      "name_quality": "source_prior",
+      "source": "constants/type_constants.asm"
+    },
+    "21": {
+      "name": "WATER",
+      "name_quality": "source_prior",
+      "source": "constants/type_constants.asm"
+    },
+    "22": {
+      "name": "GRASS",
+      "name_quality": "source_prior",
+      "source": "constants/type_constants.asm"
+    },
+    "23": {
+      "name": "ELECTRIC",
+      "name_quality": "source_prior",
+      "source": "constants/type_constants.asm"
+    },
+    "24": {
+      "name": "PSYCHIC",
+      "name_quality": "source_prior",
+      "source": "constants/type_constants.asm"
+    },
+    "25": {
+      "name": "ICE",
+      "name_quality": "source_prior",
+      "source": "constants/type_constants.asm"
+    },
+    "26": {
+      "name": "DRAGON",
+      "name_quality": "source_prior",
+      "source": "constants/type_constants.asm"
+    }
+  },
+  "type_chart": {
+    "source": "data/type_effects.asm",
+    "entries": [
+      {
+        "attack_type_id": 21,
+        "defender_type_id": 20,
+        "factor_tenths": 20
+      },
+      {
+        "attack_type_id": 20,
+        "defender_type_id": 22,
+        "factor_tenths": 20
+      },
+      {
+        "attack_type_id": 20,
+        "defender_type_id": 25,
+        "factor_tenths": 20
+      },
+      {
+        "attack_type_id": 22,
+        "defender_type_id": 21,
+        "factor_tenths": 20
+      },
+      {
+        "attack_type_id": 23,
+        "defender_type_id": 21,
+        "factor_tenths": 20
+      },
+      {
+        "attack_type_id": 21,
+        "defender_type_id": 5,
+        "factor_tenths": 20
+      },
+      {
+        "attack_type_id": 4,
+        "defender_type_id": 2,
+        "factor_tenths": 0
+      },
+      {
+        "attack_type_id": 21,
+        "defender_type_id": 21,
+        "factor_tenths": 5
+      },
+      {
+        "attack_type_id": 20,
+        "defender_type_id": 20,
+        "factor_tenths": 5
+      },
+      {
+        "attack_type_id": 23,
+        "defender_type_id": 23,
+        "factor_tenths": 5
+      },
+      {
+        "attack_type_id": 25,
+        "defender_type_id": 25,
+        "factor_tenths": 5
+      },
+      {
+        "attack_type_id": 22,
+        "defender_type_id": 22,
+        "factor_tenths": 5
+      },
+      {
+        "attack_type_id": 24,
+        "defender_type_id": 24,
+        "factor_tenths": 5
+      },
+      {
+        "attack_type_id": 20,
+        "defender_type_id": 21,
+        "factor_tenths": 5
+      },
+      {
+        "attack_type_id": 22,
+        "defender_type_id": 20,
+        "factor_tenths": 5
+      },
+      {
+        "attack_type_id": 21,
+        "defender_type_id": 22,
+        "factor_tenths": 5
+      },
+      {
+        "attack_type_id": 23,
+        "defender_type_id": 22,
+        "factor_tenths": 5
+      },
+      {
+        "attack_type_id": 0,
+        "defender_type_id": 5,
+        "factor_tenths": 5
+      },
+      {
+        "attack_type_id": 0,
+        "defender_type_id": 8,
+        "factor_tenths": 0
+      },
+      {
+        "attack_type_id": 8,
+        "defender_type_id": 8,
+        "factor_tenths": 20
+      },
+      {
+        "attack_type_id": 20,
+        "defender_type_id": 7,
+        "factor_tenths": 20
+      },
+      {
+        "attack_type_id": 20,
+        "defender_type_id": 5,
+        "factor_tenths": 5
+      },
+      {
+        "attack_type_id": 21,
+        "defender_type_id": 4,
+        "factor_tenths": 20
+      },
+      {
+        "attack_type_id": 23,
+        "defender_type_id": 4,
+        "factor_tenths": 0
+      },
+      {
+        "attack_type_id": 23,
+        "defender_type_id": 2,
+        "factor_tenths": 20
+      },
+      {
+        "attack_type_id": 22,
+        "defender_type_id": 4,
+        "factor_tenths": 20
+      },
+      {
+        "attack_type_id": 22,
+        "defender_type_id": 7,
+        "factor_tenths": 5
+      },
+      {
+        "attack_type_id": 22,
+        "defender_type_id": 3,
+        "factor_tenths": 5
+      },
+      {
+        "attack_type_id": 22,
+        "defender_type_id": 5,
+        "factor_tenths": 20
+      },
+      {
+        "attack_type_id": 22,
+        "defender_type_id": 2,
+        "factor_tenths": 5
+      },
+      {
+        "attack_type_id": 25,
+        "defender_type_id": 21,
+        "factor_tenths": 5
+      },
+      {
+        "attack_type_id": 25,
+        "defender_type_id": 22,
+        "factor_tenths": 20
+      },
+      {
+        "attack_type_id": 25,
+        "defender_type_id": 4,
+        "factor_tenths": 20
+      },
+      {
+        "attack_type_id": 25,
+        "defender_type_id": 2,
+        "factor_tenths": 20
+      },
+      {
+        "attack_type_id": 1,
+        "defender_type_id": 0,
+        "factor_tenths": 20
+      },
+      {
+        "attack_type_id": 1,
+        "defender_type_id": 3,
+        "factor_tenths": 5
+      },
+      {
+        "attack_type_id": 1,
+        "defender_type_id": 2,
+        "factor_tenths": 5
+      },
+      {
+        "attack_type_id": 1,
+        "defender_type_id": 24,
+        "factor_tenths": 5
+      },
+      {
+        "attack_type_id": 1,
+        "defender_type_id": 7,
+        "factor_tenths": 5
+      },
+      {
+        "attack_type_id": 1,
+        "defender_type_id": 5,
+        "factor_tenths": 20
+      },
+      {
+        "attack_type_id": 1,
+        "defender_type_id": 25,
+        "factor_tenths": 20
+      },
+      {
+        "attack_type_id": 1,
+        "defender_type_id": 8,
+        "factor_tenths": 0
+      },
+      {
+        "attack_type_id": 3,
+        "defender_type_id": 22,
+        "factor_tenths": 20
+      },
+      {
+        "attack_type_id": 3,
+        "defender_type_id": 3,
+        "factor_tenths": 5
+      },
+      {
+        "attack_type_id": 3,
+        "defender_type_id": 4,
+        "factor_tenths": 5
+      },
+      {
+        "attack_type_id": 3,
+        "defender_type_id": 7,
+        "factor_tenths": 20
+      },
+      {
+        "attack_type_id": 3,
+        "defender_type_id": 5,
+        "factor_tenths": 5
+      },
+      {
+        "attack_type_id": 3,
+        "defender_type_id": 8,
+        "factor_tenths": 5
+      },
+      {
+        "attack_type_id": 4,
+        "defender_type_id": 20,
+        "factor_tenths": 20
+      },
+      {
+        "attack_type_id": 4,
+        "defender_type_id": 23,
+        "factor_tenths": 20
+      },
+      {
+        "attack_type_id": 4,
+        "defender_type_id": 22,
+        "factor_tenths": 5
+      },
+      {
+        "attack_type_id": 4,
+        "defender_type_id": 7,
+        "factor_tenths": 5
+      },
+      {
+        "attack_type_id": 4,
+        "defender_type_id": 5,
+        "factor_tenths": 20
+      },
+      {
+        "attack_type_id": 4,
+        "defender_type_id": 3,
+        "factor_tenths": 20
+      },
+      {
+        "attack_type_id": 2,
+        "defender_type_id": 23,
+        "factor_tenths": 5
+      },
+      {
+        "attack_type_id": 2,
+        "defender_type_id": 1,
+        "factor_tenths": 20
+      },
+      {
+        "attack_type_id": 2,
+        "defender_type_id": 7,
+        "factor_tenths": 20
+      },
+      {
+        "attack_type_id": 2,
+        "defender_type_id": 22,
+        "factor_tenths": 20
+      },
+      {
+        "attack_type_id": 2,
+        "defender_type_id": 5,
+        "factor_tenths": 5
+      },
+      {
+        "attack_type_id": 24,
+        "defender_type_id": 1,
+        "factor_tenths": 20
+      },
+      {
+        "attack_type_id": 24,
+        "defender_type_id": 3,
+        "factor_tenths": 20
+      },
+      {
+        "attack_type_id": 7,
+        "defender_type_id": 20,
+        "factor_tenths": 5
+      },
+      {
+        "attack_type_id": 7,
+        "defender_type_id": 22,
+        "factor_tenths": 20
+      },
+      {
+        "attack_type_id": 7,
+        "defender_type_id": 1,
+        "factor_tenths": 5
+      },
+      {
+        "attack_type_id": 7,
+        "defender_type_id": 2,
+        "factor_tenths": 5
+      },
+      {
+        "attack_type_id": 7,
+        "defender_type_id": 24,
+        "factor_tenths": 20
+      },
+      {
+        "attack_type_id": 7,
+        "defender_type_id": 8,
+        "factor_tenths": 5
+      },
+      {
+        "attack_type_id": 7,
+        "defender_type_id": 3,
+        "factor_tenths": 20
+      },
+      {
+        "attack_type_id": 5,
+        "defender_type_id": 20,
+        "factor_tenths": 20
+      },
+      {
+        "attack_type_id": 5,
+        "defender_type_id": 1,
+        "factor_tenths": 5
+      },
+      {
+        "attack_type_id": 5,
+        "defender_type_id": 4,
+        "factor_tenths": 5
+      },
+      {
+        "attack_type_id": 5,
+        "defender_type_id": 2,
+        "factor_tenths": 20
+      },
+      {
+        "attack_type_id": 5,
+        "defender_type_id": 7,
+        "factor_tenths": 20
+      },
+      {
+        "attack_type_id": 5,
+        "defender_type_id": 25,
+        "factor_tenths": 20
+      },
+      {
+        "attack_type_id": 8,
+        "defender_type_id": 0,
+        "factor_tenths": 0
+      },
+      {
+        "attack_type_id": 8,
+        "defender_type_id": 24,
+        "factor_tenths": 0
+      },
+      {
+        "attack_type_id": 20,
+        "defender_type_id": 26,
+        "factor_tenths": 5
+      },
+      {
+        "attack_type_id": 21,
+        "defender_type_id": 26,
+        "factor_tenths": 5
+      },
+      {
+        "attack_type_id": 23,
+        "defender_type_id": 26,
+        "factor_tenths": 5
+      },
+      {
+        "attack_type_id": 22,
+        "defender_type_id": 26,
+        "factor_tenths": 5
+      },
+      {
+        "attack_type_id": 25,
+        "defender_type_id": 26,
+        "factor_tenths": 20
+      },
+      {
+        "attack_type_id": 26,
+        "defender_type_id": 26,
+        "factor_tenths": 20
+      }
+    ],
+    "bytes_hex": "151414141614141914161514171514150514040200151505141405171705191905161605181805141505161405151605171605000505000800080814140714140505150414170400170214160414160705160305160514160205191505191614190414190214010014010305010205011805010705010514011914010800031614030305030405030714030505030805041414041714041605040705040514040314021705020114020714021614020505180114180314071405071614070105070205071814070805070314051414050105050405050214050714051914080000081800141a05151a05171a05161a05191a141a1a14ff",
+    "quality": "source_prior_until_entire_table_matches_exact_rom"
   },
   "move_data_table": {
     "source": "data/moves.asm",

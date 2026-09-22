@@ -132,7 +132,7 @@ class DecisionContextTests(unittest.TestCase):
                 return {'answer':{'choice':'a'},'source':'OFFLINE TEST DOUBLE'}
             with patch.dict('os.environ',{'TYPESAFE_API_KEY':'fixture-only-not-real'}), \
                  patch('run.Emulator',return_value=world),patch('run.Reader',return_value=reader),patch('run.choose',side_effect=choose):
-                report=run(Path('TEST.gb'),output,goal='Explore',steps=100,max_stalled_steps=12)
+                report=run(Path('TEST.gb'),output,goal='Explore',steps=100,max_stalled_steps=12,max_recovery_attempts=0)
             self.assertEqual(report['status'],'stalled')
             self.assertEqual(report['executed_actions'],12)
             self.assertEqual(report['new_tiles_this_run'],0)
@@ -144,6 +144,24 @@ class DecisionContextTests(unittest.TestCase):
             rows=[json.loads(line) for line in (output/'events.jsonl').read_text().splitlines()]
             self.assertTrue(all(not row['outcome']['world_progress'] for row in rows if row['type']=='result'))
             self.assertEqual(rows[-1]['status'],'stalled')
+
+    def test_true_no_effect_loop_gets_bounded_replanning_before_stopping(self):
+        with tempfile.TemporaryDirectory() as directory:
+            output=Path(directory)/'run';world=Mock();world.save.return_value=b'OFFLINE RECOVERY STATE'
+            reader=Mock();reader.snapshot.side_effect=lambda:world_state()
+            hints=[]
+            def choose(before,*args,**kwargs):
+                hints.append(before['campaign'].get('recovery'))
+                return {'answer':{'choice':'a'},'source':'OFFLINE TEST DOUBLE'}
+            with patch.dict('os.environ',{'TYPESAFE_API_KEY':'fixture-only-not-real'}), \
+                 patch('run.Emulator',return_value=world),patch('run.Reader',return_value=reader),patch('run.choose',side_effect=choose):
+                report=run(Path('TEST.gb'),output,goal='Explore',steps=100,max_stalled_steps=12,max_recovery_attempts=3)
+            rows=[json.loads(line)for line in(output/'events.jsonl').read_text().splitlines()]
+            self.assertEqual(report['status'],'stalled');self.assertEqual(report['executed_actions'],48)
+            self.assertEqual([r['attempt']for r in rows if r['type']=='recovery'],[1,2,3])
+            self.assertEqual(report['recovery_count'],3)
+            self.assertEqual(world.press.call_count,48)  # only actual mocked JEV choices
+            self.assertTrue(any(h and h['attempt']==3 for h in hints))
 
 
 if __name__=='__main__':unittest.main()

@@ -85,7 +85,7 @@ export class EventStore {
       const latencyKey = `${event.step}:${event.attempt ?? 1}`;
       if (latencyKey !== run._lastLatencyKey) { run._modelMs += event.latency_ms; run._latencyCount++; run._lastLatencyKey = latencyKey; }
     }
-    if (['observation', 'jev_request', 'jev_response', 'jev_error', 'decision', 'executing', 'result', 'finished'].includes(event.type)) delete run.jev_wait;
+    if (['observation', 'jev_request', 'jev_response', 'jev_error', 'decision', 'executing', 'result', 'recovery', 'finished'].includes(event.type)) delete run.jev_wait;
     if (event.type === 'observation') run.status = 'observing';
     if (event.type === 'jev_request') { run.calls++; run.status = 'calling'; }
     if (event.type === 'jev_response') run.status = 'received';
@@ -97,6 +97,15 @@ export class EventStore {
       run.jev_wait = { since: event.time, retry_after_seconds: seconds,
         retry_at: seconds === null ? null : new Date(Date.parse(event.time) + seconds * 1000).toISOString(),
         reason: event.reason, consecutive_windows: Number.isInteger(event.consecutive_windows) && event.consecutive_windows >= 0 ? event.consecutive_windows : null };
+    }
+    if (event.type === 'recovery') {
+      const nonnegative = value => Number.isInteger(value) && value >= 0 ? value : null;
+      run.status = 'recovering';
+      run.recovery_count = (run.recovery_count ?? 0) + 1;
+      run.recovery = { since: event.time, step: event.step,
+        attempt: nonnegative(event.attempt), max_attempts: nonnegative(event.max_attempts),
+        reason: event.reason, no_effect_steps: nonnegative(event.no_effect_steps),
+        loop_kind: event.loop_kind, failed_button: event.failed_button };
     }
     if (event.type === 'decision') run.status = 'decided';
     if (event.type === 'executing') run.status = 'executing';

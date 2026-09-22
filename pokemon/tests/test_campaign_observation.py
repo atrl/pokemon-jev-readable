@@ -8,7 +8,7 @@ from pathlib import Path
 from types import SimpleNamespace
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from memory import Reader, load_profile, CHARACTERS, PartyNotReady, PP_BONUS_SIGNATURE, DIVIDE_WRAPPER_SIGNATURE
-from world_data import map_prior, load_world_data
+from world_data import map_prior, load_world_data, type_effectiveness
 
 
 class FakeMemory:
@@ -64,6 +64,76 @@ class CampaignObservationTests(unittest.TestCase):
         self.emulator.rom_bytes[0x1000:0x1000 + len(PP_BONUS_SIGNATURE)] = PP_BONUS_SIGNATURE
         self.emulator.rom_bytes[0x38d0:0x38d0 + len(DIVIDE_WRAPPER_SIGNATURE)] = DIVIDE_WRAPPER_SIGNATURE
         self.reader = Reader(self.emulator, self.profile)
+
+    def combatants(self):
+        self.field('wPartyCount', 1)
+        party = bytearray(44)
+        party[0] = 176
+        party[1:3] = (28).to_bytes(2, 'big')
+        party[33] = 10
+        party[34:36] = (28).to_bytes(2, 'big')
+        party[8] = 52  # Ember, actual ROM-table ID.
+        party[29] = 25
+        self.field('wPartyMon1', party)
+        for symbol, species, level, hp, types, stats in (
+                ('wBattleMon',176,10,28,[20,20],[16,14,19,15]),
+                ('wEnemyMon',59,11,24,[4,4],[19,9,29,14])):
+            mon = bytearray(29)
+            mon[0] = species
+            mon[1:3] = hp.to_bytes(2,'big')
+            mon[5:7] = bytes(types)
+            mon[8] = 52 if symbol == 'wBattleMon' else 10
+            mon[14] = level
+            mon[15:17] = hp.to_bytes(2,'big')
+            for offset,value in zip((17,19,21,23), stats):
+                mon[offset:offset+2] = value.to_bytes(2,'big')
+            mon[25] = 25 if symbol == 'wBattleMon' else 35
+            self.field(symbol, mon)
+        self.field('wIsInBattle', 2)
+
+    def test_type_chart_preserves_gen1_immunities_dual_types_and_rom_order(self):
+        self.assertEqual(type_effectiveness(8,[24],verified=True)['multiplier'], 0)  # GHOST -> PSYCHIC
+        self.assertEqual(type_effectiveness(21,[20,20],verified=True)['multiplier'], 2)  # WATER -> FIRE once
+        self.assertEqual(type_effectiveness(21,[5,4],verified=True)['multiplier'], 4)
+        mixed = type_effectiveness(25,[21,26],verified=True)  # ICE -> WATER/DRAGON
+        self.assertEqual(mixed['multiplier'], 1)
+        self.assertEqual(mixed['factors'], [0.5,2])
+        self.assertFalse(type_effectiveness(21,[20])['verified'])
+        self.assertIsNone(type_effectiveness(21,[255],verified=True)['multiplier'])
+
+    def test_battle_tactical_fields_and_chart_require_actual_rom_match(self):
+        self.verified_pp_reader()
+        self.combatants()
+        self.assertFalse(self.reader.battle()['player']['moves'][0]['effectiveness']['verified'])
+        chart = bytes.fromhex(load_world_data()['type_chart']['bytes_hex'])
+        self.emulator.rom_bytes[0x3000:0x3000 + len(chart)] = chart
+        self.reader = Reader(self.emulator,self.profile)
+        b = self.reader.battle()
+        self.assertTrue(b['verified'])
+        self.assertEqual(b['player']['attack'], 16)
+        self.assertEqual(b['enemy']['speed'], 29)
+        self.assertEqual([t['id'] for t in b['player']['types']], [20])
+        self.assertTrue(b['player']['types_verified'])
+        self.assertTrue(b['player']['verified_stats'])
+        self.assertTrue(b['player']['moves'][0]['knowledge']['numeric_data_verified'])
+        self.assertTrue(b['player']['moves'][0]['effectiveness']['verified'])
+        self.assertEqual(b['player']['moves'][0]['effectiveness']['multiplier'], 1)
+        self.emulator.rom_bytes[0x3000] ^= 1
+        self.reader = Reader(self.emulator,self.profile)
+        self.assertFalse(self.reader.battle()['type_chart']['verified'])
+
+    def test_unusable_extra_stat_or_type_never_erases_verified_hp(self):
+        self.combatants()
+        enemy_address = self.profile['addresses']['wEnemyMon']
+        self.emulator.memory[enemy_address + 19:enemy_address + 21] = b'\x00\x00'
+        self.emulator.memory[enemy_address + 5] = 255
+        b = self.reader.battle()
+        self.assertTrue(b['verified'])
+        self.assertEqual(b['enemy']['hp'], 24)
+        self.assertIsNone(b['enemy']['defense'])
+        self.assertFalse(b['enemy']['verified_stats'])
+        self.assertFalse(b['enemy']['types_verified'])
+        self.assertFalse(b['player']['moves'][0]['effectiveness']['verified'])
 
     def test_max_pp_requires_both_complete_move_table_and_calculation_match(self):
         self.assertIsNone(self.reader.move(0, 10, 35)['max_pp'])

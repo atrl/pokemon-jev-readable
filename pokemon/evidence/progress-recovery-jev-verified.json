@@ -1,0 +1,111 @@
+{
+  "checked_at": "2026-09-22T12:39:48.206030+00:00",
+  "kind": "actual_JEV_control_from_previously_stalled_101_action_save",
+  "actions": 300,
+  "status": "budget_reached",
+  "recovery_count": 0,
+  "new_tiles": 0,
+  "known_tile_movement_actions": 47,
+  "observable_activity_without_new_story_or_tile_evidence": 206,
+  "all_buttons_from_jev": true,
+  "move_confirmations": [
+    {
+      "step": 11,
+      "selected_slot": 2,
+      "recommended_move": "EMBER"
+    },
+    {
+      "step": 22,
+      "selected_slot": 2,
+      "recommended_move": "EMBER"
+    },
+    {
+      "step": 33,
+      "selected_slot": 2,
+      "recommended_move": "EMBER"
+    },
+    {
+      "step": 44,
+      "selected_slot": 2,
+      "recommended_move": "EMBER"
+    },
+    {
+      "step": 65,
+      "selected_slot": 2,
+      "recommended_move": "EMBER"
+    },
+    {
+      "step": 161,
+      "selected_slot": 2,
+      "recommended_move": "EMBER"
+    },
+    {
+      "step": 172,
+      "selected_slot": 2,
+      "recommended_move": "EMBER"
+    },
+    {
+      "step": 183,
+      "selected_slot": 2,
+      "recommended_move": "EMBER"
+    },
+    {
+      "step": 211,
+      "selected_slot": 2,
+      "recommended_move": "EMBER"
+    },
+    {
+      "step": 223,
+      "selected_slot": 2,
+      "recommended_move": "EMBER"
+    },
+    {
+      "step": 233,
+      "selected_slot": 2,
+      "recommended_move": "EMBER"
+    },
+    {
+      "step": 243,
+      "selected_slot": 2,
+      "recommended_move": "EMBER"
+    },
+    {
+      "step": 253,
+      "selected_slot": 2,
+      "recommended_move": "EMBER"
+    },
+    {
+      "step": 265,
+      "selected_slot": 2,
+      "recommended_move": "EMBER"
+    },
+    {
+      "step": 277,
+      "selected_slot": 2,
+      "recommended_move": "EMBER"
+    },
+    {
+      "step": 285,
+      "selected_slot": 2,
+      "recommended_move": "EMBER"
+    },
+    {
+      "step": 294,
+      "selected_slot": 2,
+      "recommended_move": "EMBER"
+    }
+  ],
+  "party_levels_seen": [
+    10,
+    11,
+    12
+  ],
+  "events_sha256": "7c119061b804cc2ccd142b53ff857f9327a17bedd5ba6c3bcb1c197bca4af88c",
+  "state_sha256": "10cea46f964e9b390ef4d47eb64e72a180345c89fe6ec0b519efc484d0fd0501",
+  "images_created": 0,
+  "limits": [
+    "This validates continuous battle/defeat/return/rematch without the previous false halt.",
+    "The party still lost battles; neither trainer nor badge victory is claimed.",
+    "Recovery-event execution is separately covered by bounded offline fault tests; this progressing real run did not require a recovery attempt."
+  ]
+}

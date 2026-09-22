@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from world_data import load_world_data, map_prior, move_prior, named_lookup
+from world_data import load_world_data, map_prior, move_prior, named_lookup, type_effectiveness
 
 CHARACTERS = {
     0x7F: " ",
@@ -67,6 +67,9 @@ class Reader:
             and self._verified_name_tables['moves'])
         table = bytes.fromhex(load_world_data()['move_data_table']['bytes_hex'])
         self._verified_move_data = rom.count(table) == 1
+        type_table = bytes.fromhex(load_world_data()['type_chart']['bytes_hex'])
+        self._verified_type_chart = rom.count(type_table) == 1
+        self._type_chart_rom_offset = rom.find(type_table) if self._verified_type_chart else None
         self._verified_pp_bonus = (rom.count(PP_BONUS_SIGNATURE) == 1
                                   and rom[0x38d0:0x38d0 + len(DIVIDE_WRAPPER_SIGNATURE)] == DIVIDE_WRAPPER_SIGNATURE)
         # Exact-ROM continuation immediately after _AddPartyMon -> AskName.
@@ -95,6 +98,8 @@ class Reader:
 
     def move(self, slot: int, move_id: int, raw_pp: int) -> dict:
         knowledge = move_prior(move_id)
+        knowledge['numeric_data_verified'] = bool(knowledge and self._verified_move_data)
+        knowledge['numeric_data_quality'] = 'verified_exact_rom_move_table' if knowledge['numeric_data_verified'] else 'source_prior'
         base_pp = knowledge.get('base_pp')
         pp_ups = raw_pp >> 6
         verified = bool(self._verified_move_data and self._verified_pp_bonus and isinstance(base_pp, int))
@@ -280,9 +285,25 @@ class Reader:
             hp, max_hp = int.from_bytes(mon[1:3], 'big'), int.from_bytes(mon[15:17], 'big')
             if not (named_lookup('species', mon[0]) and 1 <= mon[14] <= 100 and 0 <= hp <= max_hp <= 999 and max_hp > 0):
                 raise ValueError('Battle combatant HP/level/species sanity failed')
+            # Optional tactical fields fail individually. Unknown stats/types
+            # must not erase otherwise coherent, already verified HP and level.
+            stats = {name: int.from_bytes(mon[offset:offset + 2], 'big')
+                     for name, offset in (('attack',17),('defense',19),('speed',21),('special',23))}
+            stats_verified = {name: 1 <= value <= 999 for name, value in stats.items()}
+            type_ids = list(dict.fromkeys(mon[5:7]))
+            types_verified = all(str(t) in load_world_data()['types'] for t in type_ids)
+            types = [{'id': value, 'name': load_world_data()['types'].get(str(value), {}).get('name'),
+                      'quality': 'verified_current_ram_type_id' if str(value) in load_world_data()['types'] else 'needs_data',
+                      'name_quality': 'source_prior', 'source': 'battle_struct type bytes + pinned constants/type_constants.asm'}
+                     for value in type_ids]
             return {'nickname': decode_text(self.data(nickname, 11)), 'species_internal_id': mon[0],
                     'species_name_prior': named_lookup('species', mon[0]), 'level': mon[14],
                     'hp': hp, 'max_hp': max_hp, 'status_bits': mon[4],
+                    'types': types, 'types_verified': types_verified,
+                    **{name: value if stats_verified[name] else None for name, value in stats.items()},
+                    'stats_verified': stats_verified, 'verified_stats': all(stats_verified.values()),
+                    'stats_quality': 'verified_current_ram_battle_stats' if all(stats_verified.values()) else 'partially_needs_data',
+                    'stats_source': 'Coherent battle_struct big-endian attack/defense/speed/special at offsets17/19/21/23; includes current battle stat modifiers',
                     'moves': [self.move(j, mon[8+j], mon[25+j]) for j in range(4) if mon[8+j]]}
         try:
             own = combatant('wBattleMon', 'wBattleMonNick')
@@ -309,6 +330,13 @@ class Reader:
                     'visible_text': visible_text, 'awaiting_input': True if text_box and tiles[358] == 0xee else None,
                     'source': 'RAM battle flag and visible battle text-box border; combatant fields withheld until valid and correlated',
                     'error': str(exc)}
+        for attacker, defender in ((own, enemy), (enemy, own)):
+            defender_ids = [entry['id'] for entry in defender['types']] if defender['types_verified'] else []
+            for move in attacker['moves']:
+                move_type = move['knowledge'].get('type_id')
+                move['effectiveness'] = type_effectiveness(move_type, defender_ids,
+                    verified=self._verified_type_chart and move['knowledge'].get('numeric_data_verified') is True
+                    and defender['types_verified'])
         rows = self.screen_text()['rows']
         text = '\n'.join(rows)
         menu = ('command' if all(word in text for word in ('FIGHT', 'RUN'))
@@ -332,6 +360,9 @@ class Reader:
                 'type_raw': battle_type, 'player': own, 'enemy': enemy,
                 'verified': True, 'quality': 'verified_coherent_battle_structures',
                 'combatants_ready': True, 'phase': 'active', 'phase_verified': True,
+                'type_chart': {'verified': self._verified_type_chart, 'rom_offset': self._type_chart_rom_offset,
+                    'source': 'Entire 247-byte Red Star TypeEffects table compared with actual ROM, unique match required',
+                    'source_commit': load_world_data()['source_commit']},
                 'menu': menu, 'menu_cursor_raw': self.byte('wCurrentMenuItem'),
                 'selected_move_slot': selected_move_slot, 'selected_command': selected_command,
                 'selection_source': 'Visible tilemap arrow plus matching menu label; normalized move slots start at 0, raw RAM cursor has menu-specific indexing',

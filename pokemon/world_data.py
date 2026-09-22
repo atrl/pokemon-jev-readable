@@ -32,6 +32,34 @@ def move_prior(move_id: int) -> dict:
     return dict(load_world_data()['moves'].get(str(move_id), {}))
 
 
+def type_effectiveness(attack_type_id: int, defender_type_ids: list[int], *, verified=False) -> dict:
+    """Version-pinned chart math; caller must supply actual-ROM verification.
+
+    Duplicate types are one type in this engine, not squared effectiveness.
+    This is only the type multiplier: STAB, damage rounding, critical hits,
+    status, screens and accuracy are separate battle mechanisms.
+    """
+    data = load_world_data()
+    known = data['types']
+    if (str(attack_type_id) not in known or not defender_type_ids
+            or len(defender_type_ids) > 2 or any(str(t) not in known for t in defender_type_ids)):
+        return {'multiplier': None, 'verified': False, 'quality': 'needs_data',
+                'source': 'Unknown move or defender type; no neutral-type assumption'}
+    defenders = set(defender_type_ids)
+    multiplier = 1.0
+    matches = []
+    for row in data['type_chart']['entries']:
+        if row['attack_type_id'] == attack_type_id and row['defender_type_id'] in defenders:
+            multiplier *= row['factor_tenths'] / 10
+            matches.append(row)
+    return {'multiplier': multiplier, 'verified': verified is True,
+            'quality': 'verified_exact_rom_type_chart' if verified is True else 'source_prior',
+            'source': 'Pinned Red Star data/type_effects.asm; all 82 type pairs plus terminator match exact ROM' if verified is True else 'Pinned Red Star source chart; actual-ROM match not supplied',
+            'attack_type_id': attack_type_id, 'defender_type_ids': sorted(defenders),
+            'matched_pairs': matches, 'factors': [row['factor_tenths'] / 10 for row in matches],
+            'limitations': 'Type multiplier only; no STAB, damage rounding, critical-hit, screen or accuracy calculation.'}
+
+
 def build(source: Path) -> dict:
     def read(relative):
         return (source / relative).read_text()
@@ -118,8 +146,14 @@ def build(source: Path) -> dict:
         r'^(\w+)\s+EQU\s+\$([0-9a-fA-F]+)', read('constants/type_constants.asm'), re.M)}
     move_bytes = bytearray()
     for index, move in moves.items():
+        move['type_id'] = types[move['type']]
         move_bytes.extend((int(index), effects[move['effect']], move['power'], types[move['type']],
                            move['accuracy_percent'] * 255 // 100, move['base_pp']))
+    effects_table = [{'attack_type_id': types[m[1]], 'defender_type_id': types[m[2]],
+                      'factor_tenths': int(m[3])} for m in re.finditer(
+        r'^\s*db\s+(\w+),\s*(\w+),\s*(\d+)', read('data/type_effects.asm'), re.M)]
+    effects_bytes = bytes([value for row in effects_table
+                          for value in (row['attack_type_id'], row['defender_type_id'], row['factor_tenths'])] + [255])
     events = {}
     for name, index in constants('constants/event_constants.asm').items():
         if name.startswith('EVENT_') and not re.fullmatch(r'EVENT_[0-9A-F]{3}', name):
@@ -144,6 +178,10 @@ def build(source: Path) -> dict:
         'source_binary_match': False, 'coordinate_units': 'walking tile (16 screen pixels); block dimensions multiplied by 2',
         'limitations': 'Source priors require live map/warp/occupancy cross-checks. No prior proves an event occurred.',
         'maps': maps, 'moves': moves, 'events': events,
+        'types': {str(value): {'name': name, 'name_quality': 'source_prior',
+                              'source': 'constants/type_constants.asm'} for name, value in types.items()},
+        'type_chart': {'source': 'data/type_effects.asm', 'entries': effects_table,
+                      'bytes_hex': effects_bytes.hex(), 'quality': 'source_prior_until_entire_table_matches_exact_rom'},
         'move_data_table': {'source': 'data/moves.asm', 'stride': 6, 'count': len(moves),
             'fields': ['move_id','effect_id','power','type_id','accuracy_times_255_div_100','base_pp'],
             'bytes_hex': move_bytes.hex(), 'quality': 'source_prior_until_complete_table_matches_exact_rom'},
