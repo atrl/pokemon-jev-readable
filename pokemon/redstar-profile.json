@@ -1,0 +1,28 @@
+{
+  "rom_sha1": "e2d564a5172d38e44b4f4b8f7d9db92f644cf5e9",
+  "source_repository": "Rangi42/redstarbluestar",
+  "source_commit": "08deafad427f0904f285e515c360003efc19d3dc",
+  "source_rebuild_sha1": "f3af693f984f7b452c8e4ab97ce6eb7b986387e1",
+  "full_source_binary_match": false,
+  "addresses": {
+    "wTileMap": 50080,
+    "wCurMap": 54110,
+    "wXCoord": 54114,
+    "wYCoord": 54113,
+    "wPlayerName": 53592,
+    "wPartyCount": 53603,
+    "wPartyMon1": 53611,
+    "wPartyMon2": 53655,
+    "wPartyMonNicks": 53941,
+    "wNumBagItems": 54045,
+    "wBagItems": 54046,
+    "wPlayerMoney": 54087,
+    "wObtainedBadges": 54102,
+    "wIsInBattle": 53335,
+    "wFontLoaded": 53188,
+    "wCurrentMenuItem": 52262,
+    "wTilesetBank": 54571,
+    "wTilesetCollisionPtr": 54576
+  },
+  "validation": "Run test_live.py against the exact ROM; source lineage is not byte-identical. No original-Red whitelist bypass."
+}

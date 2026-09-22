@@ -9,95 +9,38 @@ permissions:
 jobs:
   pokemon:
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 8
     env:
       SDL_VIDEODRIVER: dummy
       SDL_AUDIODRIVER: dummy
-      SOURCE_SHA: 08deafad427f0904f285e515c360003efc19d3dc
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           persist-credentials: false
-      - name: Build the historical source and its exact symbol table
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq bison flex libpng-dev pkg-config
-          git init /tmp/rgbds
-          git -C /tmp/rgbds remote add origin https://github.com/gbdev/rgbds.git
-          git -C /tmp/rgbds fetch --depth 1 origin c59cb6a828c259292dd0eade7ea23d6112e84f4e
-          git -C /tmp/rgbds checkout --detach FETCH_HEAD
-          make -C /tmp/rgbds -j2 CFLAGS='-O2 -fcommon'
-          git init /tmp/redstar-source
-          git -C /tmp/redstar-source remote add origin https://github.com/Rangi42/redstarbluestar.git
-          git -C /tmp/redstar-source fetch --depth 1 origin "$SOURCE_SHA"
-          git -C /tmp/redstar-source checkout --detach FETCH_HEAD
-          make -C /tmp/redstar-source -j2 red RGBDS=/tmp/rgbds/
-          mkdir -p pokemon-evidence
-          cp /tmp/redstar-source/redstar.sym pokemon-evidence/source.sym
       - name: Install real emulator
         run: |
           python3 -m venv /tmp/redstar-venv
-          /tmp/redstar-venv/bin/pip install pyboy==2.7.0 Pillow
-      - name: Probe game memory without an AI policy
+          /tmp/redstar-venv/bin/pip install -r pokemon/requirements.txt
+      - name: Unit tests (not a gameplay claim)
+        run: /tmp/redstar-venv/bin/python -m unittest discover -s pokemon/tests -v
+      - name: Real ROM memory, movement, dialog and menu regression
+        run: /tmp/redstar-venv/bin/python pokemon/test_live.py
+      - name: Jev-only control, at most 12 decisions
         env:
           TYPESAFE_API_KEY: ${{ secrets.TYPESAFE_API_KEY }}
         run: |
-          /tmp/redstar-venv/bin/python - <<'PY'
-          import hashlib, json, os, re
-          from pathlib import Path
-          from pyboy import PyBoy
-          out = Path('pokemon-evidence')
-          rom = Path('red-star-2020-08-18.gb')
-          actual = rom.read_bytes()
-          built = Path('/tmp/redstar-source/redstar.gbc').read_bytes()
-          syms = {}
-          for line in Path('/tmp/redstar-source/redstar.sym').read_text().splitlines():
-              m = re.match(r'([0-9a-fA-F]+):([0-9a-fA-F]+)\s+(\S+)', line)
-              if m:
-                  syms[m[3]] = {'bank':int(m[1],16),'address':int(m[2],16)}
-          wanted = ['wTileMap','wCurMap','wXCoord','wYCoord','wPlayerName','wRivalName','wPartyCount','wPartyMons','wPartyMon1','wPartyMon1HP','wPartyMon1Level','wPartyMon1MaxHP','wPartyMonNicks','wNumBagItems','wBagItems','wPlayerMoney','wObtainedBadges','wIsInBattle','wFontLoaded','wTextBoxID','wEnemyMon','wEnemyMonHP','wBattleMon','wCurrentMenuItem','wTopMenuItemY','wMaxMenuItem','wNumSprites','wSpritePlayerStateData1FacingDirection']
-          profile = {k:syms[k] for k in wanted if k in syms}
-          report = {'source_sha':os.environ['SOURCE_SHA'], 'rom_sha1':hashlib.sha1(actual).hexdigest(), 'rebuilt_sha1':hashlib.sha1(built).hexdigest(), 'exact_source_match':actual==built,'lengths':[len(actual),len(built)], 'symbols':profile,'jev_key_present':bool(os.environ.get('TYPESAFE_API_KEY')), 'policy':'deterministic_probe_not_jev'}
-          out.joinpath('profile-probe.json').write_text(json.dumps(report,indent=2))
-          print('SOURCE_MATCH',json.dumps(report))
-          chars = {0x7f:' ', **{0x80+i:c for i,c in enumerate('ABCDEFGHIJKLMNOPQRSTUVWXYZ')}, **{0xa0+i:c for i,c in enumerate('abcdefghijklmnopqrstuvwxyz')}, **{0xf6+i:c for i,c in enumerate('0123456789')},0xe6:'?',0xe7:'!',0xe8:'.',0xe0:"'",0xe3:'-',0xf3:'/',0xf4:',',0xec:'>',0xed:'>',0xee:'v'}
-          def addr(k, default): return syms.get(k,{}).get('address',default)
-          g = PyBoy(str(rom),window='null',sound_emulated=False)
-          g.set_emulation_speed(0)
-          def press(b, held=8, settle=100):
-              g.button_press(b)
-              try:g.tick(held,render=True,sound=False)
-              finally:g.button_release(b)
-              g.tick(settle,render=True,sound=False)
-          def read():
-              a=addr('wTileMap',0xc3a0)
-              tiles=list(g.memory[a:a+360])
-              lines=[''.join(chars.get(c,' ') for c in tiles[j:j+20]).rstrip() for j in range(0,360,20)]
-              return {'frame':g.frame_count,'screen_text':lines,'bytes':{k:int(g.memory[v['address']]) for k,v in profile.items() if 0xc000<=v['address']<=0xdfff},'player_name':''.join(chars.get(c,'') for c in g.memory[addr('wPlayerName',0xd158):addr('wPlayerName',0xd158)+11])}
-          steps=[]
-          try:
-              g.tick(600,render=True,sound=False)
-              press('start',8,200)
-              for i in range(100):
-                  s=read();steps.append(s)
-                  text='\n'.join(s['screen_text'])
-                  print('PROBE',i,json.dumps(s))
-                  if i%10==0 or 'NEW NAME' in text:g.screen.image.save(out/f'probe-{i:03}.png')
-                  if 'NEW NAME' in text:
-                      press('down',8,24);press('a',8,140)
-                  else:press('a',8,120)
-              g.screen.image.save(out/'probe-last.png')
-              for button in ['right','down','left','up']:
-                  before=read();press(button,16,16);after=read()
-                  steps.append({'input':button,'before':before,'after':after})
-              out.joinpath('probe-trace.json').write_text(json.dumps(steps,indent=2))
-          finally:g.stop(save=False)
-          PY
-      - name: Keep reports, symbols and screenshots, never the ROM
+          /tmp/redstar-venv/bin/python pokemon/run.py \
+            --state pokemon/.work/bedroom.state \
+            --output pokemon-evidence/jev --steps 12 --allow-missing-key
+          echo '## Jev execution status' >> "$GITHUB_STEP_SUMMARY"
+          cat pokemon-evidence/jev/report.json >> "$GITHUB_STEP_SUMMARY"
+      - name: Keep reports and screenshots only
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: redstar-memory-evidence
-          path: pokemon-evidence/
+          name: redstar-memory-and-jev
+          path: |
+            pokemon-evidence/**/*.json
+            pokemon-evidence/**/*.png
           retention-days: 7
           if-no-files-found: warn
