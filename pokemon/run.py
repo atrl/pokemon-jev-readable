@@ -43,6 +43,7 @@ def run(rom: Path, output: Path, *, goal: str, steps: int, state_file: Path | No
     world = None
     reader = None
     first_frame = None
+    video_restarts = 0
     report = {"started_at":datetime.now(timezone.utc).isoformat(),"model_ms":0,"video_enabled":video,"jev_calls":0,"jev_http_attempts":0,"executed_actions":0,"goal":goal,"status":"starting",
               "game_completed":False,"policy":"jev_only","resume_from_user_state":state_file is not None}
 
@@ -126,7 +127,11 @@ def run(rom: Path, output: Path, *, goal: str, steps: int, state_file: Path | No
 
             decision = choose(before,goal,history,on_event=decision_event)
             if video:
-                world.video_status()
+                video_health = world.video_status()
+                if video_health.get('restart_count',0) != video_restarts:
+                    video_restarts = video_health['restart_count']
+                    report['video_restarts'] = video_restarts
+                    emit('video_restarted',step=step,restart_count=video_restarts,error=video_health.get('last_error'))
             report['jev_calls'] += 1
             button = decision['answer']['choice']
             # Keep legacy artifact indexing; streamed step numbers are 1-based.

@@ -1,0 +1,44 @@
+{
+  "verified_at": "2026-09-22T05:07:06.466273+00:00",
+  "mode": "real_rom_real_jev_continuous_h264_video",
+  "run_id": "30711b1ab6ba8b646e44",
+  "run_directory": "pokemon/runs/2026-09-22T05-05-25.868Z-17160",
+  "configured_budget": 5000,
+  "snapshot_status": "calling",
+  "snapshot_steps": 67,
+  "timing_snapshot": {
+    "sampled_at": "2026-09-22T05:07:06.465Z",
+    "elapsed_ms": 100491,
+    "model_ms": 53277,
+    "http_attempts": 68,
+    "avg_latency_ms": 795.179104477612,
+    "steps_per_minute": 40.003582410365105,
+    "remaining_steps": 4933,
+    "estimated_remaining_ms": 7398837.358208955,
+    "game_seconds": 44.666666666666664
+  },
+  "browser_video": {
+    "ready_state": 4,
+    "width": 160,
+    "height": 144,
+    "decoded_frames_observed": 399,
+    "dropped_frames_observed": 0,
+    "public_player_playback": "passed",
+    "mobile_width_390_no_horizontal_overflow": null
+  },
+  "checks": {
+    "node_tests": 45,
+    "python_tests": 33,
+    "model_wait_keeps_video_connection": true,
+    "periodic_checkpoint_tests": "passed",
+    "sigterm_checkpoint_test": "passed",
+    "no_screenshot_files": true
+  },
+  "notes": [
+    "This is a running snapshot, not a claim that 5000 steps are completed.",
+    "Estimated remaining time is for the action budget, not story completion.",
+    "Older20-step runs used accelerated emulation and are local trial baselines only.",
+    "Mobile viewport recheck has not returned; desktop public video playback is verified.",
+    "Initial video run stopped at87 actions after a video encoder error. Checkpoint step87 validated; bounded encoder recovery is being verified before resuming."
+  ]
+}

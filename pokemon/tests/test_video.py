@@ -81,16 +81,56 @@ class VideoIntegrationTests(unittest.TestCase):
             self.assertFalse(list(Path(directory).rglob("*.png")))
             self.assertFalse(list(Path(directory).rglob("*.jpg")))
 
-    def test_encoder_exit_is_reported_and_close_is_bounded(self):
+    def test_encoder_exit_recovers_without_ending_live_playlist(self):
+        with tempfile.TemporaryDirectory() as directory:
+            stream = HLSVideo(Path(directory), ffmpeg=FFMPEG)
+            try:
+                stream.publish(bytes([255, 0, 0]) * (160 * 144))
+                time.sleep(1.3)
+                playlist = Path(directory) / "video/index.m3u8"
+                before = playlist.read_text()
+                self.assertNotIn("#EXT-X-ENDLIST", before)
+                first_process = stream._process
+                first_process.kill()
+                first_process.wait(timeout=2)
+                stream.publish(bytes([0, 0, 255]) * (160 * 144))
+                deadline = time.monotonic() + 3
+                while stream.status()["restart_count"] == 0 and time.monotonic() < deadline:
+                    time.sleep(.05)
+                time.sleep(1.3)
+                status = stream.status()
+                after = playlist.read_text()
+                self.assertEqual(status["restart_count"], 1)
+                self.assertIn("returncode=-9", status["last_error"])
+                self.assertIn("writer=", status["last_error"])
+                self.assertIn("stderr=", status["last_error"])
+                self.assertIn("#EXT-X-DISCONTINUITY", after)
+                self.assertNotIn("#EXT-X-ENDLIST", after)
+                self.assertIsNone(stream._process.poll())
+            finally:
+                stream.close()
+            self.assertIn("#EXT-X-ENDLIST", playlist.read_text())
+            decoded = subprocess.check_output([
+                FFMPEG, "-v", "error", "-i", str(playlist), "-f", "rawvideo", "-pix_fmt", "rgb24", "pipe:1",
+            ])
+            self.assertGreater(decoded[0], 240)
+            self.assertGreater(decoded[-1], 240)
+
+    def test_repeated_encoder_death_fails_visibly_at_bounded_recovery_limit(self):
         with tempfile.TemporaryDirectory() as directory:
             stream = HLSVideo(Path(directory), ffmpeg=FFMPEG)
             stream.publish(bytes(160 * 144 * 3))
-            stream._process.kill()
-            stream._process.wait(timeout=2)
-            with self.assertRaisesRegex(RuntimeError, "encoder failed"):
+            for restart in range(4):
+                process = stream._process
+                process.kill()
+                process.wait(timeout=2)
+                deadline = time.monotonic() + 3
+                while stream._process is process and stream._error is None and time.monotonic() < deadline:
+                    time.sleep(.02)
+            with self.assertRaisesRegex(RuntimeError, "recovery limit reached"):
                 stream.publish(bytes(160 * 144 * 3))
             started = time.monotonic()
-            with self.assertRaisesRegex(RuntimeError, "encoder failed"):
+            with self.assertRaisesRegex(RuntimeError, "recovery limit reached"):
                 stream.close()
             self.assertLess(time.monotonic() - started, 2)
             self.assertFalse(stream._thread.is_alive())

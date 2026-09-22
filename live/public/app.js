@@ -20,7 +20,7 @@ const statusNames = {
 const eventNames = {
   started: '运行开始', observation: '读取游戏状态', jev_request: '调用 Jev',
   jev_response: '收到 Jev 响应', jev_error: 'Jev 调用失败', decision: '确认决策',
-  executing: '执行动作', result: '动作结果', finished: '运行结束', error: '运行异常',
+  executing: '执行动作', result: '动作结果', finished: '运行结束', error: '运行异常', video_started: '游戏视频已连接', video_restarted: '游戏视频已重连', checkpoint: '已自动存档',
 };
 const buttonNames = { up: '↑ 上', down: '↓ 下', left: '← 左', right: '→ 右', a: 'A', b: 'B', start: 'START', select: 'SELECT', wait: '等待' };
 const node = (tag, className, text) => {
@@ -626,7 +626,10 @@ $('game-video').addEventListener('pause', () => {
   if (videoState.attached && videoState.hasPicture && !$('game-video').ended) videoStatus('画面已暂停 · 点击播放可继续观看');
 });
 $('game-video').addEventListener('ended', () => {
-  if (videoState.attached) videoStatus('已播放到本轮保留视频的结尾');
+  if (!videoState.attached) return;
+  const run = state.runs.get(state.selected);
+  if (run && !terminalStatus(run.status)) scheduleVideoRetry('视频编码器正在重新连接');
+  else videoStatus('已播放到本轮保留视频的结尾');
 });
 $('refresh-button').addEventListener('click', async () => {
   $('refresh-button').disabled = true;

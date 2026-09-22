@@ -6,6 +6,7 @@ published immutable RGB24 bytes, so network waits remain a connected video feed.
 from __future__ import annotations
 
 import os
+from collections import deque
 from pathlib import Path
 import select
 import shutil
@@ -22,7 +23,7 @@ class HLSVideo:
         executable = ffmpeg or os.environ.get("POKEMON_FFMPEG") or shutil.which("ffmpeg")
         if not executable:
             raise RuntimeError("Live video requires ffmpeg with the libx264 encoder")
-        self.directory = Path(output) / "video"
+        self.directory = (Path(output) / "video").resolve()
         self.directory.mkdir(parents=True, exist_ok=True)
         if (self.directory / "index.m3u8").exists():
             raise ValueError("Video output already exists; use a new run directory")
@@ -35,37 +36,61 @@ class HLSVideo:
         self._closed = False
         self._published = 0
         self._encoded = 0
+        self._restarts = 0
+        self._restart_times: deque[float] = deque()
+        self._last_error: str | None = None
+        self._executable = executable
         self._log = self.directory / "ffmpeg.log"
-        command = [
-            executable, "-hide_banner", "-loglevel", "warning", "-y",
-            "-f", "rawvideo", "-pixel_format", "rgb24",
-            "-video_size", f"{width}x{height}", "-framerate", str(fps),
-            "-i", "pipe:0", "-an", "-c:v", "libx264", "-preset", "veryfast",
-            "-tune", "zerolatency", "-profile:v", "baseline", "-pix_fmt", "yuv420p",
-            "-crf", "18", "-g", str(fps), "-keyint_min", str(fps), "-sc_threshold", "0",
-            "-f", "hls", "-hls_time", "1", "-hls_list_size", "12",
-            "-hls_delete_threshold", "2", "-hls_segment_type", "fmp4",
-            "-hls_fmp4_init_filename", "init.mp4", "-hls_flags",
-            "delete_segments+independent_segments+program_date_time+temp_file",
-            "-hls_segment_filename", str(self.directory / "segment-%06d.m4s"),
-            str(self.directory / "index.m3u8"),
-        ]
-        with self._log.open("wb") as log:
-            self._process = subprocess.Popen(command, stdin=subprocess.PIPE,
-                                             stdout=subprocess.DEVNULL, stderr=log,
-                                             bufsize=0)
-        assert self._process.stdin is not None
-        os.set_blocking(self._process.stdin.fileno(), False)
+        self._start_encoder()
         self._thread = threading.Thread(target=self._write_frames,
                                         name="pokemon-video", daemon=True)
         self._thread.start()
 
+    def _start_encoder(self, *, resume: bool = False) -> None:
+        # Append a discontinuity on recovery: a new encoder starts new media
+        # timestamps. Never reuse segment names a browser may already cache.
+        segments = [int(path.stem.removeprefix("segment-"))
+                    for path in self.directory.glob("segment-*.m4s")
+                    if path.stem.removeprefix("segment-").isdigit()]
+        start_number = max(segments, default=-1) + 1
+        flags = "delete_segments+independent_segments+program_date_time+temp_file+omit_endlist"
+        if resume and (self.directory / "index.m3u8").exists():
+            flags += "+append_list+discont_start"
+        command = [
+            self._executable, "-hide_banner", "-loglevel", "warning", "-nostdin", "-y",
+            "-f", "rawvideo", "-pixel_format", "rgb24",
+            "-video_size", f"{self.width}x{self.height}", "-framerate", str(self.fps),
+            "-i", "pipe:0", "-an", "-c:v", "libx264", "-preset", "veryfast",
+            "-tune", "zerolatency", "-profile:v", "baseline", "-pix_fmt", "yuv420p",
+            "-crf", "18", "-g", str(self.fps), "-keyint_min", str(self.fps), "-sc_threshold", "0",
+            "-f", "hls", "-hls_time", "1", "-hls_list_size", "12",
+            "-hls_delete_threshold", "2", "-hls_segment_type", "fmp4",
+            "-hls_fmp4_init_filename", "init.mp4", "-hls_flags", flags,
+            "-start_number", str(start_number),
+            "-hls_segment_filename", str(self.directory / "segment-%06d.m4s"),
+            str(self.directory / "index.m3u8"),
+        ]
+        with self._log.open("ab") as log:
+            self._process = subprocess.Popen(command, stdin=subprocess.PIPE,
+                                             stdout=subprocess.DEVNULL, stderr=log,
+                                             bufsize=0, start_new_session=True)
+        assert self._process.stdin is not None
+        os.set_blocking(self._process.stdin.fileno(), False)
+
+    def _diagnostic(self, error: BaseException | None = None) -> str:
+        with self._log.open("rb") as log:
+            log.seek(max(0, self._log.stat().st_size - 4096))
+            detail = log.read().decode("utf-8", errors="replace").strip()
+        return (f"writer={error or self._error}; returncode={self._process.poll()}; "
+                f"stderr={detail or '(empty)'}")
+
     def _failure(self) -> RuntimeError:
-        detail = self._log.read_bytes()[-4096:].decode("utf-8", errors="replace").strip()
-        return RuntimeError(f"Live video encoder failed: {detail or self._error or self._process.returncode}")
+        return RuntimeError(f"Live video encoder failed: {self._diagnostic()}")
 
     def check(self) -> None:
-        if self._error is not None or (not self._closed and self._process.poll() is not None):
+        # The writer supervises ffmpeg and owns bounded recovery. A transient
+        # encoder exit must not race a gameplay check and abort the saved game.
+        if self._error is not None:
             raise self._failure()
 
     def publish(self, rgb24: bytes) -> None:
@@ -87,7 +112,30 @@ class HLSVideo:
             return {"fps": self.fps, "width": self.width, "height": self.height,
                     "format": "hls-fmp4", "codec": "h264",
                     "playlist": "video/index.m3u8", "published_frames": self._published,
-                    "encoded_frames": self._encoded}
+                    "encoded_frames": self._encoded, "restart_count": self._restarts,
+                    "last_error": self._last_error}
+
+    def _recover_encoder(self, error: BaseException) -> None:
+        self._last_error = self._diagnostic(error)
+        now = time.monotonic()
+        while self._restart_times and self._restart_times[0] < now - 300:
+            self._restart_times.popleft()
+        assert self._process.stdin is not None
+        self._process.stdin.close()
+        if self._process.poll() is None:
+            self._process.kill()
+        self._process.wait(timeout=2)
+        if len(self._restart_times) >= 3:
+            raise RuntimeError(f"Encoder recovery limit reached (3 in 5 minutes): {self._last_error}")
+        if self._stop.wait(0.1):
+            return
+        self._restart_times.append(now)
+        self._restarts += 1
+        with self._log.open("a") as log:
+            log.write(f"\nEncoder restart {self._restarts}: {error}; previous returncode={self._process.returncode}\n")
+        with self._lock:
+            if not self._stop.is_set():
+                self._start_encoder(resume=True)
 
     def _write_frame(self, frame: bytes) -> bool:
         assert self._process.stdin is not None
@@ -123,8 +171,15 @@ class HLSVideo:
             while not self._stop.is_set():
                 with self._lock:
                     frame = self._frame
-                if frame is not None and not self._write_frame(frame):
-                    break
+                try:
+                    if frame is not None and not self._write_frame(frame):
+                        break
+                except (OSError, RuntimeError) as error:
+                    if self._stop.is_set():
+                        raise
+                    self._recover_encoder(error)
+                    deadline = time.monotonic()
+                    continue
                 with self._lock:
                     self._encoded += 1
                 deadline += 1 / self.fps
@@ -141,8 +196,9 @@ class HLSVideo:
     def close(self) -> None:
         if self._closed:
             return
-        self._closed = True
-        self._stop.set()
+        with self._lock:
+            self._closed = True
+            self._stop.set()
         self._ready.set()
         self._thread.join(timeout=2)
         try:
@@ -157,3 +213,11 @@ class HLSVideo:
             self._error = RuntimeError("Video writer did not stop")
         if result != 0 or self._error is not None:
             raise self._failure()
+        # ffmpeg omits ENDLIST while running so an encoder recovery cannot make
+        # an HLS player permanently stop. Only a completed close ends the feed.
+        playlist = self.directory / "index.m3u8"
+        if playlist.exists():
+            content = playlist.read_text()
+            temporary = playlist.with_suffix(".m3u8.tmp")
+            temporary.write_text(content + ("" if "#EXT-X-ENDLIST" in content else "#EXT-X-ENDLIST\n"))
+            temporary.replace(playlist)
