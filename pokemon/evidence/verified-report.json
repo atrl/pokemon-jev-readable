@@ -1,0 +1,28 @@
+{
+  "run_id": 35681323183,
+  "tested_commit": "874df590b20cb5eee5313009437a6e0269f65eae",
+  "rom_sha1": "e2d564a5172d38e44b4f4b8f7d9db92f644cf5e9",
+  "source_binary_match": false,
+  "real_emulator": "PyBoy 2.7.0",
+  "regression_policy": "scripted_regression_not_jev",
+  "memory_checks": {
+    "name": "RED",
+    "map_id": 38,
+    "right": {"before": [3,6], "after": [4,6]},
+    "left": {"before": [3,6], "after": [2,6]},
+    "down": {"before": [3,6], "after": [3,7]},
+    "up": {"before": [3,6], "after": [3,6]},
+    "menu_cursor": {"before": 0, "after": 1},
+    "dialog_decoded": true,
+    "empty_party_and_bag": true,
+    "state_replay_pixels_and_observation": true,
+    "status": "passed"
+  },
+  "jev": {
+    "status": "blocked_missing_key",
+    "jev_calls": 0,
+    "executed_actions": 0,
+    "reason": "TYPESAFE_API_KEY unavailable in the workflow environment. No fallback policy ran."
+  },
+  "not_tested": ["nonempty party", "nonempty bag", "battles", "Jev gameplay", "story completion"]
+}

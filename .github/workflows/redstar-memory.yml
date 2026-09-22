@@ -1,0 +1,46 @@
+name: Red Star memory and Jev
+on:
+  push:
+    branches: [feat/pokemon-redstar-jev]
+    paths: ['pokemon/**', '.github/workflows/redstar-memory.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  pokemon:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    env:
+      SDL_VIDEODRIVER: dummy
+      SDL_AUDIODRIVER: dummy
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Install real emulator
+        run: |
+          python3 -m venv /tmp/redstar-venv
+          /tmp/redstar-venv/bin/pip install -r pokemon/requirements.txt
+      - name: Unit tests (not a gameplay claim)
+        run: /tmp/redstar-venv/bin/python -m unittest discover -s pokemon/tests -v
+      - name: Real ROM memory, movement, dialog and menu regression
+        run: /tmp/redstar-venv/bin/python pokemon/test_live.py
+      - name: Jev-only control, at most 12 decisions
+        env:
+          TYPESAFE_API_KEY: ${{ secrets.TYPESAFE_API_KEY }}
+        run: |
+          /tmp/redstar-venv/bin/python pokemon/run.py \
+            --state pokemon/.work/bedroom.state \
+            --output pokemon-evidence/jev --steps 12 --allow-missing-key
+          echo '## Jev execution status' >> "$GITHUB_STEP_SUMMARY"
+          cat pokemon-evidence/jev/report.json >> "$GITHUB_STEP_SUMMARY"
+      - name: Keep reports and screenshots only
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: redstar-memory-and-jev
+          path: |
+            pokemon-evidence/**/*.json
+            pokemon-evidence/**/*.png
+          retention-days: 7
+          if-no-files-found: warn
