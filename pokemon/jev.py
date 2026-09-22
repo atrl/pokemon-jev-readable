@@ -22,6 +22,11 @@ BUTTONS = {
     "wait": "Release all buttons and let text, animation or a transition finish.",
 }
 ENDPOINT = "https://api.typesafe.ai/v1/systemone"
+TRANSIENT_HTTP_STATUSES = (429, 500, 502, 503, 504, 529)
+
+
+class JevUnavailable(RuntimeError):
+    """Temporary service/network failure; no physical action was authorized."""
 
 DEFAULT_GAME_GOAL = (
     "Complete Pokemon Red Star's main story: defeat the Pokemon League Champion "
@@ -254,19 +259,25 @@ def choose(observation: dict, goal: str, history: list[dict], *,
                  latency_ms=round((time.monotonic() - attempt_started) * 1000))
             emit("jev_error", attempt=attempt, error="http_error", phase="request", httpStatus=status,
                  latency_ms=round((time.monotonic() - attempt_started) * 1000))
-            if status in (429, 503, 529) and attempt < 3:
+            if status in TRANSIENT_HTTP_STATUSES and attempt < 3:
                 time.sleep(2 ** (attempt - 1))
                 continue
+            if status in TRANSIENT_HTTP_STATUSES:
+                raise JevUnavailable(f"Jev HTTP {status}; no action executed") from None
             raise RuntimeError(f"Jev HTTP {status}; no action executed") from None
         except KeyboardInterrupt:
             emit("jev_error", attempt=attempt, error="interrupted", phase="request")
             raise
         except Exception as exc:
             emit("jev_error", attempt=attempt, error="connection_failed", phase="request",
+                 exception_type=type(exc).__name__, reason_type=type(getattr(exc,'reason',None)).__name__,
+                 errno=getattr(getattr(exc,'reason',exc),'errno',None) if type(getattr(getattr(exc,'reason',exc),'errno',None)) is int else None,
                  latency_ms=round((time.monotonic() - attempt_started) * 1000))
             if isinstance(exc, (OSError, http.client.HTTPException)) and attempt < 3:
                 time.sleep(2 ** (attempt - 1))
                 continue
+            if isinstance(exc, (OSError, http.client.HTTPException)):
+                raise JevUnavailable("Jev connection failed; no action executed") from None
             raise RuntimeError("Jev connection failed; no action executed") from None
         try:
             response = json.loads(raw_response)

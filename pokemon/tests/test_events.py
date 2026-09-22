@@ -45,6 +45,46 @@ def events(path):
 
 
 class EventTests(unittest.TestCase):
+    def test_run_waits_through_temporary_outage_without_changing_observation_or_pressing(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path=Path(directory)/'run';world=Mock();world.save.return_value=b'offline outage checkpoint'
+            reader=Mock();reader.snapshot.return_value=observation()
+            requests=[]
+            def network(request,**kwargs):
+                world.press.assert_not_called();requests.append(request.data)
+                if len(requests)<=3:raise urllib.error.URLError(TEST_KEY)
+                return response(answer())
+            with patch.dict('os.environ',{'TYPESAFE_API_KEY':TEST_KEY}), \
+                 patch('run.Emulator',return_value=world),patch('run.Reader',return_value=reader), \
+                 patch('urllib.request.urlopen',side_effect=network),patch('run.time.sleep') as sleep:
+                report=run(Path('TEST.gb'),path,goal='Offline test',steps=1)
+            rows=events(path);waiting=[r for r in rows if r['type']=='jev_wait']
+            self.assertEqual(report['status'],'budget_reached')
+            self.assertEqual(report['executed_actions'],1);self.assertEqual(report['jev_http_attempts'],4)
+            self.assertEqual([r['attempt']for r in rows if r['type']=='jev_request'],[1,2,3,4])
+            self.assertEqual(len(set(requests)),1)
+            self.assertEqual(waiting[0]['retry_after_seconds'],5)
+            self.assertTrue(any(r['type']=='jev_resumed'for r in rows))
+            self.assertEqual(sleep.call_args_list,[call(1),call(2),call(5)])
+            world.press.assert_called_once_with('a',held=8,settle=32)
+            self.assertNotIn(TEST_KEY,json.dumps(rows))
+
+    def test_interrupting_service_wait_preserves_zero_action_checkpoint(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path=Path(directory)/'run';world=Mock();world.save.return_value=b'offline waiting state'
+            reader=Mock();reader.snapshot.return_value=observation()
+            def sleep(seconds):
+                if seconds==5:raise KeyboardInterrupt
+            with patch.dict('os.environ',{'TYPESAFE_API_KEY':TEST_KEY}), \
+                 patch('run.Emulator',return_value=world),patch('run.Reader',return_value=reader), \
+                 patch('urllib.request.urlopen',side_effect=urllib.error.URLError(TEST_KEY)) as network, \
+                 patch('run.time.sleep',side_effect=sleep):
+                report=run(Path('TEST.gb'),path,goal='Offline test',steps=1)
+            self.assertEqual(report['status'],'interrupted');self.assertEqual(network.call_count,3)
+            world.press.assert_not_called()
+            self.assertEqual((path/'last.state').read_bytes(),b'offline waiting state')
+            self.assertEqual(json.loads((path/'last.state.json').read_text())['step'],0)
+
     def test_retries_emit_one_request_per_actual_attempt_without_credentials(self):
         output = []
         payload = answer()
@@ -228,8 +268,9 @@ class EventTests(unittest.TestCase):
                 self.assertEqual(json.loads((path / 'report.json').read_text())['executed_actions'], 0)
                 emulator.assert_not_called()
 
-    def test_failed_and_interrupted_attempts_finish_without_fallback(self):
-        for error, expected in [(urllib.error.URLError(TEST_KEY), 'failed'), (KeyboardInterrupt(), 'interrupted')]:
+    def test_permanent_failure_and_interrupted_attempts_finish_without_fallback(self):
+        permanent=urllib.error.HTTPError('https://example.invalid',401,'unauthorized',{},None)
+        for error, expected in [(permanent, 'failed'), (KeyboardInterrupt(), 'interrupted')]:
             with self.subTest(expected=expected), tempfile.TemporaryDirectory() as directory:
                 path = Path(directory) / 'run'
                 world = Mock()

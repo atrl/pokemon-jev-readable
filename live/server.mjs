@@ -85,10 +85,19 @@ export class EventStore {
       const latencyKey = `${event.step}:${event.attempt ?? 1}`;
       if (latencyKey !== run._lastLatencyKey) { run._modelMs += event.latency_ms; run._latencyCount++; run._lastLatencyKey = latencyKey; }
     }
+    if (['observation', 'jev_request', 'jev_response', 'jev_error', 'decision', 'executing', 'result', 'finished'].includes(event.type)) delete run.jev_wait;
     if (event.type === 'observation') run.status = 'observing';
     if (event.type === 'jev_request') { run.calls++; run.status = 'calling'; }
     if (event.type === 'jev_response') run.status = 'received';
     if (event.type === 'jev_error') run.status = 'request_error';
+    if (event.type === 'jev_wait') {
+      const seconds = Number.isFinite(event.retry_after_seconds) && event.retry_after_seconds >= 0 && event.retry_after_seconds <= 86400
+        ? event.retry_after_seconds : null;
+      run.status = 'waiting_for_jev';
+      run.jev_wait = { since: event.time, retry_after_seconds: seconds,
+        retry_at: seconds === null ? null : new Date(Date.parse(event.time) + seconds * 1000).toISOString(),
+        reason: event.reason, consecutive_windows: Number.isInteger(event.consecutive_windows) && event.consecutive_windows >= 0 ? event.consecutive_windows : null };
+    }
     if (event.type === 'decision') run.status = 'decided';
     if (event.type === 'executing') run.status = 'executing';
     if (event.type === 'result') { run.results++; run.status = event.success === false ? 'action_error' : 'running'; }
@@ -103,6 +112,9 @@ export class EventStore {
       try { process.kill(pid, 0); } catch (error) { if (error.code === 'ESRCH') { summary.status = 'interrupted'; summary.reason = '运行进程已退出，未收到结束事件。'; } }
     }
     const sampledAt = new Date();
+    if (summary.jev_wait) summary.jev_wait = { ...summary.jev_wait,
+      retry_remaining_seconds: summary.jev_wait.retry_at === null ? null
+        : Math.max(0, Math.ceil((Date.parse(summary.jev_wait.retry_at) - sampledAt.getTime()) / 1000)) };
     let elapsed = _elapsedMs ?? Math.max(0, Date.parse(run.updatedAt) - Date.parse(run.startedAt));
     if (!TERMINAL.has(summary.status)) elapsed += Math.max(0, sampledAt.getTime() - Date.parse(run.updatedAt));
     const rate = elapsed > 0 ? run.results * 60000 / elapsed : 0;

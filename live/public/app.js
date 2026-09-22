@@ -16,6 +16,7 @@ const statusNames = {
   stalled: '检测到重复循环 · 已存档停止', failed: '运行失败', error: '运行失败', interrupted: '已中断', aborted: '已中断',
   max_steps: '达到步数上限', limit: '达到步数上限', blocked: '等待条件',
   waiting: '等待事件', starting: '正在启动', observing: '读取游戏状态', calling: '等待 Jev 响应',
+  waiting_for_jev: '等待 JEV 服务恢复',
   received: '已收到响应', request_error: 'Jev 调用失败', decided: '已确认决策', executing: '执行按键中',
   action_error: '动作执行失败', budget_reached: '达到步数上限', blocked_missing_key: '缺少 Jev Key',
   blocked_connection: '游戏连接不可用',
@@ -23,6 +24,7 @@ const statusNames = {
 const eventNames = {
   started: '运行开始', observation: '读取游戏状态', jev_request: '调用 Jev',
   jev_response: '收到 Jev 响应', jev_error: 'Jev 调用失败', decision: '确认决策',
+  jev_wait: '等待 JEV 服务恢复', jev_resumed: 'JEV 服务已恢复',
   executing: '执行动作', result: '动作结果', finished: '运行结束', error: '运行异常', video_started: '游戏视频已连接', video_restarted: '游戏视频已重连', checkpoint: '已自动存档', objective: '主线目标更新',
 };
 const buttonNames = { up: '↑ 上', down: '↓ 下', left: '← 左', right: '→ 右', a: 'A', b: 'B', start: 'START', select: 'SELECT', wait: '等待' };
@@ -60,7 +62,7 @@ const actionName = (action) => {
   const value = typeof action === 'object' && action !== null ? action.id ?? action.button ?? action.type : action;
   return buttonNames[value] ?? brief(value, '未提供动作');
 };
-const statusClass = (status) => /^(running|started|active|starting|observing|calling|received|decided|executing)$/.test(status) ? 'active' : /^(completed|success|succeeded)$/.test(status) ? 'success' : /^(error|failed|request_error|action_error)$/.test(status) ? 'error' : /^(blocked.*|stalled|interrupted|aborted)$/.test(status) ? 'warning' : '';
+const statusClass = (status) => /^(running|started|active|starting|observing|calling|received|decided|executing)$/.test(status) ? 'active' : /^(completed|success|succeeded)$/.test(status) ? 'success' : /^(error|failed|request_error|action_error)$/.test(status) ? 'error' : /^(blocked.*|waiting_for_jev|stalled|interrupted|aborted)$/.test(status) ? 'warning' : '';
 const terminalStatus = (status) => /^(completed|success|succeeded|finished|stopped|stalled|failed|error|interrupted|aborted|max_steps|limit|budget_reached|blocked.*)$/.test(status);
 
 function notice(message = '') {
@@ -218,7 +220,9 @@ function render() {
   if (run.reason) warnings.push(brief(run.reason));
   if (run.truncated) warnings.push(`本页展示最近 ${run.retainedEvents ?? 2000} 条事件，较早事件仍保留在本机运行记录中。`);
   const updatedAt = dateValue(run.updatedAt)?.getTime();
-  if (!terminalStatus(run.status) && updatedAt && Date.now() - updatedAt > 90000) warnings.push('超过 90 秒未收到此运行的新事件。上方状态为最后记录，不能确认代理仍在推进。');
+  const retryAt = dateValue(run.jev_wait?.retry_at)?.getTime();
+  const expectedBackoff = run.status === 'waiting_for_jev' && retryAt && Date.now() <= retryAt + 90000;
+  if (!terminalStatus(run.status) && !expectedBackoff && updatedAt && Date.now() - updatedAt > 90000) warnings.push('超过 90 秒未收到此运行的新事件。上方状态为最后记录，不能确认代理仍在推进。');
   $('run-warning').textContent = warnings.join(' ');
   $('run-warning').hidden = !warnings.length;
   const steps = new Set(list.filter((event) => event.step !== null && event.step !== undefined).map((event) => event.step));
@@ -241,10 +245,6 @@ function render() {
   }
   renderTiming();
   renderComparison();
-  const phase = run.status === 'calling' ? 'JEV 正在思考 · 等待响应时，游戏停在当前画面，视频流继续播放。'
-    : terminalStatus(run.status) ? '本轮运行已结束 · 可查看已保留的视频片段与决策记录。'
-      : `${statusNames[run.status] ?? '游戏运行中'} · 每次按键与执行结果会同步到下方时间线。`;
-  $('game-phase').textContent = phase;
   const last = list.at(-1);
   if (last) $('last-update').textContent = `最近事件 ${dateFormat(last.time, true)} · ${eventNames[last.type] ?? last.type}`;
 }
@@ -261,9 +261,35 @@ function elapsedFor(run) {
   if (!anchor) return run.timing?.elapsed_ms;
   return anchor.elapsed + (anchor.terminal ? 0 : Math.max(0, performance.now() - anchor.received));
 }
+function jevRetrySeconds(run) {
+  if (run.status !== 'waiting_for_jev') return null;
+  const retryAt = dateValue(run.jev_wait?.retry_at)?.getTime();
+  const sampledAt = dateValue(run.timing?.sampled_at)?.getTime();
+  const anchor = state.timingAnchors.get(run.id);
+  if (retryAt !== undefined && sampledAt !== undefined && anchor) {
+    return Math.max(0, Math.ceil((retryAt - sampledAt - Math.max(0, performance.now() - anchor.received)) / 1000));
+  }
+  return Number.isFinite(run.jev_wait?.retry_remaining_seconds) ? run.jev_wait.retry_remaining_seconds : null;
+}
+function renderRunActivity(run) {
+  $('run-status').className = `status-pill ${statusClass(run.status)}`;
+  if (run.status === 'waiting_for_jev') {
+    const remaining = jevRetrySeconds(run);
+    const retry = remaining === null ? '等待自动重试' : remaining > 0 ? `${remaining} 秒后重试` : '等待下一次重试请求';
+    const windows = run.jev_wait?.consecutive_windows;
+    $('run-status').textContent = `等待 JEV 恢复 · ${retry}`;
+    $('game-phase').textContent = `JEV 服务暂时不可用${Number.isInteger(windows) ? ` · 第 ${windows} 轮等待` : ''} · ${retry}。游戏暂不执行新按键，视频保持直播。`;
+  } else {
+    $('run-status').textContent = statusNames[run.status] ?? brief(run.status, '状态未知');
+    $('game-phase').textContent = run.status === 'calling' ? '正在等待 JEV 响应 · 游戏停在当前画面，视频流继续播放。'
+      : terminalStatus(run.status) ? '本轮运行已结束 · 可查看已保留的视频片段与决策记录。'
+        : `${statusNames[run.status] ?? '游戏运行中'} · 每次按键与执行结果会同步到下方时间线。`;
+  }
+}
 function renderTiming() {
   const run = state.runs.get(state.selected);
   if (!run) return;
+  renderRunActivity(run);
   const timing = run.timing ?? {};
   const elapsed = elapsedFor(run);
   const completed = run.results ?? run.steps ?? 0;
@@ -427,6 +453,8 @@ function eventSummary(event) {
       return answer?.choice !== undefined ? `返回选择 ${actionName(answer.choice)}${typeof answer.confidence === 'number' ? ` · 置信度 ${(answer.confidence * 100).toFixed(1)}%` : ''}；等待本地校验。` : '已记录响应正文，可展开查看。';
     }
     case 'jev_error': return event.error === 'missing_api_key' ? '尚未配置 TYPESAFE_API_KEY，未发起 Jev 请求。' : brief(event.error, '调用失败，未提供错误详情');
+    case 'jev_wait': return `JEV 服务暂时不可用；${Number.isFinite(event.retry_after_seconds) ? `${event.retry_after_seconds} 秒后自动重试` : '等待自动重试'}${Number.isInteger(event.consecutive_windows) ? ` · 连续等待 ${event.consecutive_windows} 轮` : ''}。本次等待不执行游戏按键。`;
+    case 'jev_resumed': return `JEV 已成功返回${Number.isInteger(event.consecutive_windows) ? ` · 结束 ${event.consecutive_windows} 轮等待` : ''}，继续处理本步决策。`;
     case 'decision': return `${event.source === 'manual' ? '手动选择' : '已确认选择'} ${actionName(event.selected ?? event.answer?.choice)}${event.selected?.description ? `\n${event.selected.description}` : ''}`;
     case 'executing': return `${actionName(event.action)}${event.action?.description ? `\n${event.action.description}` : ''}`;
     case 'result': {

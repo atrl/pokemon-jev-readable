@@ -18,7 +18,7 @@ import time
 
 from emulator import Emulator
 from memory import Reader, load_profile
-from jev import choose, observation_for_model, redact_secrets, DEFAULT_GAME_GOAL
+from jev import choose, observation_for_model, redact_secrets, DEFAULT_GAME_GOAL, JevUnavailable
 from progress import ProgressTracker
 from campaign import CampaignPlanner
 
@@ -185,7 +185,36 @@ def run(rom: Path, output: Path, *, goal: str, steps: int, state_file: Path | No
                     save_report()
                 emit(event['type'],step=step,**{key:value for key,value in event.items() if key != 'type'})
 
-            decision = choose(before,goal,history,on_event=decision_event)
+            attempt_offset=0
+            unavailable_windows=0
+            while True:
+                def retry_event(event):
+                    # HTTP attempt identities remain distinct across waiting
+                    # windows on the same paused observation/physical step.
+                    if type(event.get('attempt')) is int:
+                        event={**event,'attempt':event['attempt']+attempt_offset}
+                    decision_event(event)
+                try:
+                    decision = choose(before,goal,history,on_event=retry_event)
+                    if unavailable_windows:
+                        emit('jev_resumed',step=step,consecutive_windows=unavailable_windows)
+                    report['status']='running'
+                    report.pop('waiting_reason',None)
+                    break
+                except JevUnavailable:
+                    unavailable_windows+=1
+                    attempt_offset=max(measured_attempts,default=attempt_offset)
+                    retry_seconds=min(5 * 2 ** min(unavailable_windows-1,3),40)
+                    report.update(status='waiting_for_jev',waiting_reason='temporarily_unavailable')
+                    save_checkpoint()
+                    save_report()
+                    emit('jev_wait',step=step,retry_after_seconds=retry_seconds,
+                         reason='temporarily_unavailable',consecutive_windows=unavailable_windows)
+                    if video and world.video_status().get('terminal_error'):
+                        raise RuntimeError('Video encoder recovery exhausted while waiting for JEV')
+                    # The emulator remains paused; its video encoder keeps
+                    # publishing the last real framebuffer during this wait.
+                    time.sleep(retry_seconds)
             if video:
                 video_health = world.video_status()
                 if video_health.get('terminal_error'):

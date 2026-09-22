@@ -169,6 +169,71 @@ test('active elapsed time advances from the last monotonic event using its wall 
   assert.equal(later.timing.estimated_remaining_ms, 12000);
 });
 
+test('JEV backoff remains active with a ticking retry delay and resumes calling without executing an action', t => {
+  t.mock.timers.enable({ apis: ['Date'], now: Date.parse('2026-09-22T01:00:10.000Z') });
+  const { root, pokemon } = fixture(t);
+  fs.writeFileSync(pokemon,
+    line('started', { time: '2026-09-22T01:00:00.000Z', elapsed_ms: 0, maxSteps: 5000, pid: process.pid, video_enabled: true }) +
+    line('jev_request', { time: '2026-09-22T01:00:01.000Z', elapsed_ms: 1000, step: 191, attempt: 3 }) +
+    line('jev_error', { time: '2026-09-22T01:00:02.000Z', elapsed_ms: 2000, step: 191, attempt: 3, latency_ms: 1000 }) +
+    line('jev_wait', { time: '2026-09-22T01:00:02.000Z', elapsed_ms: 2000, step: 191,
+      retry_after_seconds: 30, reason: 'temporarily_unavailable', consecutive_windows: 1 }));
+  const store = new EventStore(root, { maxEvents: 2 });
+  store.poll();
+  const first = store.list()[0];
+  assert.equal(first.status, 'waiting_for_jev');
+  assert.equal(first.calls, 1);
+  assert.equal(first.results, 0);
+  assert.equal(first.video.enabled, true);
+  assert.equal(first.jev_wait.retry_at, '2026-09-22T01:00:32.000Z');
+  assert.equal(first.jev_wait.retry_remaining_seconds, 22);
+  assert.equal(first.jev_wait.consecutive_windows, 1);
+  assert.equal(first.timing.elapsed_ms, 10000);
+  assert.equal(first.timing.model_ms, 1000);
+  assert.equal(store.detail(first.id).events.some(event => event.type === 'finished'), false);
+  // Checkpoints and video heartbeats do not finish, resume, or discard backoff.
+  fs.appendFileSync(pokemon, line('checkpoint', { time: '2026-09-22T01:00:10.000Z', elapsed_ms: 10000 })
+    + line('video_started', { time: '2026-09-22T01:00:10.000Z', elapsed_ms: 10000 }));
+  store.poll();
+  t.mock.timers.tick(25000);
+  const waited = store.detail(first.id).run;
+  assert.equal(waited.status, 'waiting_for_jev');
+  assert.equal(waited.jev_wait.retry_remaining_seconds, 0);
+  assert.equal(waited.timing.elapsed_ms, 35000);
+  assert.equal(waited.results, 0);
+  assert.equal(waited.timing.model_ms, 1000);
+  // Retry is another HTTP attempt at the same gameplay step, not a result.
+  fs.appendFileSync(pokemon, line('jev_request', { time: '2026-09-22T01:00:35.000Z', elapsed_ms: 35000, step: 191, attempt: 4 }));
+  store.poll();
+  const resumed = store.detail(first.id).run;
+  assert.equal(resumed.status, 'calling');
+  assert.equal(resumed.calls, 2);
+  assert.equal(resumed.results, 0);
+  assert.equal(resumed.steps, 191);
+  assert.equal(resumed.jev_wait, undefined);
+  fs.appendFileSync(pokemon, line('jev_response', { time: '2026-09-22T01:00:36.000Z', elapsed_ms: 36000,
+    step: 191, attempt: 4, httpStatus: 200, latency_ms: 1000 }));
+  store.poll();
+  assert.equal(store.detail(first.id).run.status, 'received');
+  assert.equal(store.detail(first.id).run.timing.model_ms, 2000);
+});
+
+test('invalid retry values cannot produce an invalid wait deadline or a terminal status', t => {
+  const { root, pokemon } = fixture(t);
+  fs.writeFileSync(pokemon, line('started', { pid: process.pid }) + line('jev_wait', {
+    step: 1, retry_after_seconds: '30', consecutive_windows: -1, reason: 'temporarily_unavailable',
+  }));
+  const store = new EventStore(root);
+  store.poll();
+  const [run] = store.list();
+  assert.equal(run.status, 'waiting_for_jev');
+  assert.equal(run.jev_wait.retry_at, null);
+  assert.equal(run.jev_wait.retry_remaining_seconds, null);
+  assert.equal(run.jev_wait.consecutive_windows, null);
+  assert.equal(run.calls, 0);
+  assert.equal(run.results, 0);
+});
+
 test('JSONL decoder preserves a UTF-8 character split between polls and skips corrupt/invalid rows', t => {
   const { root, file } = fixture(t);
   const text = '调用中：正在读取真实游戏状态';
@@ -235,6 +300,9 @@ test('an exited process is marked interrupted unless an explicit terminal event 
   store.poll();
   assert.equal(store.list()[0].status, 'interrupted');
   assert.match(store.list()[0].reason, /退出/);
+  fs.appendFileSync(file, line('jev_wait', { retry_after_seconds: 300, reason: 'temporarily_unavailable', consecutive_windows: 2 }));
+  store.poll();
+  assert.equal(store.list()[0].status, 'interrupted');
   fs.appendFileSync(file, line('finished', { status: 'completed' }));
   store.poll();
   assert.equal(store.list()[0].status, 'completed');
