@@ -412,7 +412,12 @@ $('refresh-button').addEventListener('click', async () => {
 const stream = new EventSource('/api/events');
 stream.addEventListener('open', () => {
   setConnection(true);
-  void refreshRuns().catch((error) => notice(`无法读取运行列表：${error.message}。可点击刷新重试。`));
+  void (async () => {
+    await refreshRuns();
+    // Before the first SSE update there is no cursor to replay on reconnect.
+    // Reload the selected history too; selectRun merges concurrent new events.
+    if (state.selected) await selectRun(state.selected);
+  })().catch((error) => notice(`无法读取运行列表：${error.message}。可点击刷新重试。`));
 });
 stream.addEventListener('error', () => setConnection(false));
 stream.addEventListener('ready', () => setConnection(true));

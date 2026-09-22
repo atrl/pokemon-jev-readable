@@ -20,7 +20,9 @@ emulator.py：按下 → 推进帧 → 松开 → 再观察
 
 [实机测试运行](https://github.com/atrl/minecraft-jev-readable/actions/runs/35681323183)。检查结果在本目录 `evidence/verified-report.json`。
 
-Jev 试运行报告是 **`blocked_missing_key`，0 次模型调用、0 次模型动作**，因为 Actions 中尚未配置 `TYPESAFE_API_KEY`。不要将这些脚本测试冒充模型已开始玩游戏。
+此前 GitHub Actions 的 Jev 试运行报告是 **`blocked_missing_key`，0 次模型调用、0 次模型动作**，因为当时 Actions 尚未配置 `TYPESAFE_API_KEY`。
+
+本地直播链路现已完成两轮、合计 **40 次真实 JEV 调用与 40 次按键执行**，HTTP 均为 200，实际返回模型为 `jev-1.13.0`；第二轮从第一轮存档继续。两轮均按 20 步预算结束，未宣称通关；正常运行生成 0 张截图。网页已经在真实浏览器验证新会话自动出现、事件追加和手机布局。[本地验证摘要](evidence/live-stream-verification.json) 保留事件哈希和调用计数，不包含密钥或原始私有日志。
 
 ## 本地直接用
 
