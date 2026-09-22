@@ -67,7 +67,8 @@ def verify(rom: Path, output: Path, checkpoint: Path) -> dict:
         world.press('start',8,64)
         menu=reader.snapshot()
         menu_text='\n'.join(menu['screen_text']['rows'])
-        assert 'ITEM' in menu_text and 'SAVE' in menu_text,menu_text
+        # Red Star really displays PACK, not vanilla Red's ITEM.
+        assert 'PACK' in menu_text and 'SAVE' in menu_text,menu_text
         before_cursor=menu['menu_cursor_raw']
         world.screenshot(output/'menu-before.png')
         write_json(output/'menu-before.json',menu)
