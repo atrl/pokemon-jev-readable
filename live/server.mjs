@@ -204,7 +204,7 @@ export function createLiveServer({ root = process.cwd(), config = {}, pollMs = 5
       response.on('close', () => clients.delete(response));
       return;
     }
-    const assets = { '/': ['index.html', 'text/html'], '/app.js': ['app.js', 'text/javascript'], '/style.css': ['style.css', 'text/css'], '/vendor/hls.min.js': ['vendor/hls.min.js', 'text/javascript'] };
+    const assets = { '/': ['index.html', 'text/html'], '/app.js': ['app.js', 'text/javascript'], '/request-inspector.js': ['request-inspector.js', 'text/javascript'], '/style.css': ['style.css', 'text/css'], '/vendor/hls.min.js': ['vendor/hls.min.js', 'text/javascript'] };
     const asset = assets[url.pathname];
     if (!asset) return json(404, { error: 'Not found' });
     try { const body = fs.readFileSync(path.join(PUBLIC, asset[0])); response.writeHead(200, { 'Content-Type': `${asset[1]}; charset=utf-8` }); response.end(body); }

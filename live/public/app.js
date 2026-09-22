@@ -1,4 +1,7 @@
+import { createRequestInspector } from './request-inspector.js';
+
 const $ = (id) => document.getElementById(id);
+const requestInspector = createRequestInspector($('input-inspector'));
 const state = {
   runs: new Map(), events: new Map(), config: {}, selected: null, autoFollow: true,
   generation: 0, visibleGroups: 30, expanded: new Set(), connection: false,
@@ -229,6 +232,7 @@ function render() {
   $('metric-latency-note').textContent = response ? `HTTP ${response.httpStatus ?? '未知'} · ${dateFormat(response.time)}` : '等待 Jev 响应';
   const signature = `${state.selected}:${state.eventRevision}:${state.visibleGroups}`;
   if (state.renderedEvents !== signature) {
+    requestInspector.update(list, run);
     renderTimeline(list);
     renderObservation(list, run);
     renderDecision(list);

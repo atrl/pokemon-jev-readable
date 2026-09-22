@@ -296,7 +296,7 @@ test('HTTP serves only explicit assets and redacted run APIs, and rejects writes
   fs.writeFileSync(path.join(root, '.env'), `TYPESAFE_API_KEY=${secret}`);
   fs.writeFileSync(file, line('started', { goal: SOURCE }) + line('jev_request', { request: { apiKey: secret }, note: secret }));
   const live = await start(t, root, { secrets: [secret], config: { minecraft: { keyConfigured: true } } });
-  for (const asset of ['/', '/app.js', '/style.css', '/health']) {
+  for (const asset of ['/', '/app.js', '/request-inspector.js', '/style.css', '/health']) {
     const result = await request(live.port, asset);
     assert.equal(result.status, 200, asset);
     assert.equal(result.headers['cache-control'], 'no-store');

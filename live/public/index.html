@@ -17,7 +17,7 @@
     </header>
     <main>
       <section class="intro">
-        <div><div class="eyebrow"><span class="square"></span> POKÉMON RED STAR × JEV</div><h1>跟着 JEV，一起冒险<span>。</span></h1><p>实时游戏画面、模型思考与行动记录，在同一个直播间。</p></div>
+        <div><div class="eyebrow"><span class="square"></span> POKÉMON RED STAR × JEV</div><h1>跟着 JEV，一起冒险<span>。</span></h1><p>实时游戏画面、JEV 输入与决策、行动记录，在同一个直播间。</p></div>
         <div class="intro-note"><span>游戏画面 + JEV 调用与结果</span><span>连续视频直播 · 实时耗时</span></div>
       </section>
       <div id="notice" class="notice" role="alert" hidden></div>
@@ -55,6 +55,24 @@
           <div class="metric"><span class="metric-label">Jev 调用<span>CALLS</span></span><strong id="metric-calls">—</strong><span class="metric-note">包含重试请求</span></div>
           <div class="metric"><span class="metric-label">动作结果<span>RESULTS</span></span><strong id="metric-results">—</strong><span id="metric-result-note" class="metric-note">执行后返回</span></div>
           <div class="metric"><span class="metric-label">最近响应<span>LATENCY</span></span><strong id="metric-latency">—</strong><span id="metric-latency-note" class="metric-note">等待 Jev 响应</span></div>
+        </section>
+        <section id="input-inspector" class="input-inspector" aria-labelledby="input-title">
+          <div class="section-header"><div><span class="eyebrow">ACTUAL JEV INPUT</span><h2 id="input-title">JEV 实际收到什么？</h2></div><span class="input-readonly">只读 · 来自请求事件</span></div>
+          <p class="input-intro">查看这一刻实际发送的提示词、候选按键与状态。中文是网页导航；英文正文保留请求原文，不是模型内部思考。切换请求不会操作游戏。</p>
+          <div class="input-toolbar"><label for="input-select">选择步数 / 尝试</label><select id="input-select" data-input="select"><option>尚无真实请求</option></select><button class="button small" data-input="follow" type="button" aria-pressed="true">跟随最新请求 · 点击固定</button><button class="button small" data-input="copy" type="button" disabled>复制完整 JSON</button><button class="button small" data-input="download" type="button" disabled>下载 JSON</button></div>
+          <p class="input-source mono" data-input="source">等待本轮真实 jev_request 事件</p>
+          <p class="input-video-note" data-input="video-note">上方视频不会随历史请求回放。</p>
+          <p class="input-window" data-input="window">历史选择来自最近最多 2,000 条事件窗口。</p>
+          <p class="input-status" data-input="status" role="status"></p>
+          <p class="empty-copy" data-input="empty">本轮尚无请求事件；提示词不会从当前代码或新状态推测补齐。</p>
+          <div data-input="body" hidden>
+            <div class="input-columns">
+              <section class="input-prompts" aria-labelledby="input-prompts-title"><h3 id="input-prompts-title">目标与提示词</h3><div data-input="goals"></div><div data-input="questions"></div></section>
+              <section class="input-state" aria-labelledby="input-state-title"><h3 id="input-state-title">发送给 JEV 的状态列表</h3><div data-input="groups"></div><div data-input="unavailable"></div><p class="input-legend">null、false、0、空字符串 ""、空数组 []、空对象 {} 按原值显示；未提供（missing）表示请求中没有该字段。对象与数组下方列出全部子字段。</p><div class="input-filter"><label for="input-filter">筛选字段路径或值</label><input id="input-filter" data-input="filter" type="search" placeholder="例如 map_id、unavailable、false" autocomplete="off"><span data-input="field-count"></span></div><div class="input-table-scroll" tabindex="0" aria-label="完整状态字段列表，可滚动"><table class="input-state-table"><thead><tr><th scope="col">字段路径</th><th scope="col">类型</th><th scope="col">原始值</th></tr></thead><tbody data-input="fields"></tbody></table><p class="empty-copy input-field-empty" data-input="field-empty" hidden>没有匹配字段，或请求未提供 state。</p></div></section>
+            </div>
+            <details class="input-temporal" open><summary>连续状态：按键前 → 动作 → 按键后 <span data-input="transition-count"></span></summary><div data-input="transitions"></div></details>
+            <details class="input-raw" data-input="raw-details"><summary>完整请求 JSON <span>来自已记录 request，格式化展示</span></summary><pre data-input="raw"></pre></details>
+          </div>
         </section>
         <details class="comparison-panel"><summary>耗时对比 <span>本机已记录运行</span></summary><p class="comparison-note">20 步短运行标为「本地试跑基线」。不同开局、动作与网络状态会影响速度；预计耗时只针对步数预算。</p><div class="comparison-scroll"><table><thead><tr><th>运行</th><th>执行步数</th><th>实际耗时</th><th>步 / 分钟</th><th>平均 JEV 响应</th></tr></thead><tbody id="timing-comparison"></tbody></table></div></details>
         <div class="workspace">

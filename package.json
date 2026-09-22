@@ -11,7 +11,7 @@
     "start": "node --env-file-if-exists=.env agent.mjs",
     "manual": "node --env-file-if-exists=.env agent.mjs --manual",
     "test": "node --test tests/*.test.mjs",
-    "check": "node --check agent.mjs && node --check minecraft.mjs && node --check jev.mjs && node --check live/server.mjs && node --check live/redact.mjs && node --check live/pokemon.mjs && node --check live/public/app.js",
+    "check": "node --check agent.mjs && node --check minecraft.mjs && node --check jev.mjs && node --check live/server.mjs && node --check live/redact.mjs && node --check live/pokemon.mjs && node --check live/public/app.js && node --check live/public/request-inspector.js",
     "live": "node --env-file-if-exists=.env --env-file-if-exists=pokemon/.env live/server.mjs",
     "pokemon": "node --env-file-if-exists=.env --env-file-if-exists=pokemon/.env live/pokemon.mjs",
     "pokemon:live": "node --env-file-if-exists=.env --env-file-if-exists=pokemon/.env live/pokemon.mjs --live"
