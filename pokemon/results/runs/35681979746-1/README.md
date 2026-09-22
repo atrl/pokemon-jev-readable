@@ -2,7 +2,7 @@
 
 **流程执行结束不等于模型取得进展，更不等于通关。**
 
-来源：https://github.com/atrl/minecraft-jev-readable/actions/runs/35681979746
+来源：https://github.com/atrl/pokemon-jev-readable/actions/runs/35681979746
 
 | 检查 | 结果 |
 |---|---|

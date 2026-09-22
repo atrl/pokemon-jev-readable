@@ -49,7 +49,7 @@
 - ROM SHA-256：`3d0c79f1627022e18765766f6cb5ea067f6b5bf7dca115552189ad65a5c3a8ac`。
 - 原始 Git blob：`a0d042c360c18b860da3ef71ebac0d826e136cdc`；原文件未修改。
 - mGBA 0.10.5 固定源码：`26b7884bc25a5933960f3cdcd98bac1ae14d42e2`。
-- GitHub Actions 构建与 ROM 校验：[run 35604598450](https://github.com/atrl/minecraft-jev-readable/actions/runs/35604598450)。这次 CI run 验证的是核心构建和 ROM 身份；25 项游戏/接口测试是在下载该核心和用户 ROM 后于工作容器中运行的，不混称为 CI 的测试成绩。
+- GitHub Actions 构建与 ROM 校验：[run 35604598450](https://github.com/atrl/pokemon-jev-readable/actions/runs/35604598450)。这次 CI run 验证的是核心构建和 ROM 身份；25 项游戏/接口测试是在下载该核心和用户 ROM 后于工作容器中运行的，不混称为 CI 的测试成绩。
 - 地址及结构参考：pret/pokefirered；40Cakes/pokebot-gen3 的 FireRed 符号表。读取器是只读适配，不运行它们的自动策略。
 
 ## 交付与未覆盖范围
