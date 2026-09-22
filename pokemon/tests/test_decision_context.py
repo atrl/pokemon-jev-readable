@@ -85,6 +85,20 @@ class DecisionContextTests(unittest.TestCase):
         self.assertTrue(request['state']['current_focus'].startswith('Resolve the current battle'))
         self.assertEqual(set(request['questions']['button']['criteria']),set(BUTTONS))
 
+    def test_trainer_intro_candidates_explain_acknowledgement_before_initialization(self):
+        raw=world_state(mode='battle');raw['dialog']={'open':None,'awaiting_input':None,'text':None}
+        raw['battle']={'active':True,'verified':False,'phase_verified':True,
+                      'phase':'text_before_combatants_ready','combatants_ready':False,
+                      'menu':'text_or_animation','visible_text':'JR.TRAINER♂ JERRY\n\nwants to fight!'}
+        request=build_request(raw,'Win a badge',[])
+        self.assertEqual(request['state']['game']['battle']['input_guidance']['suggested_button'],'a')
+        self.assertIn('before combatant initialization',request['questions']['button']['criteria']['a'])
+        self.assertIn('missing combatant data is not a reason',request['questions']['button']['criteria']['wait'])
+        self.assertNotIn('player',request['state']['game']['battle'])
+        self.assertEqual(set(request['questions']['button']['criteria']),set(BUTTONS))
+        raw['battle']['phase_verified']=False
+        self.assertNotIn('input_guidance',build_request(raw,'Win a badge',[])['state']['game']['battle'])
+
     def test_checkpoint_memory_requires_the_same_state_identity(self):
         with tempfile.TemporaryDirectory() as directory:
             state=Path(directory)/'last.state';state.write_bytes(b'offline state')

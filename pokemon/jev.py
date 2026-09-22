@@ -71,7 +71,7 @@ def observation_for_model(observation: dict) -> dict:
         if isinstance(battle.get("enemy"),dict):
             battle["enemy"]={k:v for k,v in battle["enemy"].items() if k!="moves"}
     else:
-        battle = {**{key:battle.get(key) for key in ('active','phase','phase_verified','combatants_ready','menu','visible_text')},
+        battle = {**{key:battle.get(key) for key in ('active','type','phase','phase_verified','combatants_ready','menu','visible_text','awaiting_input')},
                   'verified':False,'quality':'needs_data'}
     return {
         "game": observation.get("game"),
@@ -135,6 +135,17 @@ def build_request(observation: dict, goal: str, history: list[dict]) -> dict:
     current_focus=(campaign.get('active_objective') or {}).get('intent') or progress.get('current_focus', 'Use verified observations to advance the goal.')
     if battle_active:
         current_focus='Resolve the current battle UI first. Advancing battle introduction/text usually needs A; choose FIGHT and a usable damaging move when its menu appears. Resume the story objective after battle.'
+        criteria['a']='Press A to acknowledge battle text or confirm the selected battle command/move. Battle text uses its own text box: overworld dialog.open may be null. Combatants not yet initialized does not mean that A is unavailable.'
+        criteria['wait']='Wait only for a visibly changing battle animation or text being printed. Waiting does not acknowledge completed challenge, encounter or send-out text; those need A.'
+        battle=game['battle']
+        text=' '.join(str(battle.get('visible_text') or '').split())
+        if battle.get('phase_verified') is True and battle.get('phase')=='text_before_combatants_ready' and 'wants to fight!' in text.lower():
+            battle['input_guidance']={'suggested_button':'a',
+                'reason':'The complete trainer challenge is waiting for acknowledgement. Combatant data is initialized after this text advances; waiting for those fields first can deadlock the controller.',
+                'source':'Exact-ROM trainer-intro save regression; advisory game-control knowledge, not a physical input override'}
+            current_focus='Acknowledge the visible trainer challenge with A, then inspect the newly initialized battle. Repeating WAIT on this completed message has no effect.'
+            criteria['a']+=' CURRENT STATE: the complete trainer challenge says wants to fight! A advances this acknowledgement before combatant initialization.'
+            criteria['wait']='CURRENT STATE: completed trainer challenge awaiting acknowledgement. WAIT leaves this message unchanged; missing combatant data is not a reason to keep waiting. A is the relevant acknowledgement input.'
     visits = feedback.get("neighbor_visits") or {}
     for direction in ("up", "down", "left", "right"):
         criteria[direction] = {"input": BUTTONS[direction],
@@ -159,8 +170,8 @@ def build_request(observation: dict, goal: str, history: list[dict]) -> dict:
                 "Then advance campaign.active_objective, which serves state.goal. Story progress takes priority over exploring new coordinates. "
                 "Use campaign.navigation.next_button as an explicit advisory path/interaction suggestion from the disclosed navigation tool, if it agrees with the latest UI and input lock. Do not wander away from the active target merely to visit a new tile. "
                 "When navigation.status is interact, A is purposeful story interaction, not a repetition to avoid. Source-prior knowledge identifies intended targets but live facts verify the result. "
-                "If game.world.input_lock.ignored_buttons_mask is 255, or scripted movement/transition has control and no input-ready dialog is visible, choose wait to let the game script proceed. "
-                "Whenever game.battle.active is true, suspend map navigation, even if combatants are not yet initialized and the scene is unknown. 'Wild ... appeared!', '... sent out ...', and a visible dialogue arrow are battle introduction text to advance with A; directional walking cannot advance it. "
+                "In OVERWORLD, if game.world.input_lock.ignored_buttons_mask is 255, or scripted movement/transition has control and no input-ready dialog is visible, choose wait to let the game script proceed. Overworld movement locks do not determine battle text input readiness. "
+                "Whenever game.battle.active is true, suspend map navigation, even if combatants are not yet initialized and the scene is unknown. '... wants to fight!', 'Wild ... appeared!', and '... sent out ...' are battle introduction text to advance with A; an absent/blinking arrow or null overworld dialog is not a reason to wait forever. Directional walking cannot advance this text. "
                 "In battle, use game.battle: command menu FIGHT is the upper-left command; select it then a damaging move with remaining PP. Avoid repeatedly using zero-power status moves. Use HP/PP and visible selected_move_slot/selected_command; menu_cursor_raw has different indexing between menus. Text/animation may need A or wait. Trainer battles cannot be fled. "
                 "If an optional nickname question is shown, B declines it. In name_entry, START completes the name rather than endlessly entering letters. In species_preview, A returns to the selection dialogue. "
                 "Use the current verified scene, observed local geometry, temporal_context and recent action effects to decide how to act safely toward that goal. "
