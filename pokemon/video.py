@@ -187,7 +187,7 @@ class HLSVideo:
                 if deadline < now - 1 / self.fps:
                     deadline = now
                 self._stop.wait(max(0, deadline - now))
-        except (OSError, RuntimeError) as error:
+        except (OSError, RuntimeError, subprocess.SubprocessError) as error:
             self._error = error
         finally:
             assert self._process.stdin is not None

@@ -135,6 +135,22 @@ class VideoIntegrationTests(unittest.TestCase):
             self.assertLess(time.monotonic() - started, 2)
             self.assertFalse(stream._thread.is_alive())
 
+    def test_recovery_subprocess_timeout_is_reported_instead_of_silent_writer_exit(self):
+        with tempfile.TemporaryDirectory() as directory:
+            stream = HLSVideo(Path(directory), ffmpeg=FFMPEG)
+            stream.publish(bytes(160 * 144 * 3))
+            with patch.object(stream, "_recover_encoder", side_effect=subprocess.TimeoutExpired("ffmpeg", 2)):
+                stream._process.kill()
+                stream._process.wait(timeout=2)
+                deadline = time.monotonic() + 2
+                while stream._error is None and time.monotonic() < deadline:
+                    time.sleep(.02)
+            with self.assertRaisesRegex(RuntimeError, "timed out"):
+                stream.status()
+            with self.assertRaisesRegex(RuntimeError, "timed out"):
+                stream.close()
+            self.assertFalse(stream._thread.is_alive())
+
     def test_real_rom_framebuffer_produces_playable_video(self):
         rom = Path(__file__).resolve().parents[2] / "red-star-2020-08-18.gb"
         if not rom.exists():
