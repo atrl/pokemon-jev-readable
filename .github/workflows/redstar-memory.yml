@@ -1,15 +1,35 @@
 name: Red Star memory and Jev
 on:
   push:
-    branches: [feat/pokemon-redstar-jev]
+    branches: [main]
+    paths: ['pokemon/**', '.github/workflows/redstar-memory.yml']
+  pull_request:
     paths: ['pokemon/**', '.github/workflows/redstar-memory.yml']
   workflow_dispatch:
+    inputs:
+      mode:
+        description: 'play 调用 Jev；verify 只验证内存，不消耗模型额度'
+        type: choice
+        options: [play, verify]
+        default: play
+      steps:
+        description: '最多决策次数；到达预算不表示通关'
+        type: number
+        default: 12
+      goal:
+        description: '交给 Jev 的任务目标'
+        type: string
+        default: 'Explore Pokemon Red Star and progress through the adventure. Infer your route from dialog and observations.'
+      publish:
+        description: '将 GIF 和结果发布到私有仓库 pokemon/results/'
+        type: boolean
+        default: true
 permissions:
   contents: read
 jobs:
   pokemon:
     runs-on: ubuntu-24.04
-    timeout-minutes: 8
+    timeout-minutes: 12
     env:
       SDL_VIDEODRIVER: dummy
       SDL_AUDIODRIVER: dummy
@@ -23,24 +43,66 @@ jobs:
           /tmp/redstar-venv/bin/pip install -r pokemon/requirements.txt
       - name: Unit tests (not a gameplay claim)
         run: /tmp/redstar-venv/bin/python -m unittest discover -s pokemon/tests -v
-      - name: Real ROM memory, movement, dialog and menu regression
+      - name: Real ROM memory regression
         run: /tmp/redstar-venv/bin/python pokemon/test_live.py
-      - name: Jev-only control, at most 12 decisions
+      - name: Jev button control (only explicit play runs use the key)
+        if: github.event_name == 'workflow_dispatch' && inputs.mode == 'play'
         env:
           TYPESAFE_API_KEY: ${{ secrets.TYPESAFE_API_KEY }}
+          DECISION_STEPS: ${{ inputs.steps }}
+          DECISION_GOAL: ${{ inputs.goal }}
         run: |
           /tmp/redstar-venv/bin/python pokemon/run.py \
-            --state pokemon/.work/bedroom.state \
-            --output pokemon-evidence/jev --steps 12 --allow-missing-key
-          echo '## Jev execution status' >> "$GITHUB_STEP_SUMMARY"
-          cat pokemon-evidence/jev/report.json >> "$GITHUB_STEP_SUMMARY"
-      - name: Keep reports and screenshots only
+            --state pokemon/.work/bedroom.state --output pokemon-evidence/jev \
+            --steps "$DECISION_STEPS" --goal "$DECISION_GOAL"
+      - name: Build replay and readable summary, including failures
+        if: always()
+        env:
+          SOURCE_RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          /tmp/redstar-venv/bin/python pokemon/render_results.py \
+            --input pokemon-evidence --output pokemon-evidence --run-url "$SOURCE_RUN"
+      - name: Downloadable replay (open index.html after extracting)
+        id: replay
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: redstar-memory-and-jev
+          name: pokemon-results-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             pokemon-evidence/**/*.json
             pokemon-evidence/**/*.png
-          retention-days: 7
-          if-no-files-found: warn
+            pokemon-evidence/index.html
+            pokemon-evidence/README.md
+            pokemon-evidence/replay.gif
+          retention-days: 30
+          if-no-files-found: error
+      - name: Show direct results link
+        if: always() && steps.replay.outputs.artifact-url != ''
+        env:
+          RESULT_URL: ${{ steps.replay.outputs.artifact-url }}
+        run: printf '\n## 查看回放\n\n[下载本次结果 ZIP](%s)，解压后双击根目录 index.html。\n' "$RESULT_URL" >> "$GITHUB_STEP_SUMMARY"
+  publish:
+    needs: pokemon
+    if: always() && github.event_name == 'workflow_dispatch' && inputs.publish && inputs.mode == 'play'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    permissions:
+      contents: write
+      actions: read
+    concurrency:
+      group: pokemon-result-publication
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Publish this run's replay, not a previous run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_RUN_ID: ${{ github.run_id }}
+          SOURCE_ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          gh run download "$SOURCE_RUN_ID" --repo "$GITHUB_REPOSITORY" \
+            --name "pokemon-results-$SOURCE_RUN_ID-$SOURCE_ATTEMPT" --dir /tmp/pokemon-result
+          python3 pokemon/maintenance/publish_result.py --folder /tmp/pokemon-result \
+            --run-id "$SOURCE_RUN_ID" --attempt "$SOURCE_ATTEMPT"
