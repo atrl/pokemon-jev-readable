@@ -45,6 +45,9 @@ class Emulator:
     def read(self, address: int, length: int = 1) -> bytes:
         if not 0 <= address <= 65535 or not 0 <= length <= 65536 - address:
             raise ValueError("Invalid memory range")
+        # PyBoy rejects empty slices, unlike a Python bytes/bytearray object.
+        if length == 0:
+            return b""
         return bytes(self.game.memory[address:address + length])
 
     def save(self) -> bytes:

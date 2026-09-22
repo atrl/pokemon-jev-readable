@@ -43,6 +43,10 @@ class CoreTests(unittest.TestCase):
         with patch.dict('os.environ',{},clear=True),patch('urllib.request.urlopen') as network:
             with self.assertRaises(RuntimeError):choose({},'Explore',[])
             network.assert_not_called()
+    def test_zero_length_read_does_not_touch_pyboy_memory(self):
+        emulator=Emulator.__new__(Emulator)
+        # No game object: this succeeds only if the empty read returns early.
+        self.assertEqual(emulator.read(0xD31E,0),b'')
     def test_empty_party(self):
         self.assertEqual(Reader(FakeMemory(),load_profile()).party(),[])
     def test_nonempty_party_fixture(self):
