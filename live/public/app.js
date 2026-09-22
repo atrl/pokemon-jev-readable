@@ -10,7 +10,7 @@ const videoState = { key: null, hls: null, attached: false, retry: null, retries
 const statusNames = {
   running: '正在运行', started: '正在运行', active: '正在运行', completed: '已完成',
   success: '已完成', succeeded: '已完成', finished: '已结束', stopped: '已停止',
-  failed: '运行失败', error: '运行失败', interrupted: '已中断', aborted: '已中断',
+  stalled: '检测到重复循环 · 已存档停止', failed: '运行失败', error: '运行失败', interrupted: '已中断', aborted: '已中断',
   max_steps: '达到步数上限', limit: '达到步数上限', blocked: '等待条件',
   waiting: '等待事件', starting: '正在启动', observing: '读取游戏状态', calling: '等待 Jev 响应',
   received: '已收到响应', request_error: 'Jev 调用失败', decided: '已确认决策', executing: '执行按键中',
@@ -57,8 +57,8 @@ const actionName = (action) => {
   const value = typeof action === 'object' && action !== null ? action.id ?? action.button ?? action.type : action;
   return buttonNames[value] ?? brief(value, '未提供动作');
 };
-const statusClass = (status) => /^(running|started|active|starting|observing|calling|received|decided|executing)$/.test(status) ? 'active' : /^(completed|success|succeeded)$/.test(status) ? 'success' : /^(error|failed|request_error|action_error)$/.test(status) ? 'error' : /^(blocked.*|interrupted|aborted)$/.test(status) ? 'warning' : '';
-const terminalStatus = (status) => /^(completed|success|succeeded|finished|stopped|failed|error|interrupted|aborted|max_steps|limit|budget_reached|blocked.*)$/.test(status);
+const statusClass = (status) => /^(running|started|active|starting|observing|calling|received|decided|executing)$/.test(status) ? 'active' : /^(completed|success|succeeded)$/.test(status) ? 'success' : /^(error|failed|request_error|action_error)$/.test(status) ? 'error' : /^(blocked.*|stalled|interrupted|aborted)$/.test(status) ? 'warning' : '';
+const terminalStatus = (status) => /^(completed|success|succeeded|finished|stopped|stalled|failed|error|interrupted|aborted|max_steps|limit|budget_reached|blocked.*)$/.test(status);
 
 function notice(message = '') {
   $('notice').textContent = message;
@@ -424,7 +424,8 @@ function eventSummary(event) {
     case 'decision': return `${event.source === 'manual' ? '手动选择' : '已确认选择'} ${actionName(event.selected ?? event.answer?.choice)}${event.selected?.description ? `\n${event.selected.description}` : ''}`;
     case 'executing': return `${actionName(event.action)}${event.action?.description ? `\n${event.action.description}` : ''}`;
     case 'result': {
-      const parts = [event.success === false ? '执行失败' : event.success === true ? '执行成功' : '执行返回'];
+      const parts = [event.success === false ? '执行失败' : event.success === true ? '按键已执行' : '执行返回'];
+      if (event.outcome) parts.push(event.outcome.new_tile ? '探索到新坐标' : event.outcome.position_changed ? '移动到已访问坐标' : '未产生新的坐标探索');
       if (event.error) parts.push(brief(event.error));
       const result = event.result;
       if (typeof result === 'string') parts.push(result);
@@ -512,6 +513,9 @@ function renderObservation(list, run) {
   if (isPokemon(run)) {
     const player = observation.player ?? {};
     addStateCell(grid, '玩家', player.name);
+    addStateCell(grid, '当前场景', ({overworld:'自由移动',dialog:'对话框',main_menu:'主菜单',unknown:'待确认'})[observation.scene?.mode] ?? '旧记录未提供');
+    addStateCell(grid, '角色朝向', buttonNames[player.facing] ?? '尚未验证');
+    addStateCell(grid, '对话状态', observation.dialog?.open === true ? (observation.dialog.awaiting_input === true ? '已打开 · 等待输入' : '已打开 · 打印/等待待确认') : observation.dialog?.open === false ? '已关闭' : '尚未确认', true);
     addStateCell(grid, '地图 ID', player.map_id);
     addStateCell(grid, 'RAM 坐标', player.x !== undefined && player.y !== undefined ? `X ${player.x} / Y ${player.y}` : undefined, true);
     addStateCell(grid, '队伍观测', Array.isArray(observation.party) ? observation.party.length ? `已记录 ${observation.party.length} 项，见完整观测` : '当前记录为空' : '尚无可靠数据', true);
@@ -522,6 +526,18 @@ function renderObservation(list, run) {
     addStateCell(grid, '坐标', position ? ['x', 'y', 'z'].map((key) => `${key.toUpperCase()} ${brief(position[key], '?')}`).join(' / ') : undefined, true);
   }
   target.append(grid);
+  if (observation.local_map?.rows) {
+    target.append(node('h3','subheading','附近背景网格'));
+    target.append(node('pre','text-display',observation.local_map.rows.join('\n')));
+    target.append(node('p','state-warning','@ 玩家 · . 背景可走 · # 背景阻挡；不包含完整 NPC、出口与台阶规则。'));
+  }
+  if (observation.progress) {
+    const progress = observation.progress;
+    target.append(node('h3','subheading','观察到的探索与循环'));
+    target.append(node('p','empty-copy',`已记录 ${progress.visited_tiles ?? 0} 个坐标；连续 ${progress.same_position_steps ?? 0} 次输入未移动。`));
+    target.append(node('p',progress.loop_detected ? 'state-warning' : 'empty-copy',progress.loop_detected ? '检测到重复交互/原地操作，模型已收到循环反馈。' : '暂无原地循环信号；探索坐标不等于剧情完成。'));
+    target.append(node('p','empty-copy',`当前位置尚未尝试：${(progress.untried_directions ?? []).map(actionName).join('、') || '四个方向均已尝试'}`));
+  }
   const text = observation.screen_text?.rows;
   if (Array.isArray(text)) {
     target.append(node('div', 'state-divider'));

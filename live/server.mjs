@@ -9,7 +9,7 @@ import { redact } from './redact.mjs';
 
 const PUBLIC = fileURLToPath(new URL('./public/', import.meta.url));
 const MAX_LINE = 1024 * 1024;
-const TERMINAL = new Set(['completed', 'stopped', 'failed', 'interrupted', 'budget_reached', 'blocked_missing_key', 'blocked_connection']);
+const TERMINAL = new Set(['completed', 'stopped', 'stalled', 'failed', 'interrupted', 'budget_reached', 'blocked_missing_key', 'blocked_connection']);
 
 export class EventStore {
   constructor(root, { maxEvents = 2000, maxRuns = 40, secrets = [], onEvent = () => {} } = {}) {

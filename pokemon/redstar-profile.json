@@ -22,7 +22,10 @@
     "wFontLoaded": 53188,
     "wCurrentMenuItem": 52262,
     "wTilesetBank": 54571,
-    "wTilesetCollisionPtr": 54576
+    "wTilesetCollisionPtr": 54576,
+    "PlayerFacingDirection": 49417,
+    "PlayerYPixels": 49412,
+    "PlayerXPixels": 49414
   },
   "validation": "Run test_live.py against the exact ROM; source lineage is not byte-identical. No original-Red whitelist bypass."
 }

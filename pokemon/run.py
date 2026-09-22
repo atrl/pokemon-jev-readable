@@ -19,6 +19,7 @@ import time
 from emulator import Emulator
 from memory import Reader, load_profile
 from jev import choose, observation_for_model, redact_secrets
+from progress import ProgressTracker
 
 
 def write_json(path: Path, data: dict) -> None:
@@ -27,13 +28,46 @@ def write_json(path: Path, data: dict) -> None:
     temp.replace(path)
 
 
+
+def restore_progress(state_file: Path, manifest: dict) -> tuple[ProgressTracker, str]:
+    """Restore only memory bound to this state hash, or replay matching legacy effects."""
+    sidecar = state_file.parent/'last.progress.json'
+    if sidecar.exists():
+        data = json.loads(sidecar.read_text())
+        if (data.get('rom_sha1') == manifest['rom_sha1'] and
+                data.get('state_sha256') == manifest['state_sha256'] and
+                data.get('step') == manifest.get('step')):
+            return ProgressTracker(data['tracker']), 'verified_checkpoint'
+        # A mismatched sidecar must not attach observations from another save.
+    tracker = ProgressTracker()
+    log = state_file.parent/'events.jsonl'
+    saved_step = manifest.get('step')
+    replayed = 0
+    if state_file.name == 'last.state' and type(saved_step) is int and log.exists():
+        with log.open() as source:
+            for line in source:
+                try:
+                    row = json.loads(line)
+                    if row.get('type') != 'result' or row.get('success') is not True or not 1 <= row.get('step', 0) <= saved_step:
+                        continue
+                    effect = row.get('result')
+                    if not isinstance(effect,dict) or not isinstance(effect.get('before'),dict) or not isinstance(effect.get('after'),dict):
+                        continue
+                    tracker.record(row.get('button',effect.get('button')),effect['before'],effect['after'])
+                    replayed += 1
+                except (ValueError,TypeError):
+                    continue
+    return tracker, f'legacy_observed_effects:{replayed}' if replayed else 'new_memory'
+
 def run(rom: Path, output: Path, *, goal: str, steps: int, state_file: Path | None = None,
         visible: bool = False, allow_missing_key: bool = False, screenshots: bool = False,
-        video: bool = False, checkpoint_every: int = 50) -> dict:
+        video: bool = False, checkpoint_every: int = 50, max_stalled_steps: int = 80) -> dict:
     if type(steps) is not int or not 1 <= steps <= 100_000:
         raise ValueError("steps must be an integer in 1..100000")
     if type(checkpoint_every) is not int or not 1 <= checkpoint_every <= 1000:
         raise ValueError("checkpoint_every must be an integer in 1..1000")
+    if type(max_stalled_steps) is not int or not 12 <= max_stalled_steps <= 10000:
+        raise ValueError("max_stalled_steps must be an integer in 12..10000")
     if not goal.strip():
         raise ValueError("goal cannot be empty")
     output.mkdir(parents=True,exist_ok=True)
@@ -44,8 +78,10 @@ def run(rom: Path, output: Path, *, goal: str, steps: int, state_file: Path | No
     reader = None
     first_frame = None
     video_restarts = 0
+    tracker = ProgressTracker()
+    stalled_steps = 0
     report = {"started_at":datetime.now(timezone.utc).isoformat(),"model_ms":0,"video_enabled":video,"jev_calls":0,"jev_http_attempts":0,"executed_actions":0,"goal":goal,"status":"starting",
-              "game_completed":False,"policy":"jev_only","resume_from_user_state":state_file is not None}
+              "game_completed":False,"policy":"jev_only","new_tiles_this_run":0,"movement_actions":0,"map_changes":0,"progress_memory_source":"new_memory","resume_from_user_state":state_file is not None}
 
     def elapsed_ms() -> int:
         return round((time.monotonic() - started) * 1000)
@@ -72,13 +108,14 @@ def run(rom: Path, output: Path, *, goal: str, steps: int, state_file: Path | No
         temp = output/'last.state.tmp'
         temp.write_bytes(state)
         temp.replace(state_path)
-        write_json(output/'last.state.json',{'rom_sha1':load_profile()['rom_sha1'],
-                   'state_sha256':hashlib.sha256(state).hexdigest(),'step':report['executed_actions'],
-                   'saved_at':datetime.now(timezone.utc).isoformat()})
+        identity = {'rom_sha1':load_profile()['rom_sha1'],'state_sha256':hashlib.sha256(state).hexdigest(),
+                    'step':report['executed_actions'],'saved_at':datetime.now(timezone.utc).isoformat()}
+        write_json(output/'last.progress.json',{**identity,'tracker':tracker.snapshot()})
+        write_json(output/'last.state.json',identity)
 
     save_report()
     emit('started',goal=goal,maxSteps=steps,status=report['status'],pid=os.getpid(),
-         video_enabled=video,checkpoint_every=checkpoint_every,resume_from_user_state=state_file is not None)
+         video_enabled=video,checkpoint_every=checkpoint_every,max_stalled_steps=max_stalled_steps,resume_from_user_state=state_file is not None)
     history = []
     try:
         if not os.environ.get("TYPESAFE_API_KEY", "").strip():
@@ -96,6 +133,7 @@ def run(rom: Path, output: Path, *, goal: str, steps: int, state_file: Path | No
             if manifest['rom_sha1'] != profile['rom_sha1'] or hashlib.sha256(state_file.read_bytes()).hexdigest()!=manifest['state_sha256']:
                 raise ValueError("State identity mismatch")
             world.load(state_file.read_bytes())
+            tracker, report["progress_memory_source"] = restore_progress(state_file,manifest)
         first_frame = getattr(world.game,'frame_count',None) if hasattr(world,'game') else None
         if video:
             metadata = world.enable_video(output)
@@ -111,6 +149,7 @@ def run(rom: Path, output: Path, *, goal: str, steps: int, state_file: Path | No
             before = reader.snapshot()
             if before['errors']:
                 raise RuntimeError("Memory sanity check failed before action")
+            before["progress"] = tracker.context(before)
             verified_before = observation_for_model(before)
             emit('observation',step=step,observation=verified_before)
             screenshot_hash = world.screenshot(output/f'{i:04d}-before.png') if screenshots else None
@@ -156,16 +195,29 @@ def run(rom: Path, output: Path, *, goal: str, steps: int, state_file: Path | No
                      error='interrupted' if isinstance(exc,KeyboardInterrupt) else type(exc).__name__,
                      result={'button':button,'before':verified_before,'after':None})
                 raise
+            outcome = tracker.record(button,before,after)
+            after['progress'] = tracker.context(after)
+            report['new_tiles_this_run'] += int(outcome['new_tile'])
+            report['movement_actions'] += int(outcome['position_changed'])
+            report['map_changes'] += int(outcome['map_changed'])
+            stalled_steps = 0 if outcome['world_progress'] else stalled_steps + 1
+            report['steps_without_new_tile_this_run'] = stalled_steps
+            report['loop_detected'] = after['progress']['loop_detected']
             history.append({'button':button,'before':before.get('player'),'after':after.get('player'),
                             'text_after':after.get('screen_text',{}).get('rows')})
             verified_after = observation_for_model(after)
-            emit('result',step=step,button=button,success=True,observation=verified_after,
+            emit('result',step=step,button=button,success=True,outcome=outcome,observation=verified_after,
                  result={'button':button,'before':verified_before,'after':verified_after})
             if report['executed_actions'] % checkpoint_every == 0:
                 save_checkpoint()
                 emit('checkpoint',step=step,saved_step=report['executed_actions'])
             history = history[-12:]
-        report['status']='budget_reached'
+            save_report()
+            if stalled_steps >= max_stalled_steps and after['progress']['loop_detected'] and (after.get('scene') or {}).get('verified') is True:
+                report.update(status='stalled',reason=f'{stalled_steps} inputs without a new coordinate and a repeated interaction/movement loop; saved for review.')
+                break
+        else:
+            report['status']='budget_reached'
     except KeyboardInterrupt:
         report['status']='interrupted'
     except Exception as exc:
@@ -211,6 +263,7 @@ def main():
     ap.add_argument('--steps',type=int,default=5000)
     ap.add_argument('--video',action=argparse.BooleanOptionalAction,default=True,help='Stream direct emulator video through FFmpeg HLS (enabled by default)')
     ap.add_argument('--checkpoint-every',type=int,default=50)
+    ap.add_argument('--max-stalled-steps',type=int,default=80)
     ap.add_argument('--visible',action='store_true')
     ap.add_argument('--screenshots',action='store_true',help='Explicitly save optional screenshot evidence; the live stream never uses images')
     ap.add_argument('--allow-missing-key',action='store_true',help='CI records blocked, never substitutes a fake decision')
@@ -220,6 +273,6 @@ def main():
         raise KeyboardInterrupt
     signal.signal(signal.SIGTERM,stop)
     print(json.dumps(run(a.rom,a.output,goal=a.goal,steps=a.steps,state_file=a.state,visible=a.visible,
-                         allow_missing_key=a.allow_missing_key,screenshots=a.screenshots,video=a.video,checkpoint_every=a.checkpoint_every),indent=2))
+                         allow_missing_key=a.allow_missing_key,screenshots=a.screenshots,video=a.video,checkpoint_every=a.checkpoint_every,max_stalled_steps=a.max_stalled_steps),indent=2))
 
 if __name__=='__main__':main()

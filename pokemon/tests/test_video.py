@@ -86,8 +86,10 @@ class VideoIntegrationTests(unittest.TestCase):
             stream = HLSVideo(Path(directory), ffmpeg=FFMPEG)
             try:
                 stream.publish(bytes([255, 0, 0]) * (160 * 144))
-                time.sleep(1.3)
                 playlist = Path(directory) / "video/index.m3u8"
+                deadline = time.monotonic() + 5
+                while not playlist.exists() and time.monotonic() < deadline:
+                    stream.check(); time.sleep(.05)
                 before = playlist.read_text()
                 self.assertNotIn("#EXT-X-ENDLIST", before)
                 first_process = stream._process
@@ -97,9 +99,12 @@ class VideoIntegrationTests(unittest.TestCase):
                 deadline = time.monotonic() + 3
                 while stream.status()["restart_count"] == 0 and time.monotonic() < deadline:
                     time.sleep(.05)
-                time.sleep(1.3)
-                status = stream.status()
+                deadline = time.monotonic() + 5
                 after = playlist.read_text()
+                while "#EXT-X-DISCONTINUITY" not in after and time.monotonic() < deadline:
+                    stream.check(); time.sleep(.05)
+                    after = playlist.read_text()
+                status = stream.status()
                 self.assertEqual(status["restart_count"], 1)
                 self.assertIn("returncode=-9", status["last_error"])
                 self.assertIn("writer=", status["last_error"])

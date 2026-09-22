@@ -1,0 +1,256 @@
+{
+  "created_at": "2026-09-22T05:53:10.689457+00:00",
+  "rom_sha1": "e2d564a5172d38e44b4f4b8f7d9db92f644cf5e9",
+  "source_commit": "08deafad427f0904f285e515c360003efc19d3dc",
+  "source_binary_match": false,
+  "input_state_sha256": "bc2086287ed9783e0974a0b0e587b26e722b26708f620429f8785a18fca52f94",
+  "policy": "isolated_copy_scripted_regression_not_jev",
+  "jev_calls": 0,
+  "production_actions": 0,
+  "screenshots_created": 0,
+  "checks": {
+    "blank_overworld": {
+      "position": {
+        "map_id": 38,
+        "x": 3,
+        "y": 6,
+        "facing": "up"
+      },
+      "scene": {
+        "mode": "overworld",
+        "verified": true,
+        "quality": "verified_pattern",
+        "source": "RAM font flag, battle exclusion, tile borders/menu labels, ROM0 background and player alignment",
+        "validation_scope": "Exact ROM; live regression in starting room, N64 dialog, and main menu",
+        "limitations": "Conservative pattern classification; unrecognized scenes remain unknown. Blank text alone does not identify a scene."
+      },
+      "dialog": {
+        "open": false,
+        "awaiting_input": false,
+        "text": "",
+        "quality": "verified_closed",
+        "source": "Verified scene pattern"
+      },
+      "local_map": {
+        "rows": [
+          "#........#",
+          "#........#",
+          "#...#....#",
+          "#...#....#",
+          "##..@..#.#",
+          "##.....#.#",
+          "##########",
+          "##########",
+          "##########"
+        ],
+        "player_cell": {
+          "x": 4,
+          "y": 4
+        },
+        "neighbors": {
+          "up": {
+            "dx": 0,
+            "dy": -1,
+            "tile_id": 30,
+            "background_passable": false
+          },
+          "down": {
+            "dx": 0,
+            "dy": 1,
+            "tile_id": 1,
+            "background_passable": true
+          },
+          "left": {
+            "dx": -1,
+            "dy": 0,
+            "tile_id": 1,
+            "background_passable": true
+          },
+          "right": {
+            "dx": 1,
+            "dy": 0,
+            "tile_id": 1,
+            "background_passable": true
+          }
+        },
+        "legend": "@ player; . background permits walking; # background does not permit walking",
+        "quality": "advisory_background_only",
+        "verified": true,
+        "source": "RAM wTileMap lower-left tiles; exact ROM0 collision table at 0x1744",
+        "validation_scope": "All four neighbors and coordinate/facing responses tested in starting room",
+        "limitations": "Not complete collision or route data. Does not identify NPCs, objects, exits, warps, ledges or scripted movement. Never filters buttons."
+      },
+      "collision_table_rom0_address": "0x1744",
+      "collision_table_bytes": "010203111213141c1aff"
+    },
+    "direction_facing_and_background": [
+      {
+        "button": "right",
+        "before": [
+          3,
+          6
+        ],
+        "after": [
+          4,
+          6
+        ],
+        "facing": "right",
+        "raw_facing": 12,
+        "moved": true,
+        "background_prediction": {
+          "dx": 1,
+          "dy": 0,
+          "tile_id": 1,
+          "background_passable": true
+        }
+      },
+      {
+        "button": "left",
+        "before": [
+          3,
+          6
+        ],
+        "after": [
+          2,
+          6
+        ],
+        "facing": "left",
+        "raw_facing": 8,
+        "moved": true,
+        "background_prediction": {
+          "dx": -1,
+          "dy": 0,
+          "tile_id": 1,
+          "background_passable": true
+        }
+      },
+      {
+        "button": "down",
+        "before": [
+          3,
+          6
+        ],
+        "after": [
+          3,
+          7
+        ],
+        "facing": "down",
+        "raw_facing": 0,
+        "moved": true,
+        "background_prediction": {
+          "dx": 0,
+          "dy": 1,
+          "tile_id": 1,
+          "background_passable": true
+        }
+      },
+      {
+        "button": "up",
+        "before": [
+          3,
+          6
+        ],
+        "after": [
+          3,
+          6
+        ],
+        "facing": "up",
+        "raw_facing": 4,
+        "moved": false,
+        "background_prediction": {
+          "dx": 0,
+          "dy": -1,
+          "tile_id": 30,
+          "background_passable": false
+        }
+      }
+    ],
+    "empty_dialog_before_letters": {
+      "open": true,
+      "awaiting_input": null,
+      "text": "",
+      "quality": "verified_text_box_partial_text_possible",
+      "source": "RAM wTileMap dialog border/interior and visible down arrow",
+      "awaiting_input_reason": "arrow_absent_or_blinking; printing_or_waiting_unknown"
+    },
+    "n64_visible_arrow": {
+      "open": true,
+      "awaiting_input": true,
+      "text": "AAAAAAA is\nplaying the N64!",
+      "quality": "verified_text_box_partial_text_possible",
+      "source": "RAM wTileMap dialog border/interior and visible down arrow",
+      "awaiting_input_reason": "visible_down_arrow"
+    },
+    "n64_hidden_blinking_arrow": {
+      "open": true,
+      "awaiting_input": null,
+      "text": "AAAAAAA is\nplaying the N64!",
+      "quality": "verified_text_box_partial_text_possible",
+      "source": "RAM wTileMap dialog border/interior and visible down arrow",
+      "awaiting_input_reason": "arrow_absent_or_blinking; printing_or_waiting_unknown"
+    },
+    "dialog_close_then_a_reopens": {
+      "closed_without_moving": true,
+      "dialog_pages": [
+        {
+          "open": true,
+          "awaiting_input": true,
+          "text": "playing the N64!\n...Okay!",
+          "quality": "verified_text_box_partial_text_possible",
+          "source": "RAM wTileMap dialog border/interior and visible down arrow",
+          "awaiting_input_reason": "visible_down_arrow"
+        },
+        {
+          "open": true,
+          "awaiting_input": null,
+          "text": "...Okay!\nIt's time to go!",
+          "quality": "verified_text_box_partial_text_possible",
+          "source": "RAM wTileMap dialog border/interior and visible down arrow",
+          "awaiting_input_reason": "arrow_absent_or_blinking; printing_or_waiting_unknown"
+        },
+        {
+          "open": false,
+          "awaiting_input": false,
+          "text": "",
+          "quality": "verified_closed",
+          "source": "Verified scene pattern"
+        }
+      ],
+      "reopened_same_first_page": true,
+      "reopened_dialog": {
+        "open": true,
+        "awaiting_input": true,
+        "text": "AAAAAAA is\nplaying the N64!",
+        "quality": "verified_text_box_partial_text_possible",
+        "source": "RAM wTileMap dialog border/interior and visible down arrow",
+        "awaiting_input_reason": "visible_down_arrow"
+      }
+    },
+    "main_menu_cursor": {
+      "scene": "main_menu",
+      "before": 0,
+      "after": 1,
+      "visible_selection": "PACK",
+      "b_returns_to_overworld": true
+    }
+  },
+  "source_evidence": {
+    "repository": "https://github.com/Rangi42/redstarbluestar",
+    "facing": "wram.asm:212-255; explicit Sprite State Data section at 0xc100; player facing offset 9",
+    "collision_table_bank": "home.asm:33,874; data/collision.asm included in ROM0",
+    "neighbor_tile_sampling": "engine/overworld/player_state.asm:277-309",
+    "dialog_border": "home/text.asm:1-40; charmap.asm:160-170",
+    "awaiting_input_marker": "home/text.asm:505-519; absent blinking arrow is inconclusive"
+  },
+  "status": "passed",
+  "not_tested": [
+    "Other maps",
+    "NPC collision",
+    "Warps/exits",
+    "Ledges",
+    "Battles",
+    "Story progress",
+    "Jev behavior after prompt changes"
+  ],
+  "input_state_unchanged": true
+}
