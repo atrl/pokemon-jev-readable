@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
-from jev import BUTTONS, build_request, validate_response, choose
+from jev import BUTTONS, build_request, validate_response, choose, observation_for_model
 from memory import Reader, decode_text, load_profile
 from emulator import Emulator
 from run import run
@@ -26,6 +26,20 @@ class CoreTests(unittest.TestCase):
         request=build_request({'anything':1},'Explore',[{'button':'a'}]*20)
         self.assertEqual(set(request['questions']['button']['criteria']),set(BUTTONS))
         self.assertEqual(len(request['state']['recent_actions']),12)
+    def test_unverified_fields_never_enter_model_state(self):
+        raw={'player':{'name':'RED','x':3,'y':6,'map_id':38,'money':3000},
+             'party':[{'species_internal_id':176}], 'bag':[{'item_id':20}],
+             'battle_type_raw':2, 'background_hint':{'rows':['....']}}
+        model=observation_for_model(raw)
+        self.assertNotIn('money',model['player'])
+        self.assertIsNone(model['party']);self.assertIsNone(model['bag'])
+        self.assertNotIn('battle_type_raw',model)
+        self.assertNotIn('background_hint',model)
+    def test_cursor_requires_observed_menu(self):
+        raw={'menu_cursor_raw':2,'screen_text':{'rows':['some dialogue']}}
+        self.assertIsNone(observation_for_model(raw)['main_menu_cursor'])
+        raw['screen_text']['rows']=['PACK','SAVE']
+        self.assertEqual(observation_for_model(raw)['main_menu_cursor'],2)
     def answer(self):
         return {'answers':{'button':{'type':'choice','choice':'a','confidence':0.7,
                 'probabilities':{b:(1.0 if b=='a' else 0.0) for b in BUTTONS}}}}

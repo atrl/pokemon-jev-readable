@@ -22,10 +22,40 @@ BUTTONS = {
 ENDPOINT = "https://api.typesafe.ai/v1/systemone"
 
 
+def verified_player(player: dict | None) -> dict | None:
+    if not isinstance(player, dict):
+        return None
+    return {key: player[key] for key in ("name", "map_id", "x", "y") if key in player}
+
+
+def observation_for_model(observation: dict) -> dict:
+    """Do not promote untested decoding to facts just because it is in RAM."""
+    rows = (observation.get("screen_text") or {}).get("rows", [])
+    main_menu_visible = "PACK" in "\n".join(rows) and "SAVE" in "\n".join(rows)
+    return {
+        "game": observation.get("game"),
+        "screen_text": observation.get("screen_text"),
+        "player": verified_player(observation.get("player")),
+        "party": [] if observation.get("party") == [] else None,
+        "bag": [] if observation.get("bag") == [] else None,
+        "main_menu_cursor": observation.get("menu_cursor_raw") if main_menu_visible else None,
+        "unavailable": ["nonempty party and bag details: not live-validated yet",
+                        "money, badges, enemy, battle type and collision: not live-validated yet"],
+        "limitations": observation.get("limitations", []),
+    }
+
+
 def build_request(observation: dict, goal: str, history: list[dict]) -> dict:
     return {
         "model": os.environ.get("TYPESAFE_MODEL", "jev-latest"),
-        "state": {"goal": goal, "game": observation, "recent_actions": history[-12:]},
+        "state": {
+            "goal": goal,
+            "game": observation_for_model(observation),
+            "recent_actions": [{"button": row.get("button"),
+                                "before": verified_player(row.get("before")),
+                                "after": verified_player(row.get("after")),
+                                "text_after": row.get("text_after")} for row in history[-12:]],
+        },
         "questions": {"button": {
             "type": "choice", "criteria": BUTTONS,
             "instructions": (
