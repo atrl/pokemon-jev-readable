@@ -45,9 +45,11 @@ class VideoUnitTests(unittest.TestCase):
             chunks.append(bytes(remaining[:2]))
             return min(2, len(remaining))
 
-        with patch("video.time.monotonic", side_effect=lambda: clock[0]), \
-             patch("video.select.select", side_effect=writable), \
-             patch("video.os.write", side_effect=partial):
+        with (
+            patch("video.time.monotonic", side_effect=lambda: clock[0]),
+            patch("video.select.select", side_effect=writable),
+            patch("video.os.write", side_effect=partial),
+        ):
             self.assertTrue(stream._write_frame(b"abcdef"))
         self.assertEqual(b"".join(chunks), b"abcdef")
         self.assertEqual(stream._last_progress_at, 18)
@@ -60,9 +62,11 @@ class VideoUnitTests(unittest.TestCase):
             clock[0] += 60
             return [], [42], []
 
-        with patch("video.time.monotonic", side_effect=lambda: clock[0]), \
-             patch("video.select.select", side_effect=resumed), \
-             patch("video.os.write", return_value=6):
+        with (
+            patch("video.time.monotonic", side_effect=lambda: clock[0]),
+            patch("video.select.select", side_effect=resumed),
+            patch("video.os.write", return_value=6),
+        ):
             self.assertTrue(stream._write_frame(b"abcdef"))
 
     def test_no_write_progress_times_out_instead_of_hanging(self):
@@ -73,9 +77,11 @@ class VideoUnitTests(unittest.TestCase):
             clock[0] += 5
             return [], [], []
 
-        with patch("video.time.monotonic", side_effect=lambda: clock[0]), \
-             patch("video.select.select", side_effect=blocked), \
-             patch("video.os.write") as write:
+        with (
+            patch("video.time.monotonic", side_effect=lambda: clock[0]),
+            patch("video.select.select", side_effect=blocked),
+            patch("video.os.write") as write,
+        ):
             with self.assertRaisesRegex(RuntimeError, "accepted no video bytes for 15 seconds"):
                 stream._write_frame(b"abcdef")
         self.assertEqual(clock[0], 15)
@@ -89,9 +95,11 @@ class VideoUnitTests(unittest.TestCase):
             clock[0] += 5
             return [], [42], []
 
-        with patch("video.time.monotonic", side_effect=lambda: clock[0]), \
-             patch("video.select.select", side_effect=writable), \
-             patch("video.os.write", side_effect=BlockingIOError):
+        with (
+            patch("video.time.monotonic", side_effect=lambda: clock[0]),
+            patch("video.select.select", side_effect=writable),
+            patch("video.os.write", side_effect=BlockingIOError),
+        ):
             with self.assertRaisesRegex(RuntimeError, "accepted no video bytes"):
                 stream._write_frame(b"abcdef")
         self.assertEqual(clock[0], 15)
@@ -105,8 +113,10 @@ class VideoUnitTests(unittest.TestCase):
             clock[0] += 0.5
             return [], [], []
 
-        with patch("video.time.monotonic", side_effect=lambda: clock[0]), \
-             patch("video.select.select", side_effect=blocked):
+        with (
+            patch("video.time.monotonic", side_effect=lambda: clock[0]),
+            patch("video.select.select", side_effect=blocked),
+        ):
             self.assertFalse(stream._write_frame(b"abcdef"))
         self.assertEqual(clock[0], 1)
 
@@ -118,8 +128,10 @@ class VideoUnitTests(unittest.TestCase):
         stream._start_encoder = MagicMock()
         with tempfile.TemporaryDirectory() as directory:
             stream._log = Path(directory) / "ffmpeg.log"
-            with patch("video.time.monotonic", return_value=400.0), \
-                 patch.object(stream._stop, "wait", return_value=False):
+            with (
+                patch("video.time.monotonic", return_value=400.0),
+                patch.object(stream._stop, "wait", return_value=False),
+            ):
                 stream._recover_encoder(RuntimeError("encoder exited"))
         self.assertEqual(list(stream._restart_times), [400.0])
         self.assertEqual(stream._restarts, 4)
@@ -135,6 +147,7 @@ class VideoUnitTests(unittest.TestCase):
 
     def test_video_renders_all_emulated_frames_and_publishes_rgb_on_caller(self):
         import numpy as np
+
         emulator = Emulator.__new__(Emulator)
         emulator.game = MagicMock()
         emulator.game.screen.ndarray = np.full((144, 160, 4), [11, 22, 33, 255], dtype=np.uint8)
@@ -145,7 +158,9 @@ class VideoUnitTests(unittest.TestCase):
         self.assertEqual(emulator.game.tick.call_count, 4)
         emulator.game.tick.assert_called_with(1, render=True, sound=False)
         self.assertEqual(emulator.video.publish.call_count, 2)
-        self.assertEqual(emulator.video.publish.call_args.args[0], bytes([11, 22, 33]) * (144 * 160))
+        self.assertEqual(
+            emulator.video.publish.call_args.args[0], bytes([11, 22, 33]) * (144 * 160)
+        )
         emulator.game.screen.image.save.assert_not_called()
 
 
@@ -170,17 +185,39 @@ class VideoIntegrationTests(unittest.TestCase):
             self.assertIn("#EXT-X-ENDLIST", text)
             self.assertEqual(status["published_frames"], 2)
             self.assertGreaterEqual(status["encoded_frames"], 60)
-            probe = json.loads(subprocess.check_output([
-                FFPROBE, "-v", "error", "-show_streams", "-show_format", "-of", "json", str(playlist),
-            ]))
+            probe = json.loads(
+                subprocess.check_output(
+                    [
+                        FFPROBE,
+                        "-v",
+                        "error",
+                        "-show_streams",
+                        "-show_format",
+                        "-of",
+                        "json",
+                        str(playlist),
+                    ]
+                )
+            )
             self.assertEqual(probe["streams"][0]["codec_name"], "h264")
             self.assertEqual(probe["streams"][0]["pix_fmt"], "yuv420p")
             self.assertEqual(probe["streams"][0]["width"], 160)
             self.assertEqual(probe["streams"][0]["height"], 144)
             self.assertGreaterEqual(float(probe["format"]["duration"]), 2)
-            decoded = subprocess.check_output([
-                FFMPEG, "-v", "error", "-i", str(playlist), "-f", "rawvideo", "-pix_fmt", "rgb24", "pipe:1",
-            ])
+            decoded = subprocess.check_output(
+                [
+                    FFMPEG,
+                    "-v",
+                    "error",
+                    "-i",
+                    str(playlist),
+                    "-f",
+                    "rawvideo",
+                    "-pix_fmt",
+                    "rgb24",
+                    "pipe:1",
+                ]
+            )
             self.assertGreater(decoded[0], 240)
             self.assertLess(decoded[2], 15)
             self.assertLess(decoded[-3], 15)
@@ -196,7 +233,8 @@ class VideoIntegrationTests(unittest.TestCase):
                 playlist = Path(directory) / "video/index.m3u8"
                 deadline = time.monotonic() + 5
                 while not playlist.exists() and time.monotonic() < deadline:
-                    stream.check(); time.sleep(.05)
+                    stream.check()
+                    time.sleep(0.05)
                 before = playlist.read_text()
                 self.assertNotIn("#EXT-X-ENDLIST", before)
                 first_process = stream._process
@@ -205,11 +243,12 @@ class VideoIntegrationTests(unittest.TestCase):
                 stream.publish(bytes([0, 0, 255]) * (160 * 144))
                 deadline = time.monotonic() + 3
                 while stream.status()["restart_count"] == 0 and time.monotonic() < deadline:
-                    time.sleep(.05)
+                    time.sleep(0.05)
                 deadline = time.monotonic() + 5
                 after = playlist.read_text()
                 while "#EXT-X-DISCONTINUITY" not in after and time.monotonic() < deadline:
-                    stream.check(); time.sleep(.05)
+                    stream.check()
+                    time.sleep(0.05)
                     after = playlist.read_text()
                 status = stream.status()
                 self.assertEqual(status["restart_count"], 1)
@@ -222,9 +261,20 @@ class VideoIntegrationTests(unittest.TestCase):
             finally:
                 stream.close()
             self.assertIn("#EXT-X-ENDLIST", playlist.read_text())
-            decoded = subprocess.check_output([
-                FFMPEG, "-v", "error", "-i", str(playlist), "-f", "rawvideo", "-pix_fmt", "rgb24", "pipe:1",
-            ])
+            decoded = subprocess.check_output(
+                [
+                    FFMPEG,
+                    "-v",
+                    "error",
+                    "-i",
+                    str(playlist),
+                    "-f",
+                    "rawvideo",
+                    "-pix_fmt",
+                    "rgb24",
+                    "pipe:1",
+                ]
+            )
             self.assertGreater(decoded[0], 240)
             self.assertGreater(decoded[-1], 240)
 
@@ -237,8 +287,12 @@ class VideoIntegrationTests(unittest.TestCase):
                 process.kill()
                 process.wait(timeout=2)
                 deadline = time.monotonic() + 3
-                while stream._process is process and stream._error is None and time.monotonic() < deadline:
-                    time.sleep(.02)
+                while (
+                    stream._process is process
+                    and stream._error is None
+                    and time.monotonic() < deadline
+                ):
+                    time.sleep(0.02)
             with self.assertRaisesRegex(RuntimeError, "recovery limit reached"):
                 stream.publish(bytes(160 * 144 * 3))
             status = stream.status()
@@ -255,12 +309,14 @@ class VideoIntegrationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             stream = HLSVideo(Path(directory), ffmpeg=FFMPEG)
             stream.publish(bytes(160 * 144 * 3))
-            with patch.object(stream, "_recover_encoder", side_effect=subprocess.TimeoutExpired("ffmpeg", 2)):
+            with patch.object(
+                stream, "_recover_encoder", side_effect=subprocess.TimeoutExpired("ffmpeg", 2)
+            ):
                 stream._process.kill()
                 stream._process.wait(timeout=2)
                 deadline = time.monotonic() + 2
                 while stream._error is None and time.monotonic() < deadline:
-                    time.sleep(.02)
+                    time.sleep(0.02)
             status = stream.status()
             self.assertEqual(status["health"], "failed")
             self.assertIn("timed out", status["terminal_error"])
@@ -288,10 +344,22 @@ class VideoIntegrationTests(unittest.TestCase):
             finally:
                 emulator.close()
             playlist = Path(directory) / "video/index.m3u8"
-            decoded = subprocess.check_output([
-                FFMPEG, "-v", "error", "-i", str(playlist), "-frames:v", "1",
-                "-f", "rawvideo", "-pix_fmt", "rgb24", "pipe:1",
-            ])
+            decoded = subprocess.check_output(
+                [
+                    FFMPEG,
+                    "-v",
+                    "error",
+                    "-i",
+                    str(playlist),
+                    "-frames:v",
+                    "1",
+                    "-f",
+                    "rawvideo",
+                    "-pix_fmt",
+                    "rgb24",
+                    "pipe:1",
+                ]
+            )
             self.assertEqual(len(decoded), 160 * 144 * 3)
             self.assertGreater(len(set(decoded)), 1)
 

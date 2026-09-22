@@ -13,7 +13,11 @@ def fact(value):
 
 
 def mon(hp=30, maximum=30, status=0, pp=20, max_pp=20, power=40):
-    move = {"move_id": 33, "pp": pp, "knowledge": {"power": power, "base_pp": 20, "quality": "source_prior"}}
+    move = {
+        "move_id": 33,
+        "pp": pp,
+        "knowledge": {"power": power, "base_pp": 20, "quality": "source_prior"},
+    }
     if max_pp is not None:
         move.update(max_pp=max_pp, max_pp_verified=True)
     return {"hp": hp, "max_hp": maximum, "status_bits": status, "level": 5, "moves": [move]}
@@ -21,22 +25,48 @@ def mon(hp=30, maximum=30, status=0, pp=20, max_pp=20, power=40):
 
 def snapshot(party=None, map_id=0):
     party = party if party is not None else [mon()]
-    return {"frame": 100, "party": party, "party_state": {"ready": True, "quality": "verified"},
-            "milestones": {"party_count": fact(len(party))}, "player": {"map_id": map_id, "x": 4, "y": 4},
-            "scene": {"mode": "overworld", "verified": True}, "battle": {"active": False, "verified": True},
-            "world": {"map_id": map_id, "source_match": True, "player_position_valid": True,
-                      "input_lock": {"ignored_buttons_mask": 0, "scripted_movement_remaining": 0}}}
+    return {
+        "frame": 100,
+        "party": party,
+        "party_state": {"ready": True, "quality": "verified"},
+        "milestones": {"party_count": fact(len(party))},
+        "player": {"map_id": map_id, "x": 4, "y": 4},
+        "scene": {"mode": "overworld", "verified": True},
+        "battle": {"active": False, "verified": True},
+        "world": {
+            "map_id": map_id,
+            "source_match": True,
+            "player_position_valid": True,
+            "input_lock": {"ignored_buttons_mask": 0, "scripted_movement_remaining": 0},
+        },
+    }
 
 
-MAPS = {"maps": {
-    "0": {"name": "PALLET_TOWN", "connections": [{"destination_map_id": 1}]},
-    "1": {"name": "VIRIDIAN_CITY", "warps": [{"destination_map_id": 41}], "connections": [{"destination_map_id": 0}, {"destination_map_id": 2}]},
-    "2": {"name": "PEWTER_CITY", "warps": [{"destination_map_id": 58}], "connections": [{"destination_map_id": 1}]},
-    "41": {"name": "VIRIDIAN_POKECENTER", "warps": [{"destination_map_id": -1}],
-           "objects": [{"sprite": "SPRITE_NURSE", "x": 3, "y": 1, "text_id": 1}]},
-    "58": {"name": "PEWTER_POKECENTER", "warps": [{"destination_map_id": -1}],
-           "objects": [{"sprite": "SPRITE_NURSE", "x": 3, "y": 1, "text_id": 1}]},
-}}
+MAPS = {
+    "maps": {
+        "0": {"name": "PALLET_TOWN", "connections": [{"destination_map_id": 1}]},
+        "1": {
+            "name": "VIRIDIAN_CITY",
+            "warps": [{"destination_map_id": 41}],
+            "connections": [{"destination_map_id": 0}, {"destination_map_id": 2}],
+        },
+        "2": {
+            "name": "PEWTER_CITY",
+            "warps": [{"destination_map_id": 58}],
+            "connections": [{"destination_map_id": 1}],
+        },
+        "41": {
+            "name": "VIRIDIAN_POKECENTER",
+            "warps": [{"destination_map_id": -1}],
+            "objects": [{"sprite": "SPRITE_NURSE", "x": 3, "y": 1, "text_id": 1}],
+        },
+        "58": {
+            "name": "PEWTER_POKECENTER",
+            "warps": [{"destination_map_id": -1}],
+            "objects": [{"sprite": "SPRITE_NURSE", "x": 3, "y": 1, "text_id": 1}],
+        },
+    }
+}
 
 
 def fixture_router(current_world, player, target_map_id, target=None, facts=None):
@@ -44,15 +74,21 @@ def fixture_router(current_world, player, target_map_id, target=None, facts=None
     # interpreted as real pinned-source terrain during these unit tests.
     adjacency = {0: [1], 1: [0, 2, 41], 2: [1, 58], 41: [1], 58: [2]}
     start = player["map_id"]
-    queue = deque([(start, [start])]); seen = {start}
+    queue = deque([(start, [start])])
+    seen = {start}
     while queue:
         at, route = queue.popleft()
         if at == target_map_id:
-            return {"status": "same_region" if at == start else "planned", "map_route": route,
-                    "region_route": [[mid, 0] for mid in route], "quality": "test_fixture"}
+            return {
+                "status": "same_region" if at == start else "planned",
+                "map_route": route,
+                "region_route": [[mid, 0] for mid in route],
+                "quality": "test_fixture",
+            }
         for nxt in adjacency.get(at, []):
             if nxt not in seen:
-                seen.add(nxt); queue.append((nxt, route + [nxt]))
+                seen.add(nxt)
+                queue.append((nxt, route + [nxt]))
     return {"status": "unreachable", "reason": "explicit_fixture_graph_has_no_route"}
 
 
@@ -98,8 +134,15 @@ class TeamStrategyTests(unittest.TestCase):
 
     def test_all_damage_pp_zero_even_if_status_move_has_pp(self):
         member = mon(pp=0)
-        member["moves"].append({"move_id": 45, "pp": 40, "max_pp": 40, "max_pp_verified": True,
-                                "knowledge": {"power": 0, "effect": "ATTACK_DOWN1_EFFECT"}})
+        member["moves"].append(
+            {
+                "move_id": 45,
+                "pp": 40,
+                "max_pp": 40,
+                "max_pp_verified": True,
+                "knowledge": {"power": 0, "effect": "ATTACK_DOWN1_EFFECT"},
+            }
+        )
         result = fixture_support(snapshot([member]), world_data=MAPS)
         self.assertIn("damage_pp_exhausted", result["evidence"]["trigger_reasons"])
         member["moves"][1]["knowledge"] = {}
@@ -113,13 +156,20 @@ class TeamStrategyTests(unittest.TestCase):
     def test_unknown_or_initializing_party_does_not_trigger(self):
         for change in ["count", "ready", "ready_quality", "hp", "battle", "lock", "map"]:
             snap = snapshot([mon(hp=1)])
-            if change == "count": snap["milestones"]["party_count"]["verified"] = False
-            if change == "ready": snap["party_state"]["ready"] = False
-            if change == "ready_quality": snap["party_state"]["quality"] = "source_prior"
-            if change == "hp": snap["party"][0]["hp"] = -1
-            if change == "battle": snap["battle"]["active"] = None
-            if change == "lock": snap["world"]["input_lock"]["ignored_buttons_mask"] = 255
-            if change == "map": snap["world"]["source_match"] = False
+            if change == "count":
+                snap["milestones"]["party_count"]["verified"] = False
+            if change == "ready":
+                snap["party_state"]["ready"] = False
+            if change == "ready_quality":
+                snap["party_state"]["quality"] = "source_prior"
+            if change == "hp":
+                snap["party"][0]["hp"] = -1
+            if change == "battle":
+                snap["battle"]["active"] = None
+            if change == "lock":
+                snap["world"]["input_lock"]["ignored_buttons_mask"] = 255
+            if change == "map":
+                snap["world"]["source_match"] = False
             self.assertIsNone(fixture_support(snap, world_data=MAPS), change)
 
     def test_no_new_support_during_battle_or_dialog(self):
@@ -168,7 +218,9 @@ class TeamStrategyTests(unittest.TestCase):
         self.assertIsNone(fixture_support(snap, active, world_data=MAPS))
 
     def test_no_route_retains_need_without_inventing_destination_or_healing(self):
-        result = fixture_support(snapshot([mon(hp=1)]), world_data={"maps": {"0": {"name": "PALLET"}}})
+        result = fixture_support(
+            snapshot([mon(hp=1)]), world_data={"maps": {"0": {"name": "PALLET"}}}
+        )
         self.assertEqual(result["id"], "heal_party")
         self.assertIsNone(result["target_map_id"])
         self.assertIn("reachable_pokecenter", result["unknown_facts"])
@@ -176,6 +228,7 @@ class TeamStrategyTests(unittest.TestCase):
     def test_region_coverage_missing_never_falls_back_to_map_hops(self):
         def unsupported(*args, **kwargs):
             return {"status": "needs_data", "reason": "outside_region_coverage"}
+
         result = fixture_support(snapshot([mon(hp=1)]), world_data=MAPS, route_planner=unsupported)
         self.assertIsNone(result["target_map_id"])
         self.assertEqual(result["route_status"], "needs_data")
@@ -184,9 +237,13 @@ class TeamStrategyTests(unittest.TestCase):
 
     def test_active_unknown_coverage_preserves_target_without_claiming_route(self):
         active = fixture_support(snapshot([mon(hp=1)]), world_data=MAPS)
+
         def unsupported(*args, **kwargs):
             return {"status": "needs_data", "reason": "outside_region_coverage"}
-        result = fixture_support(snapshot([mon(hp=20)], map_id=2), active, world_data=MAPS, route_planner=unsupported)
+
+        result = fixture_support(
+            snapshot([mon(hp=20)], map_id=2), active, world_data=MAPS, route_planner=unsupported
+        )
         self.assertEqual(result["target_map_id"], 41)
         self.assertEqual(result["route_status"], "needs_data")
         self.assertFalse(result["ready_to_navigate"])
@@ -200,15 +257,21 @@ class TeamStrategyTests(unittest.TestCase):
         self.assertEqual(result["target_map_id"], 64)
         self.assertEqual(result["route_map_ids"], [15, 3, 64])
         self.assertTrue(result["ready_to_navigate"])
-        old = next(row for row in result["routing"]["clinic_candidates"] if row["target_map_id"] == 68)
+        old = next(
+            row for row in result["routing"]["clinic_candidates"] if row["target_map_id"] == 68
+        )
         self.assertEqual(old["status"], "unreachable")
 
     def test_actual_unreachable_latched_clinic_is_reselected_with_evidence(self):
         snap = snapshot([mon(hp=1)], map_id=15)
         snap["player"].update(x=70, y=10)
-        active = {"id": "heal_party", "target_map_id": 68, "target_map_name": "MT_MOON_POKECENTER",
-                  "target": {"kind": "object", "sprite": "SPRITE_NURSE", "x": 3, "y": 1, "text_id": 1},
-                  "reason": "old low HP request"}
+        active = {
+            "id": "heal_party",
+            "target_map_id": 68,
+            "target_map_name": "MT_MOON_POKECENTER",
+            "target": {"kind": "object", "sprite": "SPRITE_NURSE", "x": 3, "y": 1, "text_id": 1},
+            "reason": "old low HP request",
+        }
         result = plan_support(snap, active)
         self.assertEqual(result["target_map_id"], 64)
         self.assertEqual(result["rejected_targets"][-1]["target_map_id"], 68)

@@ -1,24 +1,18 @@
 {
-  "name": "minecraft-jev-readable",
+  "name": "pokemon-jev-readable",
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "真实 Minecraft 状态 → Jev 选择 → Mineflayer 执行；可逐行阅读的完整示例",
+  "description": "Pokémon Red Star：真实游戏状态 → JEV 选择 → 按键执行与实时视频直播",
   "engines": {
     "node": ">=22.16.0"
   },
   "scripts": {
-    "start": "node --env-file-if-exists=.env agent.mjs",
-    "manual": "node --env-file-if-exists=.env agent.mjs --manual",
+    "start": "node --env-file-if-exists=.env --env-file-if-exists=pokemon/.env live/pokemon.mjs --live",
     "test": "node --test tests/*.test.mjs",
-    "check": "node --check agent.mjs && node --check minecraft.mjs && node --check jev.mjs && node --check live/server.mjs && node --check live/redact.mjs && node --check live/pokemon.mjs && node --check live/public/app.js && node --check live/public/request-inspector.js",
+    "check": "node --check live/server.mjs && node --check live/redact.mjs && node --check live/pokemon.mjs && node --check live/public/app.js && node --check live/public/request-inspector.js && node --check live/public/view-helpers.js && node --check live/public/video-player.js && node --check live/public/campaign-panel.js && node --check live/public/controller-view.js",
     "live": "node --env-file-if-exists=.env --env-file-if-exists=pokemon/.env live/server.mjs",
     "pokemon": "node --env-file-if-exists=.env --env-file-if-exists=pokemon/.env live/pokemon.mjs",
     "pokemon:live": "node --env-file-if-exists=.env --env-file-if-exists=pokemon/.env live/pokemon.mjs --live"
-  },
-  "dependencies": {
-    "mineflayer": "4.39.0",
-    "mineflayer-pathfinder": "2.4.5",
-    "vec3": "0.1.10"
   }
 }

@@ -1,4 +1,5 @@
 """Bounded observation memory. This module records facts; it never selects inputs."""
+
 from __future__ import annotations
 
 from collections import OrderedDict
@@ -68,8 +69,14 @@ def _compact_observation(observation):
     """Keep action-aligned facts without promoting raw RAM or unknown phases."""
     position = _position(observation)
     scene = observation.get("scene") or {}
-    verified = (scene.get("verified") is True
-                and scene.get("mode") in ("overworld", "dialog", "main_menu", "battle", "name_entry", "species_preview"))
+    verified = scene.get("verified") is True and scene.get("mode") in (
+        "overworld",
+        "dialog",
+        "main_menu",
+        "battle",
+        "name_entry",
+        "species_preview",
+    )
     dialog = _dialog(observation) if verified else {}
     opened = dialog.get("open")
     awaiting_input = dialog.get("awaiting_input")
@@ -86,7 +93,10 @@ def _compact_observation(observation):
         "frame": frame if type(frame) is int and frame >= 0 else None,
     }
     player = observation.get("player") or {}
-    if player.get("facing_quality") == "verified_direction_response" and player.get("facing") in DIRECTIONS:
+    if (
+        player.get("facing_quality") == "verified_direction_response"
+        and player.get("facing") in DIRECTIONS
+    ):
         compact["facing"] = player["facing"]
     return compact
 
@@ -147,8 +157,11 @@ class ProgressTracker:
     def _dialog_effect(self, before, after):
         before_open, after_open = _open(before), _open(after)
         before_site, after_site = _site(before), _site(after)
-        if before_open is True and before_site and (
-                self.active_dialog is None or self.active_dialog["site"] != before_site):
+        if (
+            before_open is True
+            and before_site
+            and (self.active_dialog is None or self.active_dialog["site"] != before_site)
+        ):
             self.active_dialog = {"site": before_site, "fingerprint": None, "matches": []}
             self._observe_dialog_text(before)
         opened = before_open is False and after_open is True
@@ -162,10 +175,15 @@ class ProgressTracker:
             fingerprint = self.active_dialog.get("fingerprint")
             if fingerprint:
                 signature = f"{self.active_dialog['site']}|{fingerprint}"
-                entry = self.interactions.setdefault(signature, {
-                    "site": self.active_dialog["site"], "fingerprint": fingerprint,
-                    "completed": 0, "reopens": 0,
-                })
+                entry = self.interactions.setdefault(
+                    signature,
+                    {
+                        "site": self.active_dialog["site"],
+                        "fingerprint": fingerprint,
+                        "completed": 0,
+                        "reopens": 0,
+                    },
+                )
                 entry["completed"] += 1
                 self.interactions.move_to_end(signature)
                 _trim(self.interactions, MAX_INTERACTIONS)
@@ -184,10 +202,16 @@ class ProgressTracker:
             self._visit(before_key)
             self.same_position_steps = 0
             self.stationary_buttons = {}
-        position_changed = (before_position is not None and after_position is not None
-                            and before_position != after_position)
-        map_changed = (before_position is not None and after_position is not None
-                       and before_position[0] != after_position[0])
+        position_changed = (
+            before_position is not None
+            and after_position is not None
+            and before_position != after_position
+        )
+        map_changed = (
+            before_position is not None
+            and after_position is not None
+            and before_position[0] != after_position[0]
+        )
         new_tile = self._visit(after_key)
         stationary = before_key is not None and before_key == after_key
         self.same_position_steps = self.same_position_steps + 1 if stationary else 0
@@ -199,12 +223,23 @@ class ProgressTracker:
         self.total_steps += 1
         before_info = self._position_info(before_key)
         before_scene = before.get("scene") or {}
-        if (button in DIRECTIONS and before_info is not None
-                and before_scene.get("verified") is True and before_scene.get("mode") == "overworld"):
-            attempts = before_info["directions"].setdefault(button, {
-                "moved": 0, "blocked_or_turn_only": 0, "unknown": 0,
-            })
-            effect = "moved" if position_changed else "blocked_or_turn_only" if stationary else "unknown"
+        if (
+            button in DIRECTIONS
+            and before_info is not None
+            and before_scene.get("verified") is True
+            and before_scene.get("mode") == "overworld"
+        ):
+            attempts = before_info["directions"].setdefault(
+                button,
+                {
+                    "moved": 0,
+                    "blocked_or_turn_only": 0,
+                    "unknown": 0,
+                },
+            )
+            effect = (
+                "moved" if position_changed else "blocked_or_turn_only" if stationary else "unknown"
+            )
             attempts[effect] += 1
         after_info = self._position_info(after_key)
         text_fingerprint = _fingerprint(_text(after))
@@ -215,21 +250,29 @@ class ProgressTracker:
                 del texts[next(iter(texts))]
         opened, closed = self._dialog_effect(before, after)
         outcome = {
-            "position_changed": position_changed, "map_changed": map_changed,
-            "new_tile": new_tile, "dialog_opened": opened, "dialog_closed": closed,
+            "position_changed": position_changed,
+            "map_changed": map_changed,
+            "new_tile": new_tile,
+            "dialog_opened": opened,
+            "dialog_closed": closed,
             "text_changed": _text(before) != _text(after),
             # Dialog or UI changes may be useful but cannot prove a new world
             # milestone without an independently validated event reader.
             "world_progress": new_tile,
         }
-        self.recent_effects.append({"button": button, "before": before_key,
-                                    "after": after_key, **outcome})
+        self.recent_effects.append(
+            {"button": button, "before": before_key, "after": after_key, **outcome}
+        )
         self.recent_effects = self.recent_effects[-MAX_RECENT:]
-        self.recent_transitions.append({
-            "step": self.total_steps, "button": button,
-            "before": _compact_observation(before), "after": _compact_observation(after),
-            "outcome": deepcopy(outcome),
-        })
+        self.recent_transitions.append(
+            {
+                "step": self.total_steps,
+                "button": button,
+                "before": _compact_observation(before),
+                "after": _compact_observation(after),
+                "outcome": deepcopy(outcome),
+            }
+        )
         self.recent_transitions = self.recent_transitions[-MAX_TRANSITIONS:]
         self.last_position = after_key
         return outcome
@@ -239,26 +282,42 @@ class ProgressTracker:
         key = _key(position)
         info = self.positions.get(key, {"directions": {}, "texts": {}})
         repeated_text = max(info["texts"].values(), default=0)
-        repeated_interactions = sum(entry["reopens"] for entry in self.interactions.values()
-                                    if entry["site"] == _site(observation))
-        same_position = self.same_position_steps if key == self.last_position and key is not None else 0
-        repetitive_buttons = self.stationary_buttons.get("a", 0) + self.stationary_buttons.get("wait", 0)
-        stationary_loop = same_position >= 12 and (repetitive_buttons >= 8 or repeated_text >= 3
-                                                  or repeated_interactions > 0)
+        repeated_interactions = sum(
+            entry["reopens"]
+            for entry in self.interactions.values()
+            if entry["site"] == _site(observation)
+        )
+        same_position = (
+            self.same_position_steps if key == self.last_position and key is not None else 0
+        )
+        repetitive_buttons = self.stationary_buttons.get("a", 0) + self.stationary_buttons.get(
+            "wait", 0
+        )
+        stationary_loop = same_position >= 12 and (
+            repetitive_buttons >= 8 or repeated_text >= 3 or repeated_interactions > 0
+        )
         recent_destinations = [effect.get("after") for effect in self.recent_effects]
-        moving_cycle = (self.steps_since_new_tile >= 24
-                        and len(self.recent_effects) == MAX_RECENT
-                        and all(destination is not None for destination in recent_destinations)
-                        and all(not effect.get("new_tile") for effect in self.recent_effects)
-                        and sum(bool(effect.get("position_changed")) for effect in self.recent_effects) >= 6
-                        and len(set(recent_destinations)) <= 4)
+        moving_cycle = (
+            self.steps_since_new_tile >= 24
+            and len(self.recent_effects) == MAX_RECENT
+            and all(destination is not None for destination in recent_destinations)
+            and all(not effect.get("new_tile") for effect in self.recent_effects)
+            and sum(bool(effect.get("position_changed")) for effect in self.recent_effects) >= 6
+            and len(set(recent_destinations)) <= 4
+        )
         loop = stationary_loop or moving_cycle
         scene = observation.get("scene") or {}
         mode = scene.get("mode") if scene.get("verified") is True else "unknown"
-        loop_kind=('position_cycle' if moving_cycle and mode=='overworld' else
-                   'repeated_interaction' if stationary_loop and repeated_interactions and mode in ('overworld','dialog') else
-                   'menu_cycle' if stationary_loop and mode=='main_menu' else
-                   'stationary_repetition' if stationary_loop else None)
+        if moving_cycle and mode == "overworld":
+            loop_kind = "position_cycle"
+        elif stationary_loop and repeated_interactions and mode in ("overworld", "dialog"):
+            loop_kind = "repeated_interaction"
+        elif stationary_loop and mode == "main_menu":
+            loop_kind = "menu_cycle"
+        elif stationary_loop:
+            loop_kind = "stationary_repetition"
+        else:
+            loop_kind = None
         if mode == "dialog" and loop:
             focus = "Resolve the repeated dialog, then explore an untried neighbor when the dialog is closed."
         elif mode == "dialog":
@@ -274,18 +333,27 @@ class ProgressTracker:
         neighbors = {}
         if position is not None:
             map_id, x, y = position
-            neighbors = {direction: self.visited.get(_key((map_id, x + dx, y + dy)), 0)
-                         for direction, (dx, dy) in DIRECTIONS.items()}
+            neighbors = {
+                direction: self.visited.get(_key((map_id, x + dx, y + dy)), 0)
+                for direction, (dx, dy) in DIRECTIONS.items()
+            }
         return {
-            "loop_detected": loop, "loop_kind":loop_kind, "same_position_steps": same_position,
+            "loop_detected": loop,
+            "loop_kind": loop_kind,
+            "same_position_steps": same_position,
             "steps_since_new_tile": self.steps_since_new_tile,
-            "untried_directions": [direction for direction in DIRECTIONS if direction not in info["directions"]],
+            "untried_directions": [
+                direction for direction in DIRECTIONS if direction not in info["directions"]
+            ],
             "direction_outcomes": deepcopy(info["directions"]),
-            "neighbor_visits": neighbors, "recent_effects": deepcopy(self.recent_effects),
+            "neighbor_visits": neighbors,
+            "recent_effects": deepcopy(self.recent_effects),
             "recent_transitions": deepcopy(self.recent_transitions),
-            "current_focus": focus, "visited_tiles": len(self.visited),
+            "current_focus": focus,
+            "visited_tiles": len(self.visited),
             "repeated_interactions": repeated_interactions,
-            "repeated_text_observations": repeated_text, "total_steps": self.total_steps,
+            "repeated_text_observations": repeated_text,
+            "total_steps": self.total_steps,
             "limitations": [
                 "World progress means a newly observed coordinate, not verified story completion.",
                 "Stationary dialog can be legitimate; loop_detected is a symptom, not proof of failure.",
@@ -295,12 +363,19 @@ class ProgressTracker:
         }
 
     def snapshot(self) -> dict:
-        return deepcopy({
-            "version": 1, "visited": list(self.visited.items()),
-            "positions": list(self.positions.items()), "interactions": list(self.interactions.items()),
-            "same_position_steps": self.same_position_steps,
-            "steps_since_new_tile": self.steps_since_new_tile, "total_steps": self.total_steps,
-            "stationary_buttons": self.stationary_buttons, "last_position": self.last_position,
-            "recent_effects": self.recent_effects, "active_dialog": self.active_dialog,
-            "recent_transitions": self.recent_transitions,
-        })
+        return deepcopy(
+            {
+                "version": 1,
+                "visited": list(self.visited.items()),
+                "positions": list(self.positions.items()),
+                "interactions": list(self.interactions.items()),
+                "same_position_steps": self.same_position_steps,
+                "steps_since_new_tile": self.steps_since_new_tile,
+                "total_steps": self.total_steps,
+                "stationary_buttons": self.stationary_buttons,
+                "last_position": self.last_position,
+                "recent_effects": self.recent_effects,
+                "active_dialog": self.active_dialog,
+                "recent_transitions": self.recent_transitions,
+            }
+        )

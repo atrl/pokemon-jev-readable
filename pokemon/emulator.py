@@ -1,4 +1,5 @@
 """A real, paused-between-decisions PyBoy session, with no task macros."""
+
 from __future__ import annotations
 
 import hashlib
@@ -6,7 +7,7 @@ import io
 from pathlib import Path
 import time
 
-from jev import BUTTONS
+from controls import BUTTONS
 
 
 class Emulator:
@@ -15,6 +16,7 @@ class Emulator:
         if hashlib.sha1(self.rom_bytes).hexdigest() != profile["rom_sha1"]:
             raise ValueError("ROM does not match the verified memory profile")
         from pyboy import PyBoy
+
         self.game = PyBoy(str(rom), window="SDL2" if visible else "null", sound_emulated=False)
         self.game.set_emulation_speed(0)
         self.video = None
@@ -25,6 +27,7 @@ class Emulator:
         if self.video is not None:
             raise RuntimeError("Live video is already enabled")
         from video import HLSVideo
+
         height, width = self.game.screen.ndarray.shape[:2]
         self.video = HLSVideo(output_dir, width=width, height=height, ffmpeg=ffmpeg)
         self._publish_video_frame()
@@ -85,7 +88,7 @@ class Emulator:
         # PyBoy rejects empty slices, unlike a Python bytes/bytearray object.
         if length == 0:
             return b""
-        return bytes(self.game.memory[address:address + length])
+        return bytes(self.game.memory[address : address + length])
 
     def save(self) -> bytes:
         stream = io.BytesIO()

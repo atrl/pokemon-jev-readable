@@ -2,9 +2,9 @@ name: Red Star memory and Jev
 on:
   push:
     branches: [main]
-    paths: ['pokemon/**', '.github/workflows/redstar-memory.yml']
+    paths: ['pokemon/**', 'live/**', 'tests/**', 'package.json', '.github/workflows/redstar-memory.yml']
   pull_request:
-    paths: ['pokemon/**', '.github/workflows/redstar-memory.yml']
+    paths: ['pokemon/**', 'live/**', 'tests/**', 'package.json', '.github/workflows/redstar-memory.yml']
   workflow_dispatch:
     inputs:
       mode:
@@ -37,6 +37,13 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      - name: Launcher and live website tests (no gameplay or API calls)
+        run: |
+          npm run check
+          npm test
       - name: Install real emulator
         run: |
           python3 -m venv /tmp/redstar-venv

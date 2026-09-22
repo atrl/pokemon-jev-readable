@@ -1,9 +1,6 @@
 node_modules/
 .env
 logs/
-.minecraft-auth/
-server/data/
-
 # Local live service and Python environment
 .venv/
 .live/

@@ -1,9 +1,11 @@
 """Reporting tests use fixtures; they are not claims of model gameplay."""
+
 import json
 from pathlib import Path
 import sys
 import tempfile
 import unittest
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from render_results import export_results
 
@@ -24,9 +26,15 @@ class ResultsTests(unittest.TestCase):
 
     def decision(self, button="a", after=True, text=""):
         player = {"name": "RED", "map_id": 38, "x": 3, "y": 6}
-        self.write("0000-decision.json", {"source": "jev", "step": 0,
-            "answer": {"choice": button, "probabilities": {button: 1}},
-            "request": {"state": {"game": {"player": player, "screen_text": {"rows": [text]}}}}})
+        self.write(
+            "0000-decision.json",
+            {
+                "source": "jev",
+                "step": 0,
+                "answer": {"choice": button, "probabilities": {button: 1}},
+                "request": {"state": {"game": {"player": player, "screen_text": {"rows": [text]}}}},
+            },
+        )
         if after:
             self.write("0000-after.json", {"player": player})
 
@@ -38,7 +46,9 @@ class ResultsTests(unittest.TestCase):
 
     def test_no_movement_not_game_completion(self):
         self.decision()
-        self.write("report.json", {"status": "budget_reached", "jev_calls": 1, "executed_actions": 1})
+        self.write(
+            "report.json", {"status": "budget_reached", "jev_calls": 1, "executed_actions": 1}
+        )
         summary = export_results(self.source, self.output)
         self.assertEqual(summary["position_changes"], 0)
         self.assertEqual(summary["distinct_positions"], 1)
@@ -56,7 +66,7 @@ class ResultsTests(unittest.TestCase):
         export_results(self.source, self.output)
         page = (self.output / "index.html").read_text()
         self.assertNotIn(attack, page)
-        self.assertIn('\\u003c/script\\u003e', page)
+        self.assertIn("\\u003c/script\\u003e", page)
 
     def test_regression_is_not_jev(self):
         self.write("report.json", {"policy": "scripted_regression_not_jev", "status": "passed"})

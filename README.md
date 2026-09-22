@@ -1,38 +1,46 @@
 # Pokémon Red Star + JEV
 
-运行仓库中的 `red-star-2020-08-18.gb`：读取游戏状态，提供主线任务、地图与战斗建议，由 JEV 选择每个实际按键。总体目标是击败联盟冠军并进入名人堂；当前实现尚未验证完整通关。
+一个可以按调用顺序阅读的游戏 agent：**只读游戏状态 → 本地任务与操作建议 → JEV 选择按键 → 执行后验证**。网页展示 Pokémon 原生视频和实际模型请求。
 
-## 实时直播
+**从 [源码阅读路线](docs/READING.md) 开始。** 安装和运行参数见 [运行说明](pokemon/README.md)。
 
-准备 Python 环境及 `.env` 中的 `TYPESAFE_API_KEY` 后：
+## 启动
+
+需要 Node.js 22.16+、Python 3.12（支持 3.10+）和 FFmpeg。Node 端只使用内置模块；HLS 浏览器依赖已随仓库提供。
 
 ```bash
-npm run pokemon:live -- --steps 5000
+python3 -m venv .venv
+.venv/bin/pip install -r pokemon/requirements.txt
+cp -n .env.example .env
+# 在 .env 中设置 TYPESAFE_API_KEY
+npm start -- --steps 5000
 ```
 
-打开 http://127.0.0.1:18766 。网页播放 Pokémon 原生实时视频，展示实际 JEV 请求、返回、提示词、状态、任务证据、地图记忆和耗时。视频通过 H.264/HLS 传输，不使用截图轮询。环境安装、存档续玩和运行边界见 [Pokémon 运行说明](pokemon/README.md)。
+打开 http://127.0.0.1:18766 。已有存档时使用 `npm start -- --resume --steps 5000`。当前正在运行的会话不需要因阅读或更新代码而重新启动。
 
-`current_focus` 由本地程序根据当前任务和游戏界面生成，战斗时会进一步填入操作建议；来源与覆盖顺序见 [字段说明](pokemon/README.md#current_focus-的来源)。
+## 代码结构
 
-## 已有结果与 Actions
+| 位置 | 责任 |
+| --- | --- |
+| `pokemon/run.py` | 唯一游戏主循环、生命周期和错误处理 |
+| `pokemon/memory.py`、`emulator.py` | 读取真实 RAM、执行真实输入 |
+| `pokemon/campaign.py`、`progress.py` | 持续任务、地图与最近动作记忆 |
+| `pokemon/prompt.py`、`prompts/button.txt` | 模型状态、`current_focus` 和按键候选 |
+| `pokemon/jev.py` | JEV HTTP、重试、答案校验 |
+| `pokemon/artifacts.py`、`activity.py` | 存档/日志与停滞恢复 |
+| `live/` | 启动入口和只读直播网站 |
+| `pokemon/tools/` | 离线生成地图、出口与招式知识，不参与按键控制 |
 
-[最近一次已发布的 Actions 归档](pokemon/results/README.md) · [历史结果](pokemon/results/runs/) · [Actions 工作流](https://github.com/atrl/minecraft-jev-readable/actions/workflows/redstar-memory.yml)。归档与本机直播是独立会话，不能将旧的 12 步试跑当成最新直播进度。
+任务规则和寻路/战斗建议由程序提供，最终执行哪个按键由 JEV 的校验后答案决定。没有其他模型参与高层规划，也不写 RAM。
 
-早期运行 35681979746 实际调用 JEV 12 次，却重复出生房间的 N64 对话。后续真实测试已推进初始宝可梦、劲敌战、包裹和图鉴，并加入导航、战斗建议与停滞恢复；这些证据仍不等于完整通关。详见 [验证记录](pokemon/README.md#主线规划版的实际运行证据)。
+## 验证与历史
 
-交互回放可从 Actions Artifacts 下载 `pokemon-results-运行号-尝试号`，解压后打开 `index.html`；GitHub 上的 HTML 文件页面默认显示源码。历史 GIF 是归档截图串联，实时观看请使用上面的直播入口。
+```bash
+npm run check
+npm test
+.venv/bin/python -m unittest discover -s pokemon/tests -v
+```
 
-普通代码提交和 PR 只运行回归，不调用 JEV。手动触发 `Red Star memory and Jev` 工作流时，`mode=play` 调用真实 JEV，`mode=verify` 仅验证内存；`steps` 默认 12，`publish=true` 将结果发布到仓库。密钥使用 Actions Secret `TYPESAFE_API_KEY`。
+[验证证据索引](docs/VERIFICATION.md) · [已发布 Actions 回放](pokemon/results/README.md) · [历史归档](pokemon/archive/README.md)。数据文件、回放和旧报告保留作证据；第一次阅读可跳过这些目录。
 
-## 核心代码
-
-- `pokemon/run.py`：观察、选择、执行、存档与有界恢复。
-- `pokemon/memory.py`：只读游戏观察及验证边界。
-- `pokemon/campaign.py`：持续任务、导航和补给记忆。
-- `pokemon/jev.py`：构建实际请求并校验 JEV 按键。
-- `live/`：只读直播网页、视频和事件流。
-- `pokemon/render_results.py`：从已有结果生成历史回放。
-
-## 历史
-
-[分支整合与归档说明](pokemon/archive/README.md)。旧 FireRed/ROM 验证工作流保留为归档参考；Minecraft 源码仍保留，原始说明位于 [docs/MINECRAFT.md](docs/MINECRAFT.md)。
+总体目标是完成主线并进入名人堂；步数、接口成功、局部任务完成都不等于已经通关。

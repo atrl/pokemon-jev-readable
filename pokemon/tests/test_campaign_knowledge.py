@@ -1,4 +1,5 @@
 """Story intent selection must not confuse source knowledge with achievement."""
+
 import json
 import sys
 import unittest
@@ -54,14 +55,19 @@ class CampaignKnowledgeTests(unittest.TestCase):
     def test_starter_uses_three_real_object_selectors(self):
         result = objective_for({"oak_asked_to_choose_mon": verified(True)}, {"map_id": 40})
         self.assertEqual(result["id"], "choose_starter")
-        self.assertEqual([(item["x"], item["y"], item["text_id"]) for item in result["interaction_selectors"]],
-                         [(6, 3, 2), (7, 3, 3), (8, 3, 4)])
+        self.assertEqual(
+            [(item["x"], item["y"], item["text_id"]) for item in result["interaction_selectors"]],
+            [(6, 3, 2), (7, 3, 3), (8, 3, 4)],
+        )
 
     def test_current_object_location_is_used_without_promoting_prior(self):
-        world = {"map_id": 40, "objects": [
-            {"sprite": "SPRITE_BALL", "text_id": 2, "x": 6, "y": 3, "visible": False},
-            {"sprite": "SPRITE_BALL", "text_id": 3, "x": 7, "y": 4, "quality": "source_prior"},
-        ]}
+        world = {
+            "map_id": 40,
+            "objects": [
+                {"sprite": "SPRITE_BALL", "text_id": 2, "x": 6, "y": 3, "visible": False},
+                {"sprite": "SPRITE_BALL", "text_id": 3, "x": 7, "y": 4, "quality": "source_prior"},
+            ],
+        }
         result = objective_for({"oak_asked_to_choose_mon": verified(True)}, world)
         self.assertEqual((result["target"]["x"], result["target"]["y"]), (7, 4))
         self.assertEqual(result["target"]["quality"], "source_prior")
@@ -113,12 +119,18 @@ class CampaignKnowledgeTests(unittest.TestCase):
 
     def test_hall_of_fame_evidence_survives_league_flag_reset(self):
         history = {"facts": {"hall_of_fame_entered": verified(True)}}
-        result = objective_for({"champion_defeated": verified(False), "hall_of_fame_entered": verified(False)}, {}, history)
+        result = objective_for(
+            {"champion_defeated": verified(False), "hall_of_fame_entered": verified(False)},
+            {},
+            history,
+        )
         self.assertEqual(result["status"], "completed")
         self.assertIs(result["completion"], True)
 
     def test_hall_map_or_naked_history_ids_cannot_claim_completion(self):
-        result = objective_for({}, {"map_id": 0x76}, {"completed_ids": [entry["id"] for entry in catalog()]})
+        result = objective_for(
+            {}, {"map_id": 0x76}, {"completed_ids": [entry["id"] for entry in catalog()]}
+        )
         self.assertNotEqual(result["status"], "completed")
         self.assertEqual(result["completed_ids"], [])
 

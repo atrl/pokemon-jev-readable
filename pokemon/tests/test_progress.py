@@ -9,11 +9,17 @@ from progress import ProgressTracker
 
 
 def observation(x=3, y=6, *, map_id=38, mode="overworld", text="", facing="up"):
-    result = {"player": {"map_id": map_id, "x": x, "y": y, "facing": facing},
-              "screen_text": {"rows": [text]}}
+    result = {
+        "player": {"map_id": map_id, "x": x, "y": y, "facing": facing},
+        "screen_text": {"rows": [text]},
+    }
     if mode is not None:
         result["scene"] = {"mode": mode, "verified": True}
-        result["dialog"] = {"open": mode == "dialog", "awaiting_input": mode == "dialog", "text": text}
+        result["dialog"] = {
+            "open": mode == "dialog",
+            "awaiting_input": mode == "dialog",
+            "text": text,
+        }
     return result
 
 
@@ -68,7 +74,9 @@ class ProgressTests(unittest.TestCase):
         self.assertNotIn("right", context["untried_directions"])
         self.assertEqual(context["direction_outcomes"]["right"]["moved"], 1)
         tracker.record("up", left, left)
-        self.assertEqual(tracker.context(left)["direction_outcomes"]["up"]["blocked_or_turn_only"], 1)
+        self.assertEqual(
+            tracker.context(left)["direction_outcomes"]["up"]["blocked_or_turn_only"], 1
+        )
 
     def test_repeated_moving_cycle_is_detected_without_stationary_streak(self):
         tracker = ProgressTracker()
@@ -124,33 +132,33 @@ class ProgressTests(unittest.TestCase):
     def test_transient_map_header_mismatch_does_not_create_position_or_progress(self):
         tracker = ProgressTracker()
         stable = observation(map_id=0, x=12, y=11)
-        stable['world'] = {'source_match': True, 'player_position_valid': True}
+        stable["world"] = {"source_match": True, "player_position_valid": True}
         transition = observation(map_id=40, x=12, y=11)
-        transition['world'] = {'source_match': False, 'player_position_valid': True}
-        outcome = tracker.record('wait', stable, transition)
-        self.assertFalse(outcome['position_changed'])
-        self.assertFalse(outcome['map_changed'])
-        self.assertFalse(outcome['new_tile'])
-        self.assertFalse(outcome['world_progress'])
-        self.assertNotIn('40:12:11', tracker.visited)
-        self.assertIsNone(tracker.recent_transitions[-1]['after']['position'])
+        transition["world"] = {"source_match": False, "player_position_valid": True}
+        outcome = tracker.record("wait", stable, transition)
+        self.assertFalse(outcome["position_changed"])
+        self.assertFalse(outcome["map_changed"])
+        self.assertFalse(outcome["new_tile"])
+        self.assertFalse(outcome["world_progress"])
+        self.assertNotIn("40:12:11", tracker.visited)
+        self.assertIsNone(tracker.recent_transitions[-1]["after"]["position"])
         # Settling to a valid lab position is a new observation, without
         # inventing a movement delta from the stale-coordinate frame.
         arrived = observation(map_id=40, x=5, y=11)
-        arrived['world'] = {'source_match': True, 'player_position_valid': True}
-        outcome = tracker.record('wait', transition, arrived)
-        self.assertFalse(outcome['position_changed'])
-        self.assertTrue(outcome['new_tile'])
-        self.assertIn('40:5:11', tracker.visited)
+        arrived["world"] = {"source_match": True, "player_position_valid": True}
+        outcome = tracker.record("wait", transition, arrived)
+        self.assertFalse(outcome["position_changed"])
+        self.assertTrue(outcome["new_tile"])
+        self.assertIn("40:5:11", tracker.visited)
 
     def test_out_of_bounds_player_cannot_add_an_explored_tile(self):
         tracker = ProgressTracker()
         invalid = observation(x=200)
-        invalid['world'] = {'source_match': True, 'player_position_valid': False}
-        result = tracker.record('right', invalid, invalid)
-        self.assertFalse(result['new_tile'])
+        invalid["world"] = {"source_match": True, "player_position_valid": False}
+        result = tracker.record("right", invalid, invalid)
+        self.assertFalse(result["new_tile"])
         self.assertEqual(len(tracker.visited), 0)
-        self.assertIsNone(tracker.recent_transitions[-1]['after']['position'])
+        self.assertIsNone(tracker.recent_transitions[-1]["after"]["position"])
 
     def test_discontinuous_observation_does_not_carry_stationary_streak(self):
         tracker = ProgressTracker()
@@ -215,12 +223,20 @@ class ProgressTests(unittest.TestCase):
         self.assertEqual(restored.context(opened), tracker.context(opened))
         self.assertEqual(len(restored.context(opened)["recent_effects"]), 8)
         for button, before, after in [("a", opened, closed), ("a", closed, opened)]:
-            self.assertEqual(restored.record(button, before, after), tracker.record(button, before, after))
+            self.assertEqual(
+                restored.record(button, before, after), tracker.record(button, before, after)
+            )
         self.assertEqual(restored.context(opened), tracker.context(opened))
-        self.assertEqual(json.loads(json.dumps(restored.snapshot())), json.loads(json.dumps(tracker.snapshot())))
+        self.assertEqual(
+            json.loads(json.dumps(restored.snapshot())), json.loads(json.dumps(tracker.snapshot()))
+        )
 
     def test_bounded_memory_and_context_do_not_mutate_the_tracker(self):
-        with patch("progress.MAX_VISITED", 4), patch("progress.MAX_POSITIONS", 3), patch("progress.MAX_INTERACTIONS", 2):
+        with (
+            patch("progress.MAX_VISITED", 4),
+            patch("progress.MAX_POSITIONS", 3),
+            patch("progress.MAX_INTERACTIONS", 2),
+        ):
             tracker = ProgressTracker()
             for x in range(8):
                 closed = observation(x=x)
@@ -237,14 +253,21 @@ class ProgressTests(unittest.TestCase):
 
     def test_transitions_are_chronological_and_aligned_to_each_action(self):
         tracker = ProgressTracker()
-        states = [observation(x=3), observation(x=4), observation(x=3),
-                  observation(x=3, map_id=39), observation(x=4, map_id=39)]
+        states = [
+            observation(x=3),
+            observation(x=4),
+            observation(x=3),
+            observation(x=3, map_id=39),
+            observation(x=4, map_id=39),
+        ]
         frames = [100, 124, 160, 184, 208]
         for state, frame in zip(states, frames):
             state["frame"] = frame
         buttons = ["right", "left", "down", "right"]
-        outcomes = [tracker.record(button, before, after)
-                    for button, before, after in zip(buttons, states, states[1:])]
+        outcomes = [
+            tracker.record(button, before, after)
+            for button, before, after in zip(buttons, states, states[1:])
+        ]
         transitions = tracker.context(states[-1])["recent_transitions"]
         self.assertEqual([item["step"] for item in transitions], [2, 3, 4])
         self.assertEqual([item["button"] for item in transitions], buttons[1:])
@@ -275,8 +298,9 @@ class ProgressTests(unittest.TestCase):
     def test_transition_compaction_excludes_unverified_raw_fields_and_bounds_text(self):
         tracker = ProgressTracker()
         before = observation(mode="dialog", text="x" * 300)
-        before["player"].update({"money": 9000, "badge_bits": 255,
-                                  "facing_quality": "verified_direction_response"})
+        before["player"].update(
+            {"money": 9000, "badge_bits": 255, "facing_quality": "verified_direction_response"}
+        )
         before["party"] = [{"species": "unverified"}]
         after = observation(mode="dialog", text="unverified")
         after["scene"]["verified"] = False
