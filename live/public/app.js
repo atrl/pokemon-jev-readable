@@ -519,7 +519,7 @@ function renderObservation(list, run) {
   if (isPokemon(run)) {
     const player = observation.player ?? {};
     addStateCell(grid, '玩家', player.name);
-    addStateCell(grid, '当前场景', ({overworld:'自由移动',dialog:'对话框',main_menu:'主菜单',unknown:'待确认'})[observation.scene?.mode] ?? '旧记录未提供');
+    addStateCell(grid, '当前场景', ({overworld:'自由移动',dialog:'对话框',main_menu:'主菜单',battle:'战斗',name_entry:'输入名字',species_preview:'宝可梦预览',unknown:'待确认'})[observation.scene?.mode] ?? '旧记录未提供');
     addStateCell(grid, '角色朝向', buttonNames[player.facing] ?? '尚未验证');
     addStateCell(grid, '对话状态', observation.dialog?.open === true ? (observation.dialog.awaiting_input === true ? '已打开 · 等待输入' : '已打开 · 打印/等待待确认') : observation.dialog?.open === false ? '已关闭' : '尚未确认', true);
     addStateCell(grid, '地图 ID', player.map_id);
@@ -539,10 +539,11 @@ function renderObservation(list, run) {
   }
   if (observation.progress) {
     const progress = observation.progress;
+    const inBattle = observation.scene?.mode === 'battle' || observation.battle?.active === true;
     target.append(node('h3','subheading','观察到的探索与循环'));
     target.append(node('p','empty-copy',`已记录 ${progress.visited_tiles ?? 0} 个坐标；连续 ${progress.same_position_steps ?? 0} 次输入未移动。`));
-    target.append(node('p',progress.loop_detected ? 'state-warning' : 'empty-copy',progress.loop_detected ? '检测到重复交互/原地操作，模型已收到循环反馈。' : '暂无原地循环信号；探索坐标不等于剧情完成。'));
-    target.append(node('p','empty-copy',`当前位置尚未尝试：${(progress.untried_directions ?? []).map(actionName).join('、') || '四个方向均已尝试'}`));
+    target.append(node('p',progress.loop_detected && !inBattle ? 'state-warning' : 'empty-copy',inBattle ? '战斗中地图坐标保持不变通常正常；结合 HP、PP 和战斗结果判断推进。原始位置重复信号保留在完整输入中。' : progress.loop_detected ? '检测到重复交互/原地操作，模型已收到循环反馈；该信号本身不证明卡住。' : '暂无原地循环信号；探索坐标不等于剧情完成。'));
+    if (!inBattle) target.append(node('p','empty-copy',`当前位置尚未尝试：${(progress.untried_directions ?? []).map(actionName).join('、') || '四个方向均已尝试'}`));
   }
   const text = observation.screen_text?.rows;
   if (Array.isArray(text)) {
