@@ -42,7 +42,7 @@ python pokemon/run.py --rom red-star-2020-08-18.gb --steps 20 --visible
 
 默认从开机画面开始，每一步由 Jev 决定。输出目录默认 `pokemon/runs/session`，必须不存在或为空；再次运行用 `--output pokemon/runs/another-run`。
 
-可设置 `--goal '你的目标'`；没有脚本规定剧情路线。当前只是接口和小规模行为验证，不保证探索或战斗效果。达到步数预算只表示停止，不表示完成任务或通关。
+默认总体目标是**击败联盟冠军并进入名人堂，完成 Red Star 主线**。`--goal` 可显式覆盖目标。探索、移动和战斗准备仅为子任务；达到步数预算不表示通关。当前代码尚未实现完整剧情规划、任务前置条件和经实机验证的通关检测器，不能把这项目标声明当成已有通关能力。详见 [通关 agent 对照与改造设计](docs/COMPLETION_AGENT_DESIGN.md)。
 
 ## 先独立验证内存
 

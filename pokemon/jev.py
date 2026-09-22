@@ -23,6 +23,13 @@ BUTTONS = {
 }
 ENDPOINT = "https://api.typesafe.ai/v1/systemone"
 
+DEFAULT_GAME_GOAL = (
+    "Complete Pokemon Red Star's main story: defeat the Pokemon League Champion "
+    "and reach the Hall of Fame. Treat exploration, navigation, team preparation "
+    "and battles as subgoals serving that objective. Claim completion only from "
+    "verified in-game evidence, never from action count, visited coordinates or confidence."
+)
+
 
 def verified_player(player: dict | None) -> dict | None:
     if not isinstance(player, dict):
@@ -106,7 +113,8 @@ def build_request(observation: dict, goal: str, history: list[dict]) -> dict:
         "questions": {"button": {
             "type": "choice", "criteria": criteria,
             "instructions": (
-                "Choose ONE physical input using this priority: current verified scene, current_focus, observed local geometry, then temporal_context and recent action effects. "
+                "Choose ONE physical input to advance state.goal. The overall goal takes priority over current_focus, which is only a local observation hint. New coordinates and movement alone do not establish story progress or completion. "
+                "Use the current verified scene, observed local geometry, temporal_context and recent action effects to decide how to act safely toward that goal. "
                 "Read transitions oldest-to-newest to distinguish opening a dialog, advancing it, closing it, turning, moving, and getting no movement. Earlier states do not override the latest verified phase. "
                 "In OVERWORLD with dialog.open=false, movement/exploration is available even when screen_text is empty; this is not a request to wait or press A. "
                 "A opens interactions in OVERWORLD. If the same interaction has already finished and reopened repeatedly, leave it and explore an untried or less-visited adjacent tile. "

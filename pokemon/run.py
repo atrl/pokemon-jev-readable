@@ -18,7 +18,7 @@ import time
 
 from emulator import Emulator
 from memory import Reader, load_profile
-from jev import choose, observation_for_model, redact_secrets
+from jev import choose, observation_for_model, redact_secrets, DEFAULT_GAME_GOAL
 from progress import ProgressTracker
 
 
@@ -267,7 +267,7 @@ def main():
     ap.add_argument('--visible',action='store_true')
     ap.add_argument('--screenshots',action='store_true',help='Explicitly save optional screenshot evidence; the live stream never uses images')
     ap.add_argument('--allow-missing-key',action='store_true',help='CI records blocked, never substitutes a fake decision')
-    ap.add_argument('--goal',default='Explore Pokemon Red Star and progress through the adventure. Infer your route from dialog and observations.')
+    ap.add_argument('--goal',default=DEFAULT_GAME_GOAL)
     a=ap.parse_args()
     def stop(_signum,_frame):
         raise KeyboardInterrupt
