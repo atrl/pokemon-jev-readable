@@ -3,3 +3,9 @@ node_modules/
 logs/
 .minecraft-auth/
 server/data/
+
+# Local live service and Python environment
+.venv/
+.live/
+
+pokemon-evidence/

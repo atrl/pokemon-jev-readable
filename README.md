@@ -1,6 +1,6 @@
 # Minecraft + Jev：可阅读的完整实现
 
-这次只有 Minecraft，没有套餐页面、React 模板或浏览器假预览。
+本仓库包含 Minecraft 采集任务，以及 [Pokémon Red Star 的 RAM → Jev 按键循环与实时网页](pokemon/README.md)。
 
 **任务：从真实游戏采集原木、合成木板/木棍/工作台、放置工作台，再合成木镐。**
 终止条件是“实际库存中有木镐，附近实际存在工作台”；已有工作台也可使用。
@@ -8,6 +8,10 @@
 这是一个完整的小任务 agent，不是原仓库屠龙路线的完整移植。
 它保留 `rmalde/minecraft-agent` 的核心机制：真实结构化状态 → 可用动作集合 → Jev 选择 → Mineflayer 执行 → 新状态。
 省去原仓库的大模型高层规划、固定种子路线、龙战斗、原生录屏和状态叠加。任务目标明确写在代码中，不让另外一个模型规划。
+
+Pokémon 直播入口：准备 Python 环境及 `.env` 中的 `TYPESAFE_API_KEY` 后，运行 `npm run pokemon:live -- --steps 20`，打开 http://127.0.0.1:18766 。网页实时展示结构化请求、响应、按键与结果；不使用截图。详见 [直播流程](pokemon/README.md#实时网页直播)。
+
+以下说明针对 Minecraft。
 
 ## 1. 运行
 

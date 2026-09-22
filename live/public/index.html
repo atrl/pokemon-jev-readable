@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="dark">
+    <meta name="theme-color" content="#111713">
+    <title>Pokémon × JEV LIVE · 决策直播</title>
+    <link rel="stylesheet" href="/style.css">
+    <script type="module" src="/app.js"></script>
+  </head>
+  <body>
+    <header class="masthead">
+      <a class="brand" href="/" aria-label="JEV LIVE 首页"><span class="brand-mark" aria-hidden="true">J</span><span>JEV<span class="brand-live">LIVE</span></span></a>
+      <div class="masthead-right"><span class="readonly">只读直播</span><span id="connection" class="connection" role="status"><i></i><span>正在连接</span></span></div>
+    </header>
+    <main>
+      <section class="intro">
+        <div><div class="eyebrow"><span class="square"></span> POKÉMON RED STAR × JEV</div><h1>看见每一次决策<span>。</span></h1><p>从真实游戏状态到 Jev 调用，再到按键与结果。每一步，都有记录。</p></div>
+        <div class="intro-note"><span>状态 → 调用 → 决策 → 结果</span><span>事件实时推送 · 无截图</span></div>
+      </section>
+      <div id="notice" class="notice" role="alert" hidden></div>
+      <section class="runbar" aria-label="选择运行记录">
+        <div class="run-picker"><label for="run-select">当前运行</label><select id="run-select" aria-label="选择运行记录"><option value="">正在读取…</option></select></div>
+        <div class="run-actions"><button id="follow-button" class="button small" type="button" aria-pressed="true">跟随最新运行</button><button id="refresh-button" class="icon-button" type="button" title="刷新运行记录" aria-label="刷新运行记录">↻</button><a id="json-link" class="text-link" href="/api/runs" target="_blank" rel="noopener">查看 JSON ↗</a></div>
+      </section>
+      <section id="empty-state" class="empty-state" hidden>
+        <div class="empty-symbol" aria-hidden="true">⌁</div><div class="eyebrow">WAITING FOR A REAL RUN</div><h2>直播台已就绪，等待 Pokémon 运行</h2><p>启动 Pokémon Red Star 代理后，这里会自动出现调用、按键和结果。</p><div id="setup-status" class="setup-status"></div><p class="empty-footnote">这个页面只订阅运行记录；连接直播台并不代表游戏正在运行。</p>
+      </section>
+      <div id="run-content" hidden>
+        <section class="run-heading"><div><div class="run-label"><span id="game-label" class="game-tag"></span><span id="run-id" class="muted mono"></span></div><h2 id="run-goal"></h2><p id="run-dates" class="muted"></p></div><span id="run-status" class="status-pill"></span></section>
+        <div id="run-warning" class="notice" role="status" hidden></div>
+        <section class="metrics" aria-label="运行统计">
+          <div class="metric"><span class="metric-label">运行步数<span>STEPS</span></span><strong id="metric-steps">—</strong><span id="metric-step-note" class="metric-note">实际记录</span></div>
+          <div class="metric"><span class="metric-label">Jev 调用<span>CALLS</span></span><strong id="metric-calls">—</strong><span class="metric-note">包含重试请求</span></div>
+          <div class="metric"><span class="metric-label">动作结果<span>RESULTS</span></span><strong id="metric-results">—</strong><span id="metric-result-note" class="metric-note">执行后返回</span></div>
+          <div class="metric"><span class="metric-label">最近响应<span>LATENCY</span></span><strong id="metric-latency">—</strong><span id="metric-latency-note" class="metric-note">等待 Jev 响应</span></div>
+        </section>
+        <div class="workspace">
+          <section class="timeline-panel" aria-labelledby="timeline-title"><div class="section-header"><div><span class="eyebrow">THE EVENT TRAIL</span><h2 id="timeline-title">决策时间线</h2></div><span class="section-hint">最新在前</span></div><div id="timeline" class="timeline"></div><button id="more-button" class="button more-button" type="button" hidden>加载更早记录</button></section>
+          <aside class="state-column">
+            <section class="panel" aria-labelledby="state-title"><div class="panel-heading"><h2 id="state-title">当前状态</h2><span id="state-time" class="muted mono"></span></div><div id="observation"></div></section>
+            <section class="panel" aria-labelledby="decision-title"><div class="panel-heading"><h2 id="decision-title">最近一次决策</h2><span class="tiny-label">MODEL OUTPUT</span></div><div id="decision"></div></section>
+            <div class="provenance-note"><span class="square"></span><p>页面展示已记录的真实事件。调用失败、执行失败和运行结束会分别标记；模型选择不等于任务完成。</p></div>
+          </aside>
+        </div>
+      </div>
+    </main>
+    <footer><span>JEV LIVE <span class="footer-divider">/</span> 每一次行动，均可追溯</span><span id="last-update">等待事件</span></footer>
+  </body>
+</html>

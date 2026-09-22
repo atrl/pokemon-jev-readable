@@ -34,7 +34,7 @@ export TYPESAFE_API_KEY='你的密钥'
 python pokemon/run.py --rom red-star-2020-08-18.gb --steps 20 --visible
 ```
 
-密钥只放环境变量或 GitHub Actions Secret，不要提交或发到聊天中。`.env.example` 只是变量清单，程序不会自动读取 `.env`。
+密钥只放环境变量或 GitHub Actions Secret，不要提交或发到聊天中。直接运行 Python 时需自行导出环境变量；下方 npm 启动入口会读取根目录 `.env` 和 `pokemon/.env`（后者优先）。
 
 默认从开机画面开始，每一步由 Jev 决定。输出目录默认 `pokemon/runs/session`，必须不存在或为空；再次运行用 `--output pokemon/runs/another-run`。
 
@@ -75,6 +75,7 @@ Artifacts 仅保留 JSON 与截图，七天后过期；不会上传 ROM 或二�
 3. `memory.py`：只读解析与字段错误处理。
 4. `emulator.py`：真实按键、帧推进、存档、截图。
 5. `test_live.py`：只用于验证接口的脚本，不参与生产策略。
+6. `../live/server.mjs` 和 `../live/public/`：只读 JSONL 事件并通过 SSE 推送至网页。
 
 ## 版本与能力边界
 
@@ -90,3 +91,50 @@ Artifacts 仅保留 JSON 与截图，七天后过期；不会上传 ROM 或二�
 
 源码：Rangi42/redstarbluestar @ `08deafad427f0904f285e515c360003efc19d3dc`。
 接口：https://docs.typesafe.ai/api ，https://docs.pyboy.dk/ 。
+
+
+## 实时网页直播
+
+从仓库根目录执行；Node.js 22.16+，Python 3.12：
+
+```bash
+uv venv --python 3.12 .venv
+uv pip install --python .venv/bin/python -r pokemon/requirements.txt
+cp .env.example .env
+# 在本机编辑 .env，填写 TYPESAFE_API_KEY；不要提交密钥。
+npm run pokemon:live -- --steps 20
+```
+
+打开 **http://127.0.0.1:18766**。默认从 ROM 开机开始，20 步结束后网页继续保留结果，Ctrl+C 关闭服务。重复运行会自动创建新的 `pokemon/runs/<时间>-<进程号>/`，不会覆盖旧会话。`--goal`、`--state` 等参数直接传入现有 Python runner。达到预算不表示通关。
+
+网页和游戏也可分别启动，适合让网页长期运行：
+
+```bash
+npm run live                          # 终端 1：只读网页，保持运行
+npm run pokemon -- --steps 20         # 终端 2：开始真实 JEV 游戏会话
+```
+
+可用 `POKEMON_PYTHON` 指定其他 Python 解释器；默认使用 `.venv/bin/python`。`LIVE_HOST`/`LIVE_PORT` 设置网页监听地址，默认仅本机。手机同一局域网查看可绑定 `0.0.0.0`，再打开本机局域网 IP 的 18766 端口。若使用公网隧道，只转发此只读网页端口；这会公开该仓库直播日志中的游戏观察与模型输入输出。
+
+每一步通过 `events.jsonl` 追加并立即刷新：
+
+```text
+observation → jev_request → jev_response → decision → executing → result
+```
+
+每次 HTTP 重试单独记录 `attempt`。请求发出后立刻可见，无需等待整轮结束；页面显示延迟、概率、实际按键、按键前后位置/文本，以及完整请求与响应 JSON。概率是模型返回值，不代表游戏成功率。密钥、Authorization 和常见凭据字段会被过滤。页面不提供控制游戏或读取任意本机文件的接口。
+
+**没有截图传输、OCR、图片轮询或预设玩法回放。**正常运行不保存 PNG；仅在显式传入 `--screenshots` 时保留可选本地截图证据。RAM 中未经过实机验证的队伍/背包等字段仍显示为不可用，不把未知值当成事实。
+
+断线时显示连接状态，重连后补齐事件；历史会话可切换。网页每 500ms 增量读取日志，保留最近 40 个会话、每个会话最近 2000 个事件；完整事件继续保存在磁盘。丢失结束事件但进程已退出时标为中断。缺密钥时记录 `blocked_missing_key`，模型调用和动作次数为 0，不启动替代策略。
+
+验证直播代码：
+
+```bash
+npm test
+npm run check
+.venv/bin/python -m unittest discover -s pokemon/tests -v
+.venv/bin/python pokemon/test_live.py
+```
+
+单元测试使用标明的测试替身，覆盖请求尚未返回时的事件、失败不执行、重连、脱敏及不保存截图；`test_live.py` 单独验证真实 ROM 内存与按键。只有实际配置密钥并运行产生的 JEV 返回才能证明模型已开始玩游戏。
