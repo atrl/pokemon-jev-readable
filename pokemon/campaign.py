@@ -12,6 +12,7 @@ from campaign_knowledge import objective_for
 from world_data import map_prior
 from route_regions import plan_route, interaction_positions
 from team_strategy import plan_support
+from plan_contract import plan_outcome
 
 DIRECTIONS = {"up": (0, -1), "down": (0, 1), "left": (-1, 0), "right": (1, 0)}
 COMPASS = {"north": "up", "south": "down", "west": "left", "east": "right"}
@@ -36,7 +37,7 @@ def trustworthy(value):
 
 def _matches_object(obj, target):
     return all(
-        target.get(key) is None or obj.get(key) == target[key] for key in ("text_id", "sprite")
+        target.get(key) is None or obj.get(key) == target[key] for key in ("object_id", "text_id", "sprite")
     )
 
 
@@ -60,6 +61,11 @@ class CampaignPlanner:
         self.steps = int(data.get("steps", 0))
         self._last_position = data.get("last_position")
         self.plan = deepcopy(data.get("plan"))
+        self.plan_history = deepcopy(data.get("plan_history", []))[-20:]
+        self.last_navigation = deepcopy(data.get("last_navigation", {}))
+        self.planning_state = deepcopy(data.get("planning_state", {"last_step": None, "last_request_failed": False}))
+        # Runtime opts in after restoring the checkpoint; no credential is persisted.
+        self.model_planning_enabled = False
         self.selector = selector or objective_for
 
     def _observe(self, observation):
@@ -201,6 +207,14 @@ class CampaignPlanner:
         if type(target_map) is not int:
             return None, []
         selectors = objective.get("interaction_selectors") or objective.get("target")
+        direct = (objective.get("plan") or {}).get("target") or {}
+        if mid == direct.get("map_id") and direct.get("kind") in ("warp", "connection"):
+            selector = direct.get("selector") or {}
+            entries = world.get("warps" if direct["kind"] == "warp" else "connections", [])
+            keys = ("x", "y", "destination_map_id") if direct["kind"] == "warp" else ("direction", "destination_map_id")
+            if any(all(entry.get(k) == selector.get(k) for k in keys) for entry in entries):
+                return deepcopy(selector), [mid, selector.get("destination_map_id")]
+            return {"kind": "unknown_route", "reason": "selected_portal_no_longer_matches_live_world"}, []
         routing = plan_route(
             world,
             observation.get("player") or {},
@@ -437,8 +451,8 @@ class CampaignPlanner:
             found = min(
                 candidates,
                 key=lambda c: (
-                    distance(c),
                     self.visits.get(f"{map_id}:{c[0]},{c[1]}", 0),
+                    distance(c),
                     abs(c[0] - x) + abs(c[1] - y),
                 ),
             )
@@ -462,14 +476,10 @@ class CampaignPlanner:
     def recover(self, observation, *, attempt, reason, failed_button):
         p = position(observation)
         if p and (observation.get("scene") or {}).get("mode") == "overworld":
-            # Discard only the current map's advisory terrain cache. Story
-            # evidence, visited positions and inter-map connections remain.
-            self.tiles.pop(str(p[0]), None)
-            for key in list(self.failed_edges):
-                if key.startswith(f"{p[0]}:"):
-                    self.failed_edges.pop(key, None)
-                    self.failed_edge_steps.pop(key, None)
+            # Refresh nearby observations, retaining explored terrain and failure evidence.
             self._observe(observation)
+        if self.model_planning_enabled and self.plan:
+            self.finish_plan("failed", "recovery_requested", observation)
         self.recovery = {
             "attempt": attempt,
             "reason": reason,
@@ -488,9 +498,39 @@ class CampaignPlanner:
         self.plan = plan
 
     def clear_plan(self, reason=None):
-        if self.plan is not None and reason:
-            self.plan["cleared_reason"] = reason
+        self.finish_plan("invalidated", reason or "explicit_clear")
+
+    def finish_plan(self, status, reason, observation=None, evidence=None):
+        if not self.plan:
+            return
+        self.plan_history.append({
+            "plan_id": self.plan.get("plan_id"), "subgoal": self.plan.get("subgoal"),
+            "intent": self.plan.get("intent"), "target_ref": self.plan.get("target_ref"),
+            "target": deepcopy(self.plan.get("target")), "success": deepcopy(self.plan.get("success")),
+            "resource_policy": deepcopy(self.plan.get("resource_policy")),
+            "status": status, "reason": reason, "step": self.steps,
+            "position": list(position(observation)) if observation and position(observation) else None,
+            "evidence": deepcopy(evidence),
+        })
+        self.plan_history = self.plan_history[-20:]
         self.plan = None
+
+    def _refresh_model_plan(self, observation, emergency):
+        if not self.plan or not self.model_planning_enabled:
+            return
+        if emergency:
+            if self.plan.get("status") != "suspended":
+                self.plan.update(status="suspended", suspended_at=self.steps,
+                                 suspended_reason="verified_team_recovery")
+            return
+        if self.plan.get("status") == "suspended":
+            paused = self.steps - self.plan.pop("suspended_at", self.steps)
+            self.plan["created_step"] = self.plan.get("created_step", self.steps) + paused
+            self.plan.update(status="active", suspended_reason=None)
+        result = plan_outcome(self.plan, observation, observation.get("progress") or {},
+                              self.steps, self.last_navigation)
+        if result:
+            self.finish_plan(result['status'], result['reason'], observation, result.get('evidence'))
 
     def _plan_expired(self, observation):
         if not isinstance(self.plan, dict):
@@ -529,7 +569,8 @@ class CampaignPlanner:
             "milestones": list(plan.get("milestones") or []),
             "resource_policy": deepcopy(plan.get("resource_policy") or {}),
             "completed_ids": story_objective.get("completed_ids", []),
-            "completion_evidence": story_objective.get("completion_evidence", {}),
+            "completion_evidence": {"plan_success": {"value": None, "verified": False,
+                "predicate": deepcopy(plan.get("success")), "scope": "local_plan_not_story"}},
             "unknown_facts": [],
             "plan": deepcopy(plan),
             "source": {
@@ -548,7 +589,8 @@ class CampaignPlanner:
         objective = self.selector(facts, world, {"facts": self.history_facts})
         story_objective = deepcopy(objective)
         if objective.get("id") != "main_story_complete":
-            self.support = plan_support(observation, self.support)
+            resource_policy = (self.plan or {}).get("resource_policy") or {}
+            self.support = plan_support(observation, self.support, resource_policy=resource_policy)
             if self.support:
                 full_recovery = self.support["evidence"]["full_recovery"]
                 objective = {
@@ -591,27 +633,44 @@ class CampaignPlanner:
             or self.recovery.get("phase") != (observation.get("scene") or {}).get("mode")
         ):
             self.recovery = None
-        if self.plan is not None and self._plan_expired(observation):
-            self.clear_plan("expired_or_completed")
+        if not self.model_planning_enabled and self.plan is not None and self._plan_expired(observation):
+            self.clear_plan("legacy_expired_or_completed")
         world = observation.get("world") or {}
         objective, story_objective = self._select_objective(observation, world)
-        plan_objective = None
-        if str(objective.get("id", "")) != "heal_party":
-            plan_objective = self._plan_objective(observation, story_objective)
+        emergency = objective.get("id") == "heal_party"
+        completed = objective.get("id") == "main_story_complete"
+        self._refresh_model_plan(observation, emergency)
+        if completed and self.plan:
+            self.finish_plan("invalidated", "verified_game_completed", observation)
+        plan_objective = None if emergency or completed else self._plan_objective(observation, story_objective)
         if plan_objective is not None:
             objective = plan_objective
+        elif self.model_planning_enabled and not emergency and not completed:
+            objective = {"id": "awaiting_model_plan", "intent": "Obtain a new grounded local plan before exploration.",
+                         "completion": False, "target_map_id": None,
+                         "completed_ids": story_objective.get("completed_ids", []),
+                         "source": {"quality": "runtime_plan_management"}}
         self._remember_objective(objective)
         target, route = self._target_for(observation, objective)
         navigation = self._navigation(observation, target)
+        self.last_navigation = deepcopy(navigation)
         return {
             "overall_goal": "Defeat the League Champion and register in the Hall of Fame",
             "active_objective": objective,
             "navigation": navigation,
             "recovery": deepcopy(self.recovery),
             "plan": deepcopy(self.plan),
+            "plan_history": deepcopy(self.plan_history[-6:]),
+            "model_planning_enabled": self.model_planning_enabled,
+            "plan_suspended": emergency,
+            "cell_visits": {k: v for k, v in self.visits.items() if k.startswith(str(world.get("map_id")) + ":")},
             "story_objective": {
                 "id": story_objective.get("id"),
                 "intent": story_objective.get("intent"),
+                "target_map_id": story_objective.get("target_map_id"),
+                "knowledge": story_objective.get("knowledge", []),
+                "completion_evidence": story_objective.get("completion_evidence", {}),
+                "quality": "source_prior_optional_reference",
             },
             "visited_map_ids": sorted(int(mid) for mid, cells in self.tiles.items() if cells),
             "recorded_action_count": self.steps,
@@ -621,10 +680,10 @@ class CampaignPlanner:
             "relevant_dialog_clues": [c for c in self.clues if c["map_id"] == world.get("map_id")][
                 -5:
             ],
-            "objective_history": self.objective_history[-6:],
+            "objective_history": self.objective_history[-20:],
             "knowledge_policy": "Version-pinned source supplies labelled priors; only verified in-game facts complete objectives. Guidance does not execute buttons.",
             "roles": {
-                "story": "data-driven prerequisite planner",
+                "story": "model plan with optional source reference" if self.model_planning_enabled else "local rule fallback",
                 "navigation": "observed-background BFS guidance",
                 "planner": "advisory high-level plan from an external model; JEV still selects inputs",
                 "physical_input": "JEV choice",
@@ -645,6 +704,9 @@ class CampaignPlanner:
                 "support": self.support,
                 "recovery": self.recovery,
                 "plan": self.plan,
+                "plan_history": self.plan_history,
+                "planning_state": self.planning_state,
+                "last_navigation": self.last_navigation,
                 "objective_history": self.objective_history,
                 "failed_edges": self.failed_edges,
                 "failed_edge_steps": self.failed_edge_steps,

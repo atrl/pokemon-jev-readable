@@ -54,7 +54,7 @@ def validate_response(response: dict) -> dict:
 def redact_secrets(value, secrets: tuple[str, ...] = ()):
     """Keep credentials out of events/artifacts, including API-echoed values."""
     keys = tuple(
-        secret for secret in (*secrets, os.environ.get("TYPESAFE_API_KEY", "").strip()) if secret
+        secret for secret in (*secrets, os.environ.get("TYPESAFE_API_KEY", "").strip(), os.environ.get("DEEPSEEK_API_KEY", "").strip()) if secret
     )
     sensitive_fields = {
         "authorization",
@@ -68,6 +68,7 @@ def redact_secrets(value, secrets: tuple[str, ...] = ()):
         return {
             redact_secrets(str(k), keys): "[REDACTED]"
             if str(k).lower().replace("_", "").replace("-", "") in sensitive_fields
+            or str(k).lower().replace("_", "").endswith("apikey")
             else redact_secrets(v, keys)
             for k, v in value.items()
         }

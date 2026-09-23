@@ -222,6 +222,7 @@ class EventTests(unittest.TestCase):
                 [row["type"] for row in rows],
                 [
                     "started",
+                    "planner_configuration",
                     "observation",
                     "jev_request",
                     "jev_response",
@@ -360,6 +361,7 @@ class EventTests(unittest.TestCase):
                 [row["type"] for row in rows],
                 [
                     "started",
+                    "planner_configuration",
                     "observation",
                     "jev_request",
                     "jev_response",
@@ -373,10 +375,11 @@ class EventTests(unittest.TestCase):
             self.assertIsInstance(rows[0]["pid"], int)
             self.assertEqual(result["jev_http_attempts"], 1)
             self.assertEqual(result["executed_actions"], 1)
-            self.assertEqual(rows[4]["answer"]["choice"], "a")
-            self.assertEqual(rows[4]["source"], "jev")
-            self.assertEqual(rows[5]["action"], "a")
-            self.assertTrue(rows[6]["success"])
+            decision = next(row for row in rows if row["type"] == "decision")
+            self.assertEqual(decision["answer"]["choice"], "a")
+            self.assertEqual(decision["source"], "jev")
+            self.assertEqual(next(row for row in rows if row["type"] == "executing")["action"], "a")
+            self.assertTrue(next(row for row in rows if row["type"] == "result")["success"])
             for row in rows:
                 self.assertEqual(row["game"], "pokemon")
                 self.assertTrue(row["time"].endswith("Z"))

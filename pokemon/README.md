@@ -34,8 +34,8 @@ npm start
 | --- | --- |
 | `TYPESAFE_API_KEY` | 必需，保存在本机环境或 Actions Secret |
 | `TYPESAFE_MODEL` | `jev-latest` |
-| `DEEPSEEK_API_KEY` | 可选；配置后卡住时调用 DeepSeek 高层规划（OpenAI 兼容接口） |
-| `DEEPSEEK_MODEL` | `deepseek-chat` |
+| `DEEPSEEK_API_KEY` | 可选；配置后调用 DeepSeek 主规划（OpenAI 兼容接口） |
+| `DEEPSEEK_MODEL` | `deepseek-flash` |
 | `DEEPSEEK_BASE_URL` | `https://api.deepseek.com` |
 | `LIVE_HOST` / `LIVE_PORT` | `127.0.0.1` / `18766` |
 | `POKEMON_PYTHON` | 默认仓库 `.venv/bin/python` |
@@ -50,10 +50,9 @@ npm start
 
 ## 高层规划与战斗资源策略
 
-- 本地确定性层负责识别停滞：连续无新坐标、位置循环、短窗口内反复回城。命中后生成紧凑态势报告，并在配置了 `DEEPSEEK_API_KEY` 时调用 DeepSeek 高层规划模型。
-- 规划模型只输出**建议**：一个子目标、目标地图/可交互对象、战斗资源策略（野外逃跑/捕获/开打）和理由；写入存档后可跨步保留、到期或完成时清除。**每个物理按键仍由 JEV 选择**，不接入按钮序列。
-- 未配置规划模型时自动退化为纯本地策略，不影响运行。
-- 野外战斗默认鼓励逃跑以节省时间（训练家战斗不能逃）；背包有已验证的精灵球且规划要求时，模型会被引导用 ITEM 菜单投球。若规划不可用，抓宠/购买精灵球只作为建议出现，不伪造道具。
+详见 [双模型合同与验证](docs/DUAL_MODEL.md)。DeepSeek 在启动、计划完成、失败或到期时规划；CampaignPlanner 管理计划、观察和验收。生产目标引用来自当前观察，不允许模型编造坐标。紧急治疗暂停原计划；失败和到期独立记录，不等同完成。
+
+`--planner-mode deepseek` 要求真实 DeepSeek；无密钥或请求失败会保存暂停。`auto` 无密钥时明确回退 local，`local` 可作为规则对照。`--planner-call-budget` 默认 50；`--max-seconds` 可限制运行墙钟时间。所有按键仍来自 JEV。
 
 ## 存档与事件
 

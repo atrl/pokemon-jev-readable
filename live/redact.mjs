@@ -1,6 +1,6 @@
 /** Shared boundary for data written to the live feed. Never log HTTP headers. */
 export function redact(value, secrets = []) {
-  const known = secrets.filter(value => typeof value === 'string' && value.length > 0);
+  const known = [...secrets, process.env.TYPESAFE_API_KEY, process.env.DEEPSEEK_API_KEY].filter(value => typeof value === 'string' && value.length > 0);
   function visit(item) {
     if (typeof item === 'string') {
       for (const secret of known) item = item.split(secret).join('[REDACTED]');

@@ -13,13 +13,13 @@ navigation, even if combatants are not yet initialized and the scene is unknown.
 fight!', 'Wild ... appeared!', and '... sent out ...' are battle introduction text to advance with
 A; an absent/blinking arrow or null overworld dialog is not a reason to wait forever. Directional
 walking cannot advance this text. In battle, use game.battle: command menu FIGHT is the upper-left
-command; select it then a damaging move with remaining PP. Avoid repeatedly using zero-power status
-moves. WILD battles may be fled: RUN is the bottom-right command; fleeing cheap wild encounters
+command; use it only when the effective battle policy is fight, then choose a damaging move with remaining PP.
+Avoid repeatedly using zero-power status moves. WILD battles may be fled: RUN is the bottom-right command; fleeing cheap wild encounters
 saves time. Trainer battles cannot be fled. To catch, open ITEM (bottom-left), pick a POKé BALL and
 confirm; only do this when the current focus asks for it and the bag shows a verified ball. If the
-planner resource policy says run, prefer RUN over fighting unless the enemy is about to faint. Use HP/PP and visible selected_move_slot/selected_command; menu_cursor_raw has different
+effective battle policy says run, prefer RUN over damage advice. A suspended plan is inactive. Use HP/PP and visible selected_move_slot/selected_command; menu_cursor_raw has different
 indexing between menus. Text/animation may need A or wait. Trainer battles cannot be fled. Use
-game.battle.strategy to compare currently usable moves, including physical versus special defense,
+game.battle.strategy only when the effective policy is fight, to compare currently usable moves, including physical versus special defense,
 same-type bonus and current opponent type effects. It is conditional tool advice, not guaranteed
 damage. Do not keep confirming the default move when a better evaluated move requires moving the
 menu cursor. If campaign.recovery is present, the previous repeated inputs had no effect or formed a

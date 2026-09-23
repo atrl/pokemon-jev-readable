@@ -1,0 +1,28 @@
+{
+  "source_run": "https://github.com/atrl/pokemon-jev-readable/actions/runs/35826841651",
+  "tested_source_commit": "9afdb4cbac6fb92f6483bdc55b24bf0546649380",
+  "source_hashes_match": true,
+  "python_tests": {
+    "total": 258, "passed": 250, "skipped": 8, "failed": 0,
+    "skip_reasons": ["2 private checkpoint regressions not available", "1 pinned upstream source rebuild not available", "5 ffmpeg/ffprobe integration checks unavailable on runner"]
+  },
+  "node_tests": {"passed": 40, "failed": 0},
+  "real_rom_regression": "passed",
+  "dual_model_attempt": {
+    "kind": "blocked_or_failed_live_attempt",
+    "initial_state": "explicit_scripted_regression_bedroom_checkpoint_not_model_progress",
+    "status": "blocked_missing_planner_key",
+    "error": "DEEPSEEK_API_KEY is required in deepseek mode",
+    "deepseek_requests": 0, "accepted_plans": 0, "jev_calls": 0, "actions": 0,
+    "actual_planner_model": null, "requests_linked_to_real_plan": 0,
+    "position_changes": 0, "map_changes": 0, "last_position": null,
+    "plan_outcomes": [], "dual_model_integration_observed": false,
+    "mt_moon_tested": false, "game_completed": false,
+    "limits": {"actions": 80, "planner_requests": 4, "wall_seconds": 240}
+  },
+  "limits": [
+    "No DeepSeek secret reached the Actions job; no model action was executed.",
+    "This attempt does not establish Mt Moon progress or game completion.",
+    "Plan lifecycle tests used explicit offline doubles; the ROM regression was explicitly scripted."
+  ]
+}

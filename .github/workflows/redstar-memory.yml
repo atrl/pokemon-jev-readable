@@ -12,6 +12,15 @@ on:
         type: choice
         options: [play, verify]
         default: play
+      planner:
+        description: 'auto 有 DeepSeek 密钥则使用主规划；deepseek 缺密钥即暂停；local 明确使用规则回退'
+        type: choice
+        options: [deepseek, auto, local]
+        default: deepseek
+      planner_calls:
+        description: 'DeepSeek 请求上限；用尽后保存暂停'
+        type: number
+        default: 8
       steps:
         description: '最多决策次数；到达预算不表示通关'
         type: number
@@ -21,7 +30,7 @@ on:
         type: string
         default: 'Explore Pokemon Red Star and progress through the adventure. Infer your route from dialog and observations.'
       publish:
-        description: '将 GIF 和结果发布到私有仓库 pokemon/results/'
+        description: '将 GIF 和结果发布到本仓库 pokemon/results/；公开仓库会公开结果'
         type: boolean
         default: true
 permissions:
@@ -56,12 +65,26 @@ jobs:
         if: github.event_name == 'workflow_dispatch' && inputs.mode == 'play'
         env:
           TYPESAFE_API_KEY: ${{ secrets.TYPESAFE_API_KEY }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          DEEPSEEK_MODEL: ${{ vars.DEEPSEEK_MODEL || 'deepseek-flash' }}
+          DEEPSEEK_BASE_URL: ${{ vars.DEEPSEEK_BASE_URL || 'https://api.deepseek.com' }}
+          DEEPSEEK_THINKING: ${{ vars.DEEPSEEK_THINKING || 'disabled' }}
+          PLANNER_MODE: ${{ inputs.planner }}
+          PLANNER_CALLS: ${{ inputs.planner_calls }}
           DECISION_STEPS: ${{ inputs.steps }}
           DECISION_GOAL: ${{ inputs.goal }}
         run: |
           /tmp/redstar-venv/bin/python pokemon/run.py \
             --state pokemon/.work/bedroom.state --output pokemon-evidence/jev \
-            --steps "$DECISION_STEPS" --goal "$DECISION_GOAL"
+            --steps "$DECISION_STEPS" --goal "$DECISION_GOAL" \
+            --planner-mode "$PLANNER_MODE" --planner-call-budget "$PLANNER_CALLS" --max-seconds 480 --screenshots
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          status=json.loads(Path('pokemon-evidence/jev/report.json').read_text())['status']
+          if status.startswith('blocked_') or status in ('failed', 'planner_unavailable', 'stalled'):
+              raise SystemExit('Run did not proceed successfully: '+status)
+          PY
       - name: Build replay and readable summary, including failures
         if: always()
         env:
@@ -77,6 +100,7 @@ jobs:
           name: pokemon-results-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             pokemon-evidence/**/*.json
+            pokemon-evidence/**/events.jsonl
             pokemon-evidence/**/*.png
             pokemon-evidence/index.html
             pokemon-evidence/README.md

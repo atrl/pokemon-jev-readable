@@ -33,6 +33,10 @@ from artifacts import (
 )
 
 
+class PlanningPause(RuntimeError):
+    """Stop with an explicit report and checkpoint, without a fallback action."""
+
+
 def run(
     rom: Path,
     output: Path,
@@ -47,6 +51,9 @@ def run(
     checkpoint_every: int = 50,
     max_stalled_steps: int = 80,
     max_recovery_attempts: int = 3,
+    planner_mode: str = "auto",
+    planner_call_budget: int = 50,
+    max_seconds: int = 0,
 ) -> dict:
     if type(steps) is not int or not 0 <= steps <= 100_000:
         raise ValueError("steps must be an integer in 0..100000 (0 runs without a step limit)")
@@ -58,6 +65,13 @@ def run(
         raise ValueError("max_recovery_attempts must be an integer in 0..10")
     if not goal.strip():
         raise ValueError("goal cannot be empty")
+    if planner_mode not in ("auto", "deepseek", "local"):
+        raise ValueError("planner_mode must be auto, deepseek or local")
+    if type(planner_call_budget) is not int or not 1 <= planner_call_budget <= 1000:
+        raise ValueError("planner_call_budget must be 1..1000")
+    if type(max_seconds) is not int or max_seconds < 0:
+        raise ValueError("max_seconds must be a nonnegative integer")
+    model_planning = planner_mode != "local" and planning.planner_configured()
     output.mkdir(parents=True, exist_ok=True)
     if any(output.iterdir()):
         raise ValueError("Choose a new empty output directory; no previous run will be overwritten")
@@ -66,7 +80,7 @@ def run(
     reader = None
     first_frame = None
     video_restarts = 0
-    planning_state = {"last_step": None, "count": 0}
+    emitted_plan_outcomes = set()
     tracker = ProgressTracker()
     campaign = CampaignPlanner()
     stall_monitor = StallMonitor(max_stalled_steps, max_recovery_attempts)
@@ -80,7 +94,11 @@ def run(
         "goal": goal,
         "status": "starting",
         "game_completed": False,
-        "policy": "jev_only",
+        "policy": "deepseek_plan_jev_input" if model_planning else "jev_only",
+        "planner_mode": "deepseek" if model_planning else "local_fallback",
+        "planner_call_budget": planner_call_budget,
+        "planning_ms": 0,
+        "planning_failures": 0,
         "new_tiles_this_run": 0,
         "movement_actions": 0,
         "map_changes": 0,
@@ -128,44 +146,56 @@ def run(
             world, output, profile["rom_sha1"], report["executed_actions"], tracker, campaign
         )
 
-    def maybe_plan(before, step) -> bool:
-        """Escalate to the planner model on deterministic stall signals.
+    def emit_plan_lifecycle():
+        for event in campaign.plan_history:
+            identity = (event.get("plan_id"), event.get("step"), event.get("status"))
+            if identity not in emitted_plan_outcomes:
+                emitted_plan_outcomes.add(identity)
+                emit("plan_outcome", **event)
+        report["active_plan_status"] = (campaign.plan or {}).get("status")
 
-        Returns True when a new plan was stored (so campaign context is rebuilt
-        once). All planner failures degrade silently to the existing policy.
-        """
-        campaign_ctx = before.get("campaign") or {}
-        progress_ctx = before.get("progress") or {}
-        situation = planning.build_situation(before, campaign_ctx, progress_ctx)
-        last = planning_state["last_step"]
-        situation["steps_since_plan"] = None if last is None else step - last
+    def maybe_plan(before, step) -> bool:
+        """Primary planning on bootstrap/completion/failure, never a hidden fallback."""
+        if not model_planning:
+            return False
+        situation = planning.build_situation(before, before.get("campaign") or {}, before.get("progress") or {})
+        situation["planning_enabled"] = True
+        if (before.get("campaign", {}).get("active_objective") or {}).get("id") == "main_story_complete":
+            return False
+        previous = campaign.planning_state
+        last = previous.get("last_step")
+        situation["steps_since_plan"] = None if last is None else campaign.steps - last
+        situation["last_request_failed"] = previous.get("last_request_failed", False)
         if not planning.needs_planning(situation):
             return False
+        if report["planning_calls"] >= planner_call_budget:
+            report.update(status="planner_budget_reached", reason="Planning call limit; checkpoint preserved")
+            raise PlanningPause()
         reasons = planning.planning_reasons(situation)
-        planning_state["last_step"] = step
-        if not planning.planner_configured():
-            emit(
-                "planning_skipped",
-                step=step,
-                reasons=reasons,
-                reason="planner_not_configured",
-            )
-            return False
-        report["planning_calls"] = report.get("planning_calls", 0) + 1
+        campaign.planning_state.update(last_step=campaign.steps, last_request_failed=False)
+        report["planning_calls"] += 1
         save_report()
         emit("planning_requested", step=step, reasons=reasons, situation=situation)
+        clock = time.monotonic()
         try:
-            plan = planning.call_planner(situation, goal)
-        except Exception as exc:  # network/schema failures never stop play
-            emit("planning_error", step=step, error=type(exc).__name__)
-            return False
+            plan = planning.call_planner(situation, goal, on_event=lambda event: emit(event.pop("type"), step=step, **event))
+        except Exception as exc:
+            campaign.planning_state["last_request_failed"] = True
+            report["planning_failures"] += 1
+            report.update(status="planner_unavailable", reason=getattr(exc, "code", type(exc).__name__))
+            emit("planning_error", step=step, error=getattr(exc, "code", type(exc).__name__),
+                 http_status=getattr(exc, "http_status", None))
+            # Do not resume the old invalid plan or invent a button.
+            raise PlanningPause() from None
+        finally:
+            report["planning_ms"] += round((time.monotonic()-clock)*1000)
         campaign.set_plan(plan)
-        planning_state["count"] += 1
-        report["plans"] = planning_state["count"]
-        report["plan_subgoal"] = plan.get("subgoal")
-        report["plan_target_map_id"] = plan.get("target_map_id")
+        report["plans"] += 1
+        report.update(plan_subgoal=plan.get("subgoal"), plan_target_map_id=plan.get("target_map_id"),
+                      planner_model=plan.get("model"))
         save_report()
         emit("plan", step=step, plan=plan, reasons=reasons)
+        save_checkpoint()
         return True
 
     def decide(before, step):
@@ -193,6 +223,9 @@ def run(
         attempt_offset = 0
         unavailable_windows = 0
         while True:
+            if max_seconds and time.monotonic() - started >= max_seconds:
+                report["status"] = "time_budget_reached"
+                raise PlanningPause()
 
             def retry_event(event):
                 # HTTP attempt identities remain distinct across waiting
@@ -299,9 +332,11 @@ def run(
         old_objective = before["campaign"]["active_objective"]["id"]
         old_verified = set(before["campaign"]["active_objective"].get("completed_ids", []))
         campaign_effect = campaign.record(button, before, after)
-        after["campaign"] = campaign.context(after)
-        new_verified = set(after["campaign"]["active_objective"].get("completed_ids", []))
         outcome = tracker.record(button, before, after)
+        after["progress"] = tracker.context(after)
+        after["campaign"] = campaign.context(after)
+        emit_plan_lifecycle()
+        new_verified = set(after["campaign"]["active_objective"].get("completed_ids", []))
         outcome["objective_changed"] = after["campaign"]["active_objective"]["id"] != old_objective
         outcome["milestones_completed"] = sorted(new_verified - old_verified)
         old_enemy = (before.get("battle") or {}).get("enemy") or {}
@@ -355,6 +390,12 @@ def run(
             if allow_missing_key:
                 return report
             raise RuntimeError(report["reason"])
+        if planner_mode == "deepseek" and not model_planning:
+            report.update(status="blocked_missing_planner_key", reason="DEEPSEEK_API_KEY is required in deepseek mode")
+            emit("planning_error", error="missing_api_key", phase="configuration")
+            raise PlanningPause()
+        emit("planner_configuration", configured=model_planning, mode=report["planner_mode"],
+             model=(os.environ.get("DEEPSEEK_MODEL") or planning.DEFAULT_MODEL) if model_planning else None)
         profile = load_profile()
         world = Emulator(rom, profile, visible=visible)
         reader = Reader(world, profile)
@@ -364,6 +405,9 @@ def run(
             tracker, report["progress_memory_source"] = restore_progress(state_file, manifest)
             campaign, report["campaign_memory_source"] = restore_campaign(state_file, manifest)
 
+        campaign.model_planning_enabled = model_planning
+        # Previous unsuccessful HTTP attempts must not suppress planning after an explicit restart.
+        campaign.planning_state["last_request_failed"] = False
         first_frame = getattr(world.game, "frame_count", None) if hasattr(world, "game") else None
         if video:
             metadata = world.enable_video(output)
@@ -375,6 +419,9 @@ def run(
         # steps == 0 means no action budget: run until the story is completed
         # or a bounded recovery pause is saved.
         for i in (range(steps) if steps else itertools.count()):
+            if max_seconds and time.monotonic() - started >= max_seconds:
+                report["status"] = "time_budget_reached"
+                break
             step = i + 1
             report["current_step"] = step
             save_report()
@@ -383,6 +430,7 @@ def run(
                 raise RuntimeError("Memory sanity check failed before action")
             before["progress"] = tracker.context(before)
             before["campaign"] = campaign.context(before)
+            emit_plan_lifecycle()
             if maybe_plan(before, step):
                 before["campaign"] = campaign.context(before)
             objective = before["campaign"]["active_objective"]
@@ -471,6 +519,8 @@ def run(
                 break
         else:
             report["status"] = "budget_reached"
+    except PlanningPause:
+        pass  # A specific non-success status has already been recorded.
     except KeyboardInterrupt:
         report["status"] = "interrupted"
     except Exception as exc:
@@ -551,6 +601,9 @@ def main():
         help="CI records blocked, never substitutes a fake decision",
     )
     ap.add_argument("--goal", default=DEFAULT_GAME_GOAL)
+    ap.add_argument("--planner-mode", choices=("auto", "deepseek", "local"), default="auto")
+    ap.add_argument("--planner-call-budget", type=int, default=50)
+    ap.add_argument("--max-seconds", type=int, default=0)
     a = ap.parse_args()
 
     def stop(_signum, _frame):
@@ -572,6 +625,9 @@ def main():
                 checkpoint_every=a.checkpoint_every,
                 max_stalled_steps=a.max_stalled_steps,
                 max_recovery_attempts=a.max_recovery_attempts,
+                planner_mode=a.planner_mode,
+                planner_call_budget=a.planner_call_budget,
+                max_seconds=a.max_seconds,
             ),
             indent=2,
         )
