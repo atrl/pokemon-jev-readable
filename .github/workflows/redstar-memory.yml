@@ -1,47 +1,15 @@
-name: Red Star memory and Jev
+name: Pokemon core checks
 on:
   push:
     branches: [main]
-    paths: ['pokemon/**', 'live/**', 'tests/**', 'package.json', '.github/workflows/redstar-memory.yml']
   pull_request:
-    paths: ['pokemon/**', 'live/**', 'tests/**', 'package.json', '.github/workflows/redstar-memory.yml']
   workflow_dispatch:
-    inputs:
-      mode:
-        description: 'play 调用 Jev；verify 只验证内存，不消耗模型额度'
-        type: choice
-        options: [play, verify]
-        default: play
-      planner:
-        description: 'auto 有 DeepSeek 密钥则使用主规划；deepseek 缺密钥即暂停；local 明确使用规则回退'
-        type: choice
-        options: [deepseek, auto, local]
-        default: deepseek
-      planner_calls:
-        description: 'DeepSeek 请求上限；用尽后保存暂停'
-        type: number
-        default: 8
-      steps:
-        description: '最多决策次数；到达预算不表示通关'
-        type: number
-        default: 12
-      goal:
-        description: '交给 Jev 的任务目标'
-        type: string
-        default: 'Explore Pokemon Red Star and progress through the adventure. Infer your route from dialog and observations.'
-      publish:
-        description: '将 GIF 和结果发布到本仓库 pokemon/results/；公开仓库会公开结果'
-        type: boolean
-        default: true
 permissions:
   contents: read
 jobs:
-  pokemon:
+  check:
     runs-on: ubuntu-24.04
-    timeout-minutes: 12
-    env:
-      SDL_VIDEODRIVER: dummy
-      SDL_AUDIODRIVER: dummy
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
@@ -49,91 +17,28 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: '22'
-      - name: Launcher and live website tests (no gameplay or API calls)
+      - name: Runtime source, repository layout, docs and frontend regressions
         run: |
           npm run check
           npm test
-      - name: Install real emulator
+      - name: Install Python runtime dependencies
         run: |
-          python3 -m venv /tmp/redstar-venv
-          /tmp/redstar-venv/bin/pip install -r pokemon/requirements.txt
-      - name: Unit tests (not a gameplay claim)
-        run: /tmp/redstar-venv/bin/python -m unittest discover -s pokemon/tests -v
-      - name: Real ROM memory regression
-        run: /tmp/redstar-venv/bin/python pokemon/test_live.py
-      - name: Jev button control (only explicit play runs use the key)
-        if: github.event_name == 'workflow_dispatch' && inputs.mode == 'play'
-        env:
-          TYPESAFE_API_KEY: ${{ secrets.TYPESAFE_API_KEY }}
-          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
-          DEEPSEEK_MODEL: ${{ vars.DEEPSEEK_MODEL || 'deepseek-flash' }}
-          DEEPSEEK_BASE_URL: ${{ vars.DEEPSEEK_BASE_URL || 'https://api.deepseek.com' }}
-          DEEPSEEK_THINKING: ${{ vars.DEEPSEEK_THINKING || 'disabled' }}
-          PLANNER_MODE: ${{ inputs.planner }}
-          PLANNER_CALLS: ${{ inputs.planner_calls }}
-          DECISION_STEPS: ${{ inputs.steps }}
-          DECISION_GOAL: ${{ inputs.goal }}
+          python3 -m venv /tmp/pokemon-venv
+          /tmp/pokemon-venv/bin/pip install -r pokemon/requirements.txt
+      - name: Core Python regressions (no game or model call)
         run: |
-          /tmp/redstar-venv/bin/python pokemon/run.py \
-            --state pokemon/.work/bedroom.state --output pokemon-evidence/jev \
-            --steps "$DECISION_STEPS" --goal "$DECISION_GOAL" \
-            --planner-mode "$PLANNER_MODE" --planner-call-budget "$PLANNER_CALLS" --max-seconds 480 --screenshots
-          python3 - <<'PY'
-          import json
-          from pathlib import Path
-          status=json.loads(Path('pokemon-evidence/jev/report.json').read_text())['status']
-          if status.startswith('blocked_') or status in ('failed', 'planner_unavailable', 'stalled'):
-              raise SystemExit('Run did not proceed successfully: '+status)
-          PY
-      - name: Build replay and readable summary, including failures
+          /tmp/pokemon-venv/bin/python -m compileall -q pokemon
+          /tmp/pokemon-venv/bin/python -m unittest discover -s pokemon/tests -v
+          /tmp/pokemon-venv/bin/python pokemon/run.py --help > /dev/null
+      - name: Ensure checks did not change tracked sources
+        run: git diff --exit-code
+      - name: Explain verification boundary
         if: always()
-        env:
-          SOURCE_RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
-          /tmp/redstar-venv/bin/python pokemon/render_results.py \
-            --input pokemon-evidence --output pokemon-evidence --run-url "$SOURCE_RUN"
-      - name: Downloadable replay (open index.html after extracting)
-        id: replay
-        if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: pokemon-results-${{ github.run_id }}-${{ github.run_attempt }}
-          path: |
-            pokemon-evidence/**/*.json
-            pokemon-evidence/**/events.jsonl
-            pokemon-evidence/**/*.png
-            pokemon-evidence/index.html
-            pokemon-evidence/README.md
-            pokemon-evidence/replay.gif
-          retention-days: 30
-          if-no-files-found: error
-      - name: Show direct results link
-        if: always() && steps.replay.outputs.artifact-url != ''
-        env:
-          RESULT_URL: ${{ steps.replay.outputs.artifact-url }}
-        run: printf '\n## 查看回放\n\n[下载本次结果 ZIP](%s)，解压后双击根目录 index.html。\n' "$RESULT_URL" >> "$GITHUB_STEP_SUMMARY"
-  publish:
-    needs: pokemon
-    if: always() && github.event_name == 'workflow_dispatch' && inputs.publish && inputs.mode == 'play'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 3
-    permissions:
-      contents: write
-      actions: read
-    concurrency:
-      group: pokemon-result-publication
-      cancel-in-progress: false
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-        with:
-          persist-credentials: false
-      - name: Publish this run's replay, not a previous run
-        env:
-          GH_TOKEN: ${{ github.token }}
-          SOURCE_RUN_ID: ${{ github.run_id }}
-          SOURCE_ATTEMPT: ${{ github.run_attempt }}
-        run: |
-          gh run download "$SOURCE_RUN_ID" --repo "$GITHUB_REPOSITORY" \
-            --name "pokemon-results-$SOURCE_RUN_ID-$SOURCE_ATTEMPT" --dir /tmp/pokemon-result
-          python3 pokemon/maintenance/publish_result.py --folder /tmp/pokemon-result \
-            --run-id "$SOURCE_RUN_ID" --attempt "$SOURCE_ATTEMPT"
+          cat >> "$GITHUB_STEP_SUMMARY" <<'EOF'
+          ## Source-only verification
+          This workflow checks source, docs, contracts and tests. It does not boot
+          a ROM, call Jev/DeepSeek, or publish run data to Git.
+          See README.md for local gameplay and docs/TROUBLESHOOTING.md for diagnostics.
+          Passing checks is not evidence of gameplay progress or completion.
+          EOF

@@ -1,8 +1,50 @@
-node_modules/
+# Secrets. Keep only the documented empty template.
 .env
-logs/
-# Local live service and Python environment
-.venv/
-.live/
+.env.*
+!.env.example
 
+# Local dependencies and bytecode.
+.venv/
+venv/
+node_modules/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+coverage/
+.DS_Store
+
+# User-provided cartridges and saves; never part of the source tree.
+roms/
+*.gb
+*.gbc
+*.gba
+*.sav
+*.state
+*.state.json
+*.progress.json
+*.campaign.json
+
+# All runtime output belongs outside version control.
+.live/
+pokemon/.work/
+pokemon/runs/
+runs/
+output/
+outputs/
+artifacts/
 pokemon-evidence/
+**/evidence/
+**/archive/
+**/results/
+*.log
+*.jsonl
+*.m3u8
+*.m4s
+*.mp4
+*.gif
+*.zip
+
+# Required redstar-*.json and vendor metadata remain tracked explicitly.

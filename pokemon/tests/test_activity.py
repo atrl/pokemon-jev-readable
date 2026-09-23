@@ -1,6 +1,5 @@
 """Activity/recovery regressions; no emulator, credentials or network."""
 
-import json
 from pathlib import Path
 import sys
 import unittest
@@ -27,18 +26,21 @@ def state(x=4, text="Challenge!", mode="battle"):
 
 
 class ActivityTests(unittest.TestCase):
-    def test_exact_defeat_return_and_rematch_trace_does_not_stop_at_101(self):
-        fixture = json.loads(
-            (Path(__file__).parent / "fixtures/defeat_return_and_rematch.json").read_text()
-        )
+    def test_known_route_and_dialog_activity_do_not_false_halt(self):
+        # Synthetic sequence, not a recorded or claimed playthrough. Guards
+        # against equating "no new story/tile" with "no observable activity".
         monitor = StallMonitor(80, 0)
-        for row in fixture["rows"]:
-            activity = monitor.observe(row["before"], row["after"], row["outcome"], row["progress"])
-            self.assertFalse(
-                activity["exhausted"], f"Unexpected stop at former production step {row['step']}"
-            )
-        self.assertLessEqual(activity["no_effect_steps"], 2)
-        self.assertGreaterEqual(activity["no_strategic_progress_steps"], 80)
+        for step in range(101):
+            if step < 45:
+                before = state(step, mode="overworld")
+                after = state(step + 1, mode="overworld")
+            else:
+                before = state(text=f"Dialog page {step}")
+                after = state(text=f"Dialog page {step + 1}")
+            activity = monitor.observe(before, after, {}, {"loop_kind": None})
+            self.assertFalse(activity["exhausted"], f"Unexpected stop at step {step}")
+        self.assertEqual(activity["no_effect_steps"], 0)
+        self.assertEqual(activity["no_strategic_progress_steps"], 101)
 
     def test_arrow_blink_and_frame_counter_do_not_fake_activity(self):
         a = state()

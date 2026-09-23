@@ -59,7 +59,7 @@
     "hNewPartyLength": 65508,
     "wcf91": 53137
   },
-  "validation": "Run test_live.py against the exact ROM; source lineage is not byte-identical. No original-Red whitelist bypass.",
+  "validation": "Exact-ROM runtime signature, structure and transition checks; see docs/ARCHITECTURE.md and docs/TROUBLESHOOTING.md. Historical source rebuild is not byte-identical.",
   "campaign_validation": {
     "map_layout": "live dimensions and warp tuples crosschecked per current map against source priors",
     "verified_event_flags": [
@@ -74,7 +74,7 @@
     ],
     "battle": "requires coherent battle flag plus both sane combatants and own party correlation; source layout checked at runtime",
     "terminal": "Exact ROM counter-increment signature at ROM offset 0x701eb; completion requires live HALL OF FAME text+map+count+8 badges+party, never counter or map alone",
-    "evidence": "pokemon/evidence/campaign-observation-verified.json",
+    "evidence": "https://github.com/atrl/pokemon-jev-readable/blob/6c0c35c5e27fad01204d6982c3aba623e577c8d5/pokemon/evidence/campaign-observation-verified.json",
     "party_registration": "Exact ROM AskName continuation at ROM 0xf362/CPU0x7362 must be on live stack, naming context and new species/count agree, and last structure is all zero. Interactive pending state is distinct from malformed party data.",
     "move_pp": "165x6 move-data bytes uniquely match ROM0x38000; complete AddBonusPP instructions match ROM0xe673 and Divide wrapper at0x38d0. maxPP=basePP+min(basePP//5,7)*(rawPP>>6). Must match at runtime; unknown otherwise.",
     "battle_intro": "Actual JEV run2 step489: wild battle text box with font flag0 precedes valid own battle mon. Battle flag+box verifies phase only; combatants withheld until valid/correlated."
