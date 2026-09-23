@@ -10,13 +10,14 @@ from __future__ import annotations
 import json
 from functools import lru_cache
 from pathlib import Path
+from paths import DATA
 
 SOURCE_COMMIT = "08deafad427f0904f285e515c360003efc19d3dc"
 
 
 @lru_cache(maxsize=1)
 def load_world_data() -> dict:
-    return json.loads(Path(__file__).with_name("redstar-world.json").read_text())
+    return json.loads((DATA / "redstar-world.json").read_text())
 
 
 def map_prior(map_id: int) -> dict | None:
@@ -89,5 +90,5 @@ if __name__ == "__main__":
 
     source = Path(sys.argv[1])
     result = build(source)
-    Path(__file__).with_name("redstar-world.json").write_text(json.dumps(result, indent=2) + "\n")
+    (DATA / "redstar-world.json").write_text(json.dumps(result, indent=2) + "\n")
     print(f"Built {len(result['maps'])} maps and {len(result['moves'])} move priors")

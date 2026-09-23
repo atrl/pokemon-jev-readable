@@ -16,11 +16,14 @@ htmlcov/
 coverage/
 .DS_Store
 
-# User-provided cartridges and saves; never part of the source tree.
-roms/
+# Other cartridges and private saves are ignored. Two original user uploads are restored.
+roms/*
 *.gb
 *.gbc
 *.gba
+!roms/README.md
+!roms/red-star-2020-08-18.gb
+!roms/1636 - Pokemon Fire Red (U)(Squirrels).gba
 *.sav
 *.state
 *.state.json

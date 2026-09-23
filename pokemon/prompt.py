@@ -1,22 +1,20 @@
 """Build the exact JEV input: verified state, current focus, and nine choices.
 
 This module is pure request construction. It never calls the API or presses a
-button. The static control instructions live in prompts/button.txt.
+button. The static control instructions live in prompts/system1/button.txt.
 """
 
 from __future__ import annotations
 
 import json
 import os
-from pathlib import Path
+from paths import load_prompt
 
 from battle_strategy import plan_battle
 from controls import BUTTONS
 from planning import pokeball_count
 
-BUTTON_INSTRUCTIONS = " ".join(
-    (Path(__file__).parent / "prompts/button.txt").read_text().splitlines()
-)
+BUTTON_INSTRUCTIONS = load_prompt("system1/button.txt", single_line=True)
 
 DEFAULT_GAME_GOAL = (
     "Complete Pokemon Red Star's main story: defeat the Pokemon League Champion "

@@ -12,6 +12,7 @@ from copy import deepcopy
 from functools import lru_cache
 import json
 from pathlib import Path
+from paths import DATA
 
 
 DIRECTIONS = {"up": (0, -1), "down": (0, 1), "left": (-1, 0), "right": (1, 0)}
@@ -33,7 +34,7 @@ def build(source: Path) -> dict:
 
 @lru_cache(maxsize=1)
 def load_regions():
-    return json.loads(Path(__file__).with_name("redstar-route-regions.json").read_text())
+    return json.loads((DATA / "redstar-route-regions.json").read_text())
 
 
 def interaction_positions(map_id, target):
@@ -207,7 +208,7 @@ if __name__ == "__main__":
     import sys
 
     result = build(Path(sys.argv[1]))
-    Path(__file__).with_name("redstar-route-regions.json").write_text(
+    (DATA / "redstar-route-regions.json").write_text(
         json.dumps(result, separators=(",", ":")) + "\n"
     )
     print(

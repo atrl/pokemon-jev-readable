@@ -2,11 +2,25 @@
 
 本文描述当前执行路径；历史方案和取舍见 [DECISIONS.md](DECISIONS.md)，故障经验见 [TROUBLESHOOTING.md](TROUBLESHOOTING.md)。安装、配置和输出位置只在 [README](../README.md) 维护。
 
+## 0. 目录与修改入口
+
+| 责任 | 唯一目录/入口 |
+| --- | --- |
+| 游戏循环、状态、模型调用、计划与执行 | `pokemon/` |
+| 内存配置、地图、招式和区域静态数据 | `pokemon/data/` |
+| Jev / DeepSeek 固定指令 | `prompts/system1/button.txt` / `prompts/system2/planner.txt` |
+| 全部测试 | `tests/python/`、`tests/web/`、`tests/integration/` |
+| 只读视频与事件网页 | `live/` |
+| 两份原始用户资产 | `roms/`，内容未改变 |
+| 本地会话、存档、视频、日志 | `pokemon/runs/` / `outputs/`，不进 Git |
+
+`pokemon/paths.py` 统一资源位置；`live/pokemon.mjs` 读取同一 `pokemon/data/redstar-profile.json`。原运行命令、存档目录及 sidecar 合同不变。System Two 系统提示从 Python 常量抽出，原文逐字保留；动态状态与候选不改成静态模板。
+
 ## 1. 边界与职责
 
 ```mermaid
 flowchart TD
-  ROM[用户本地 ROM] --> E[PyBoy / emulator.py]
+  ROM[恢复的或用户显式指定的 ROM] --> E[PyBoy / emulator.py]
   E --> O[Reader.snapshot: 只读观察]
   O --> M[ProgressTracker + CampaignPlanner]
   M --> P[planning: 带来源的现场摘要]
@@ -127,11 +141,11 @@ active → suspended（紧急治疗，暂停 TTL）→ 恢复后重新评估
 | 进入 Git | 不进入 Git |
 | --- | --- |
 | 运行源码、启动配置、依赖清单 | `.env`、认证资料 |
-| 内存适配、地图/招式 JSON、重建工具 | ROM、存档、旁文件 |
+| 内存适配、地图/招式 JSON、重建工具及两份原上传资产 | 其他未明确授权入库的 ROM、存档、旁文件 |
 | HLS 播放器及许可证 | 视频片段、截图、GIF、回放页面 |
-| 纯核心回归源码、架构文档 | 运行日志、测试输出、evidence/archive/results、历史实测夹具 |
+| 核心及可复用实机测试源码、架构文档 | 运行日志、测试输出、evidence/archive/results、历史实测夹具 |
 
-必需数据为 `redstar-profile.json`、`redstar-world.json`、`redstar-route-regions.json`。重建入口：
+必需数据集中在 `pokemon/data/`：`redstar-profile.json`、`redstar-world.json`、`redstar-route-regions.json`。重建入口：
 
 ```bash
 .venv/bin/python pokemon/world_data.py /path/to/redstarbluestar

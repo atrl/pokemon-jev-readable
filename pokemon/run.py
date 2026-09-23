@@ -18,6 +18,7 @@ import signal
 import time
 
 from emulator import Emulator
+from paths import default_rom
 from memory import Reader, load_profile
 from jev import choose, observation_for_model, redact_secrets, DEFAULT_GAME_GOAL, JevUnavailable
 from progress import ProgressTracker
@@ -566,7 +567,7 @@ def run(
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--rom", type=Path, default=Path("red-star-2020-08-18.gb"))
+    ap.add_argument("--rom", type=Path, default=default_rom())
     ap.add_argument("--output", type=Path, default=Path("pokemon/runs/session"))
     ap.add_argument("--state", type=Path)
     ap.add_argument(
