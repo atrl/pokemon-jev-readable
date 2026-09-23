@@ -25,6 +25,7 @@ def build_situation(observation, campaign, progress):
         'failed_plans': deepcopy(campaign.get('plan_history', [])[-12:]),
         'targets': deepcopy(campaign.get('targets') or {}),
         'failed_target_refs': deepcopy(campaign.get('failed_target_refs') or []),
+        'target_failures': deepcopy(campaign.get('target_failures') or []),
         'baseline': {**baseline({**game, 'progress': progress}), 'scene': game['scene']['mode'],
                      'observation_id': game['observation_id']},
         'milestones': deepcopy(game.get('milestones') or {}),
@@ -47,7 +48,8 @@ def build_request(observation, goal, history):
     if context.get('knowledge_mode') != 'observed':
         context = {}
     campaign = take(context, ('knowledge_mode', 'active_objective', 'plan', 'plan_history',
-                              'memory', 'navigation', 'recovery', 'model_planning_enabled'))
+                              'memory', 'navigation', 'recovery', 'model_planning_enabled',
+                              'failed_target_refs', 'target_failures'))
     plan = campaign.get('plan') or {}
     questions = {'button': {
         'type': 'choice', 'criteria': dict(BUTTONS),

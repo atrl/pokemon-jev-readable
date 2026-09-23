@@ -7,7 +7,8 @@ from __future__ import annotations
 from copy import deepcopy
 from experience import Experience
 from perception import POLICY, project, point, take
-from plan_contract import counter_growth, success_evidence
+from plan_contract import success_evidence
+from plan_review import repetition_evidence, target_failure_context
 
 
 class PlanManager:
@@ -43,10 +44,12 @@ class PlanManager:
     def finish_plan(self, status, reason, observation=None, evidence=None):
         if not self.plan:
             return
+        game = project(observation) if observation is not None else {}
         self.plan_history.append({**take(self.plan, ('plan_id', 'subgoal', 'intent', 'reasoning', 'target_ref',
                                                     'target', 'success', 'policy', 'resource_policy')),
                                   'status': status, 'reason': reason, 'step': self.steps,
-                                  'position': point(observation) if observation else None,
+                                  'position': point(game) if game else None,
+                                  'failure_observation_id': game.get('observation_id') if status == 'failed' else None,
                                   'evidence': deepcopy(evidence)})
         self.plan_history = self.plan_history[-32:]
         self.plan = None
@@ -87,19 +90,12 @@ class PlanManager:
             self.finish_plan('completed', 'predicate_verified', game, evidence)
         elif age >= plan['expires_steps']:
             self.finish_plan('expired', 'action_budget_reached', game)
-        elif age >= plan['max_no_effect_steps']:
-            # An unchanged position during dialogue/battle is not automatically failure.
-            tail = self.memory.effects[-plan['max_no_effect_steps']:]
-            unchanged = len(tail) == plan['max_no_effect_steps'] and all(not e['changed_fields'] for e in tail)
-            # Repetition is judged from this plan's own window; a loop inherited
-            # from before the plan must not end it before it produced evidence.
-            same_position_growth = counter_growth(base, progress, 'same_position_steps', plan['max_no_effect_steps'])
-            no_tile_growth = counter_growth(base, progress, 'steps_since_new_tile', plan['max_no_effect_steps'])
-            no_plan_baseline = base.get('same_position_steps') is None and base.get('steps_since_new_tile') is None
-            if unchanged or same_position_growth or no_tile_growth or (
-                    no_plan_baseline and game['scene']['mode'] == 'overworld' and progress.get('loop_detected')):
-                self.finish_plan('failed', 'observed_repetition_requires_model_review', game,
-                                 {'recent_actions': deepcopy(tail[-8:])})
+        else:
+            # No-new-tile/stationary counters alone cannot prove a failed plan:
+            # dialogue, battles and valid backtracking can advance without them.
+            repetition = repetition_evidence(plan, self.memory.effects, self.steps)
+            if repetition is not None:
+                self.finish_plan('failed', 'observed_repetition_requires_model_review', game, repetition)
         if self.plan:
             # Only the planner's explicit interrupt contract may use risk thresholds.
             for rule in plan.get('replan_when', []):
@@ -133,17 +129,14 @@ class PlanManager:
         if self.completion_evidence:
             objective = {'id': 'main_story_complete', 'intent': None, 'completion': True,
                          'completion_evidence': self.completion_evidence, 'completed_ids': []}
-        failed_target_refs = sorted({
-            row['target_ref'] for row in self.plan_history
-            if row.get('status') == 'failed' and isinstance(row.get('target_ref'), str) and row['target_ref']
-        })
+        failed_target_refs, target_failures = target_failure_context(self.plan_history, game)
         targets = {ref: entry for ref, entry in self.memory.catalog(game).items()
                    if ref not in failed_target_refs}
         return {'knowledge_mode': 'observed', 'active_objective': objective,
                 'navigation': self.memory.path_to(game, (plan or {}).get('target')),
                 'plan': deepcopy(plan), 'plan_history': deepcopy(self.plan_history[-12:]),
                 'memory': self.memory.context(game), 'targets': targets,
-                'failed_target_refs': failed_target_refs,
+                'failed_target_refs': failed_target_refs, 'target_failures': target_failures,
                 'recovery': deepcopy(self.recovery), 'model_planning_enabled': self.model_planning_enabled,
                 'plan_suspended': False, 'visited_map_ids': [int(k) for k in self.memory.maps],
                 'recorded_action_count': self.steps, 'migration': self.migration,
