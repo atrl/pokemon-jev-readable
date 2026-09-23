@@ -49,6 +49,7 @@ class PlanManager:
                                                     'target', 'success', 'policy', 'resource_policy')),
                                   'status': status, 'reason': reason, 'step': self.steps,
                                   'position': point(game) if game else None,
+                                  'observation_id': game.get('observation_id') if game else None,
                                   'failure_observation_id': game.get('observation_id') if status == 'failed' else None,
                                   'evidence': deepcopy(evidence)})
         self.plan_history = self.plan_history[-32:]

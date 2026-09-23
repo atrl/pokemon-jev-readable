@@ -119,10 +119,17 @@ class FailureContextTests(unittest.TestCase):
         refs, attempts = target_failure_context(history, {'observation_id': 'obs:old'})
         self.assertEqual(refs, []); self.assertEqual(len(attempts), 1)
 
-    def test_budget_expiry_or_model_interrupt_is_not_target_failure(self):
-        for status in ('expired', 'invalidated', 'completed'):
-            self.assertEqual(target_failure_context(self.history(status=status),
-                                                    {'observation_id': 'obs:old'}), ([], []))
+    def test_single_non_completion_is_recorded_but_not_withheld(self):
+        for status in ('expired', 'invalidated'):
+            refs, attempts = target_failure_context(self.history(status=status), {'observation_id': 'obs:old'})
+            self.assertEqual(refs, [])
+            self.assertEqual(attempts[0]['status'], status)
+
+    def test_repeated_non_completion_withholds_the_target(self):
+        history = [self.history(status='invalidated', step=8 + i, plan_id=f'p{i}')[0] for i in range(3)]
+        refs, attempts = target_failure_context(history, {'observation_id': 'obs:new'})
+        self.assertEqual(refs, ['object:38:1'])
+        self.assertEqual(len(attempts), 3)
 
 
 class ManagerIntegrationTests(unittest.TestCase):

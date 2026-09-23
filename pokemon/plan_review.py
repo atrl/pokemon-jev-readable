@@ -60,25 +60,34 @@ def repetition_evidence(plan, effects, step):
             'recent_actions': deepcopy(tail[-8:])}
 
 
-def target_failure_context(history, game):
-    """Suppress identical retries only while the actionable observation is unchanged.
+def target_failure_context(history, game, *, repeated_threshold=3):
+    """Qualify attempts so the planner stops re-issuing an unproductive target.
 
-    Old records lacking an observation identity remain visible as history but
-    cannot impose a permanent prohibition. Changed evidence allows reassessment,
-    not an assertion that the previously attempted target is now reachable.
+    A plan that ends without completing (failed/expired/invalidated) is evidence
+    about one attempt, not proof a place is permanently unreachable. Exact
+    same-observation failures are withheld immediately; a target that keeps
+    ending without completion across retained history is also withheld until it
+    completes or the history rolls over. This is a working-memory limit, not a
+    world fact.
     """
     current = game.get('observation_id')
-    withheld, attempts = set(), []
+    withheld, attempts, unsuccessful = set(), [], {}
     for record in history:
         ref = record.get('target_ref')
-        if record.get('status') != 'failed' or not isinstance(ref, str) or not ref:
+        if not isinstance(ref, str) or not ref:
             continue
-        at_failure = record.get('failure_observation_id')
-        same = isinstance(current, str) and bool(current) and at_failure == current
-        if same:
+        status = record.get('status')
+        observed = record.get('failure_observation_id') or record.get('observation_id')
+        same = isinstance(current, str) and bool(current) and observed == current
+        if status in ('failed', 'expired', 'invalidated'):
+            unsuccessful[ref] = unsuccessful.get(ref, 0) + 1
+        if status == 'failed' and same:
             withheld.add(ref)
         attempts.append({'target_ref': ref, 'plan_id': record.get('plan_id'),
                          'reason': record.get('reason'), 'step': record.get('step'),
-                         'failure_observation_id': at_failure, 'same_observation': same,
-                         'scope': 'failed_attempt_not_permanent_unreachability'})
+                         'status': status, 'observation_id': observed, 'same_observation': same,
+                         'scope': 'attempt_not_permanent_unreachability'})
+    for ref, count in unsuccessful.items():
+        if count >= repeated_threshold:
+            withheld.add(ref)
     return sorted(withheld), attempts[-32:]
