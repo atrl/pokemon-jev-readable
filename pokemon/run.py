@@ -202,6 +202,7 @@ def run(
         finally:
             report["planning_ms"] += round((time.monotonic()-clock)*1000)
         campaign.set_plan(plan)
+        campaign.planning_state["plan_execution_marker"] = report["executed_actions"]
         report["plans"] += 1
         report.update(plan_subgoal=plan.get("subgoal"), plan_target_map_id=plan.get("target_map_id"),
                       planner_model=plan.get("model"))
@@ -499,26 +500,34 @@ def run(
 
             decision = decide(before, step)
             review = decision.get("plan_review") or {}
-            if review:
+            wants_replan = review.get("choice") == "replan"
+            if (
+                wants_replan
+                and model_planning
+                and campaign.plan is not None
+                and campaign.planning_state.get("plan_execution_marker") == report["executed_actions"]
+            ):
+                # A fresh plan was just produced and no action has run; honoring
+                # another replan would deadlock without ever executing a button.
+                wants_replan = False
+                emit("plan_review", step=step, answer=review, button_withheld=None,
+                     withheld=False, forced_continue=True)
+            elif review:
                 emit("plan_review", step=step, answer=review,
-                     button_withheld=decision["answer"]["choice"],
-                     withheld=review.get("choice") == "replan")
-            if review.get("choice") == "replan":
-                if model_planning:
-                    report["jev_calls"] += 1
-                    report["plan_review_requests"] += 1
-                    write_json(output / f"{step - 1:04d}-decision.json", {**decision, "executed": False, "source": "jev"})
-                    campaign.finish_plan("invalidated", "system1_requested_replan", before,
-                                         {"observation_id": before.get("observation_id"), "review": review})
-                    emit_plan_lifecycle()
-                    # Refresh the context so the planner sees the outcome it is replacing.
-                    before["campaign"] = campaign.context(before)
-                    request_plan(before, step)
-                    save_checkpoint()
-                    save_report()
-                    continue
-                # No planner configured: escalation cannot run, and no plan is fabricated.
-                emit("planning_skipped", step=step, reason="planner_not_configured")
+                     button_withheld=decision["answer"]["choice"], withheld=wants_replan)
+            if wants_replan and model_planning:
+                report["jev_calls"] += 1
+                report["plan_review_requests"] += 1
+                write_json(output / f"{step - 1:04d}-decision.json", {**decision, "executed": False, "source": "jev"})
+                campaign.finish_plan("invalidated", "system1_requested_replan", before,
+                                     {"observation_id": before.get("observation_id"), "review": review})
+                emit_plan_lifecycle()
+                # Refresh the context so the planner sees the outcome it is replacing.
+                before["campaign"] = campaign.context(before)
+                request_plan(before, step)
+                save_checkpoint()
+                save_report()
+                continue
             button = record_decision(decision, step, screenshot_hash)
             after = execute(button, verified_before, step)
             outcome, activity = record_outcome(button, before, after)

@@ -74,16 +74,13 @@ def build_situation(observation, campaign, progress):
 
 
 def _battle_focus(battle):
-    """Neutral UI routing: an active battle is resolved before any retained plan."""
+    """Neutral UI routing: the battle UI is resolved before the plan's predicate can be checked."""
     if battle.get('menu') == 'move':
         return ("A battle move menu is open. A confirms the selected move; a move with 0 PP is rejected and changes "
-                "nothing, so move the cursor to a move with PP above 0 first. The retained plan does not apply until "
-                "the battle ends.")
+                "nothing, so move the cursor to a move with PP above 0 first.")
     if battle.get('menu') == 'command':
-        return ("A battle command menu is open. Choose a command to resolve the battle. The retained plan does not "
-                "apply until the battle ends.")
-    return ("Resolve the active battle UI (text, animation or menu). Waiting does not advance completed text. The "
-            "retained plan does not apply until the battle ends.")
+        return "A battle command menu is open. Choose a command to resolve the battle."
+    return "Resolve the active battle UI (text, animation or menu). Waiting does not advance completed text."
 
 
 def build_request(observation, goal, history):
@@ -103,7 +100,8 @@ def build_request(observation, goal, history):
         battle.get('verified') is True or battle.get('phase_verified') is True)
     criteria = dict(BUTTONS)
     if battle_active:
-        current_focus = _battle_focus(battle)
+        note = _battle_focus(battle)
+        current_focus = (f"{plan['intent']} " if plan.get('intent') else "") + note
         if battle.get('menu') == 'move':
             moves = (battle.get('player') or {}).get('moves') or []
             slot = battle.get('selected_move_slot')

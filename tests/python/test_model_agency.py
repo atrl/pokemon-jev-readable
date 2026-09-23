@@ -347,6 +347,16 @@ class RuntimeTests(unittest.TestCase):
             self.assertEqual(report['planning_calls'],1); self.assertEqual(len(upper),1)
             self.assertEqual(report['executed_actions'],3)
 
+    def test_repeated_replan_without_execution_cannot_deadlock(self):
+        with TemporaryDirectory() as tmp:
+            # Second replan right after a fresh plan is forced to continue, so a
+            # button is finally executed instead of chaining plan-only steps.
+            report,world,upper,_=self.run_double(Path(tmp)/'run',('replan','replan','continue'))
+            self.assertEqual(report['planning_calls'],1); self.assertEqual(len(upper),1)
+            self.assertEqual(report['plan_review_requests'],1); self.assertEqual(report['executed_actions'],2)
+            rows=[json.loads(x) for x in (Path(tmp)/'run/events.jsonl').read_text().splitlines()]
+            self.assertTrue(any(r['type']=='plan_review' and r.get('forced_continue') for r in rows))
+
     def test_system_one_replan_withholds_parallel_button(self):
         with TemporaryDirectory() as tmp:
             report,world,_,_=self.run_double(Path(tmp)/'run',('replan','continue'))
