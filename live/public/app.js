@@ -534,6 +534,8 @@ function eventSummary(event) {
     case "plan_outcome":
       return `计划 ${brief(event.status)} · ${brief(event.reason)}${event.subgoal ? ` · ${brief(event.subgoal)}` : ""}`;
     case "plan_review": {
+      if (event.forced_continue)
+        return "System One 想交回 System Two，但上一步刚生成计划且尚未执行动作；本次强制执行按键，避免只规划不行动。";
       const choice = event.answer?.choice;
       return choice === "replan"
         ? `System One 认为需要战略决策：交给 System Two 规划，本次按键已扣留（原答案 ${actionName(event.button_withheld)} 未执行）。`
