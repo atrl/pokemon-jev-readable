@@ -325,6 +325,24 @@ class RuntimeTests(unittest.TestCase):
             self.assertTrue(any(r['type']=='plan_review' for r in rows))
             self.assertEqual(sum(r['type']=='executing' for r in rows),1)
 
+    def test_malformed_planner_reply_is_retried_not_fatal(self):
+        _,_,s=setup(); good=normalize_plan(proposal(),s); calls=[]
+        def planner(situation,goal,**_):
+            calls.append(1)
+            if len(calls)==1: raise planning.PlannerError('invalid_plan_or_json')
+            return good
+        world=Mock(); world.game=SimpleNamespace(frame_count=0); world.save.return_value=b'EXPLICIT OFFLINE STATE'
+        reader=Mock(); reader.snapshot.return_value=raw()
+        with TemporaryDirectory() as tmp, \
+             patch.dict(os.environ,{'TYPESAFE_API_KEY':'fixture-jev','DEEPSEEK_API_KEY':'fixture-ds'}), \
+             patch('run.Emulator',return_value=world), patch('run.Reader',return_value=reader), \
+             patch('run.choose',Mock(return_value={'answer':{'choice':'wait'},'source':'offline-test-double'})), \
+             patch('planning.call_planner',side_effect=planner):
+            report=run(Path('OFFLINE.gb'),Path(tmp)/'run',goal='g',steps=1,planner_mode='deepseek')
+            rows=[json.loads(x) for x in (Path(tmp)/'run/events.jsonl').read_text().splitlines()]
+        self.assertEqual(len(calls),2); self.assertEqual(report['plans'],1)
+        self.assertTrue(any(r['type']=='planning_retry' for r in rows))
+
     def test_missing_required_key_does_not_start_game(self):
         with TemporaryDirectory() as tmp, patch.dict(os.environ,{'TYPESAFE_API_KEY':'fixture','DEEPSEEK_API_KEY':''}), patch('run.Emulator') as emulator:
             report=run(Path('OFFLINE.gb'),Path(tmp)/'run',goal='test',steps=1,planner_mode='deepseek')

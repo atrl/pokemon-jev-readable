@@ -20,6 +20,11 @@ DEFAULT_MODEL = 'deepseek-flash'
 DEFAULT_PLAN_TTL = 160
 DEFAULT_MIN_INTERVAL = 8
 DEFAULT_NO_TILE_TRIGGER = 120
+# A malformed or unverifiable reply is a model formatting error, not an outage;
+# re-ask a bounded number of times before pausing. Never substitute an action.
+DEFAULT_PLAN_ATTEMPTS = 3
+RETRYABLE_PLAN_ERRORS = ('invalid_plan_or_json', 'empty_response', 'truncated_response',
+                         'response_too_large')
 
 
 def build_situation(observation, campaign, progress):

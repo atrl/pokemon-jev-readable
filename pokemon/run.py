@@ -181,8 +181,23 @@ def run(
         save_report()
         emit("planning_requested", step=step, reasons=reasons, situation=situation)
         clock = time.monotonic()
+        plan = None
         try:
-            plan = planning.call_planner(situation, goal, on_event=lambda event: emit(event.pop("type"), step=step, **event))
+            for attempt in range(1, planning.DEFAULT_PLAN_ATTEMPTS + 1):
+                try:
+                    plan = planning.call_planner(
+                        situation, goal,
+                        on_event=lambda event: emit(event.pop("type"), step=step, **event),
+                    )
+                    break
+                except planning.PlannerError as exc:
+                    # A malformed/unverifiable model reply is retried; a network or
+                    # HTTP failure is not, and no fallback action is ever chosen.
+                    if exc.code in planning.RETRYABLE_PLAN_ERRORS and attempt < planning.DEFAULT_PLAN_ATTEMPTS:
+                        emit("planning_retry", step=step, attempt=attempt, error=exc.code)
+                        time.sleep(1)
+                        continue
+                    raise
         except Exception as exc:
             campaign.planning_state["last_request_failed"] = True
             report["planning_failures"] += 1
