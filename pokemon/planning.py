@@ -20,6 +20,9 @@ DEFAULT_MODEL = 'deepseek-flash'
 DEFAULT_PLAN_TTL = 160
 DEFAULT_MIN_INTERVAL = 8
 DEFAULT_NO_TILE_TRIGGER = 120
+# Do not re-plan on consecutive steps: a completed weak plan or a System One
+# replan should not spend one paid planning call per action.
+DEFAULT_REPLAN_COOLDOWN = 4
 # A malformed or unverifiable reply is a model formatting error, not an outage;
 # re-ask a bounded number of times before pausing. Never substitute an action.
 DEFAULT_PLAN_ATTEMPTS = 3
@@ -45,7 +48,7 @@ def planning_reasons(situation):
     return reasons
 
 
-def needs_planning(situation, *, min_interval=DEFAULT_MIN_INTERVAL):
+def needs_planning(situation, *, min_interval=DEFAULT_MIN_INTERVAL, cooldown=DEFAULT_REPLAN_COOLDOWN):
     if situation.get('suspended'):
         return False
     if situation.get('plan_active') and not situation.get('plan_invalid'):
@@ -56,7 +59,12 @@ def needs_planning(situation, *, min_interval=DEFAULT_MIN_INTERVAL):
         if type(since) is int and since < min_interval:
             return False
     if situation.get('planning_enabled'):
-        return True
+        since = situation.get('steps_since_plan')
+        # Bootstrap has no previous plan; afterwards wait a few steps so an
+        # immediately-completed weak plan does not trigger one call per action.
+        if since is None:
+            return True
+        return type(since) is int and since >= cooldown
     if type(situation.get('steps_since_plan')) is int and situation['steps_since_plan'] < min_interval:
         return False
     return any(r in ('no_new_tile', 'loop_detected') for r in planning_reasons(situation))

@@ -54,7 +54,7 @@ def run(
     max_stalled_steps: int = 80,
     max_recovery_attempts: int = 3,
     planner_mode: str = "auto",
-    planner_call_budget: int = 50,
+    planner_call_budget: int = 200,
     max_seconds: int = 0,
 ) -> dict:
     if type(steps) is not int or not 0 <= steps <= 100_000:
@@ -646,7 +646,7 @@ def main():
     )
     ap.add_argument("--goal", default=DEFAULT_GAME_GOAL)
     ap.add_argument("--planner-mode", choices=("auto", "deepseek", "local"), default="auto")
-    ap.add_argument("--planner-call-budget", type=int, default=50)
+    ap.add_argument("--planner-call-budget", type=int, default=200)
     ap.add_argument("--max-seconds", type=int, default=0)
     a = ap.parse_args()
 

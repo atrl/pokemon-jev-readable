@@ -16,7 +16,11 @@ const TERMINAL = new Set([
   "failed",
   "interrupted",
   "budget_reached",
+  "time_budget_reached",
+  "planner_budget_reached",
+  "planner_unavailable",
   "blocked_missing_key",
+  "blocked_missing_planner_key",
   "blocked_connection",
 ]);
 const PUBLIC_ASSETS = {

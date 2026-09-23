@@ -243,6 +243,12 @@ class ContractTests(unittest.TestCase):
         self.assertIsNone(m.plan); self.assertEqual(c['plan_history'][-1]['status'],'completed')
         self.assertTrue(planning.needs_planning(build_situation(raw(x=5),c,{'total_steps':1})))
 
+    def test_replanning_cools_down_between_consecutive_plans(self):
+        _,_,s=setup(); s=dict(s); s.update(plan_active=False, planning_enabled=True)
+        s['steps_since_plan']=1; self.assertFalse(planning.needs_planning(s))
+        s['steps_since_plan']=planning.DEFAULT_REPLAN_COOLDOWN; self.assertTrue(planning.needs_planning(s))
+        s['steps_since_plan']=None; self.assertTrue(planning.needs_planning(s))
+
     def test_gameplay_risk_does_not_replace_model_plan(self):
         m,g,s=setup(); m.set_plan(normalize_plan(proposal(),s))
         danger=raw(); danger['party']=[{'hp':1,'max_hp':90,'status_bits':8,'moves':[]}]
@@ -318,16 +324,23 @@ class RuntimeTests(unittest.TestCase):
             report=run(Path('OFFLINE.gb'),folder,goal='User supplied goal',steps=len(reviews),planner_mode='deepseek',max_seconds=5)
         return report,world,upper_requests,http_requests
 
-    def test_default_dual_loop_has_no_legacy_policy_and_replans_after_completion(self):
+    def test_default_dual_loop_has_no_legacy_policy_and_cools_down(self):
         with TemporaryDirectory() as tmp:
             report,world,upper,lower=self.run_double(Path(tmp)/'run')
             self.assertEqual(report['observation_policy'],'structured_player_v1'); self.assertEqual(report['executed_actions'],2)
-            self.assertEqual(report['planning_calls'],2); self.assertEqual(len(upper),2); self.assertEqual(len(lower),2)
+            # The completed plan is not immediately re-planned: one paid call per action is wasteful.
+            self.assertEqual(report['planning_calls'],1); self.assertEqual(len(upper),1); self.assertEqual(len(lower),2)
+            self.assertIn('plan_status',lower[0]['questions'])
             for sent in lower:
-                self.assertIn('plan_status',sent['questions'])
                 self.assertTrue({'recommended_move','next_button','story_reference','story_objective','heal_party'}.isdisjoint(keys(sent)))
                 self.assertEqual(sent['questions']['button']['criteria'],BUTTONS)
             self.assertEqual(world.press.call_count,2)
+
+    def test_replans_again_after_the_cooldown(self):
+        with TemporaryDirectory() as tmp:
+            report,world,upper,lower=self.run_double(Path(tmp)/'run',('continue',)*6)
+            self.assertEqual(report['planning_calls'],2); self.assertEqual(len(upper),2)
+            self.assertEqual(report['executed_actions'],6)
 
     def test_system_one_replan_withholds_parallel_button(self):
         with TemporaryDirectory() as tmp:
