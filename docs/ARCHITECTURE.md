@@ -26,20 +26,20 @@ System One / Jev —— 按键 + 是否需要重新规划（同次请求的独�
 
 | 文件/目录 | 职责 |
 |---|---|
-| `pokemon/run.py` | 唯一控制循环，预算、日志、存档；默认 `knowledge_mode=observed` |
+| `pokemon/run.py` | 唯一控制循环，预算、日志、存档 |
 | `pokemon/perception.py` | 模型观察边界；不把原始 RAM 字典直接当模型状态 |
 | `pokemon/experience.py` | 有界地图/对白/动作经验与模型笔记，事实和假设分开 |
 | `pokemon/plan_manager.py` | 无手写游戏策略的计划管理器，兼容事件中的 `campaign` 字段 |
 | `pokemon/model_context.py` | 两个模型的中立输入，保持相同的观察权限 |
 | `pokemon/planning.py` / `jev.py` | 模型请求、重试/错误、响应检查 |
-| `pokemon/plan_contract.py` | observed v3 与显式 assisted v2 合同校验 |
+| `pokemon/plan_contract.py` | observed v3 计划合同校验 |
 | `pokemon/memory.py` / `emulator.py` | 版本绑定的只读 RAM 适配及模拟器执行 |
-| `prompts/system1/`、`prompts/system2/` | 固定提示；`*-assisted.txt` 仅供旧方案对照 |
+| `prompts/system1/`、`prompts/system2/` | 固定提示 |
 | `tests/python/`、`tests/web/`、`tests/integration/` | 单测、网页测试、真实模拟器/显式模型测试 |
 | `pokemon/data/` | 原始版本匹配/解码数据；完整地图不进入默认模型规划 |
 | `live/` | 原生 RGB→HLS、事件→SSE，只读网页 |
 
-历史 `campaign.py`、`team_strategy.py`、`battle_strategy.py`、`campaign_knowledge.py`、`route_regions.py` 未删除，以免再次破坏可复用资源，但只在 **`--knowledge-mode assisted`** 的对照模式下参与策略。默认循环不实例化 CampaignPlanner，也不调用其导航、治疗或招式评分。
+`campaign.py`、`team_strategy.py`、`battle_strategy.py`、`campaign_knowledge.py`、`route_regions.py` 及其固定攻略数据已删除；运行时不再存在硬编码剧情、自动治疗、招式评分或源码路线。
 
 ## 3. 观察合同：准确不等于有权知道
 
@@ -92,12 +92,11 @@ DeepSeek 可以输出最多 4 条 `memory_updates`，每条必须引用本次收
 
 ## 6. 模式、费用和可观察性
 
-两个正交开关：
+只有一个规划开关：
 
-- `--knowledge-mode observed`（默认）：上述观察/记忆；`assisted`：显式旧攻略与策略对照。
-- `--planner-mode deepseek`：要求规划服务；`auto`：有密钥则双模型，缺少时为 Jev-only observed；`local`：禁用 System Two。要复现实验旧规则，用 `assisted + local`。
+- `--planner-mode deepseek`：要求规划服务；`auto`：有密钥则双模型，缺少时为 Jev-only；`local`：禁用 System Two。程序不再提供旧规则对照模式。
 
-`--steps` 现在限制决策轮次，包含 Jev 请求重规划但未执行按键的轮次；`executed_actions` 单独计数。`plan_review_requests`、`knowledge_mode`、`observation_policy` 写入报告。规划调用另有预算；暂停和存档不是通关。
+`--steps` 现在限制决策轮次，包含 Jev 请求重规划但未执行按键的轮次；`executed_actions` 单独计数。`plan_review_requests`、`observation_policy` 写入报告。规划调用另有预算；暂停和存档不是通关。
 
 当前 UI 继续展示事件、计划及可展开的真实请求，不是静态的示意状态。测试与运行结果只放被忽略的 outputs/runs 或 Actions Artifact。
 
@@ -105,6 +104,6 @@ DeepSeek 可以输出最多 4 条 `memory_updates`，每条必须引用本次收
 
 默认路径测试必须证明：改变隐藏字段不改变两模型输入；低血量不自动回城；招式不自动排名；经验只由观察更新；笔记不会变成事实；完成/失败确实触发重规划；Jev 要求重规划时并行按键不会执行。
 
-旧策略测试通过 `tests/python/assisted_helpers.py` 显式选择 assisted，保留对照，不冒充默认模式测试。`test_model_agency.py` 专门检查默认控制链。真实 ROM 由 integration 分别验证 raw→过滤→记忆→序列化；模拟 API 的测试不等于真实模型对局。
+`test_model_agency.py` 专门检查默认控制链。真实 ROM 由 integration 分别验证 raw→过滤→记忆→序列化；模拟 API 的测试不等于真实模型对局。
 
 本次重构不能证明月见山或整场游戏成功；模型可能仍选错目标、反复修改计划，当前背景图也不识别所有机关/招牌语义。需要对应存档与真实两模型运行才能测量策略效果。

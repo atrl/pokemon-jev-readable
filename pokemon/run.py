@@ -20,7 +20,7 @@ import time
 from emulator import Emulator
 from paths import default_rom
 from memory import Reader, load_profile
-from jev import choose, observation_for_model, redact_secrets, DEFAULT_GAME_GOAL, JevUnavailable
+from jev import choose, redact_secrets, DEFAULT_GAME_GOAL, JevUnavailable
 from progress import ProgressTracker
 from plan_manager import PlanManager
 from perception import project
@@ -54,7 +54,6 @@ def run(
     max_stalled_steps: int = 80,
     max_recovery_attempts: int = 3,
     planner_mode: str = "auto",
-    knowledge_mode: str = "observed",
     planner_call_budget: int = 50,
     max_seconds: int = 0,
 ) -> dict:
@@ -74,8 +73,6 @@ def run(
         raise ValueError("planner_call_budget must be 1..1000")
     if type(max_seconds) is not int or max_seconds < 0:
         raise ValueError("max_seconds must be a nonnegative integer")
-    if knowledge_mode not in ("observed", "assisted"):
-        raise ValueError("knowledge_mode must be observed or assisted")
     model_planning = planner_mode != "local" and planning.planner_configured()
     output.mkdir(parents=True, exist_ok=True)
     if any(output.iterdir()):
@@ -87,11 +84,7 @@ def run(
     video_restarts = 0
     emitted_plan_outcomes = set()
     tracker = ProgressTracker()
-    if knowledge_mode == "observed":
-        campaign = PlanManager()
-    else:
-        from campaign import CampaignPlanner
-        campaign = CampaignPlanner()
+    campaign = PlanManager()
     stall_monitor = StallMonitor(max_stalled_steps, max_recovery_attempts)
     report = {
         "started_at": datetime.now(timezone.utc).isoformat(),
@@ -104,9 +97,8 @@ def run(
         "status": "starting",
         "game_completed": False,
         "policy": "deepseek_plan_jev_input" if model_planning else "jev_only",
-        "planner_mode": "deepseek" if model_planning else "jev_only_observed" if knowledge_mode == "observed" else "local_fallback",
-        "knowledge_mode": knowledge_mode,
-        "observation_policy": "structured_player_v1" if knowledge_mode == "observed" else "source_assisted",
+        "planner_mode": "deepseek" if model_planning else "local",
+        "observation_policy": "structured_player_v1",
         "plan_review_requests": 0,
         "planner_call_budget": planner_call_budget,
         "planning_ms": 0,
@@ -316,12 +308,10 @@ def run(
 
     def read_observation():
         raw = reader.snapshot()
-        if knowledge_mode == "observed":
-            campaign.evaluate(raw)
-            view = project(raw)
-            view["errors"] = raw.get("errors", [])
-            return view
-        return {**raw, "knowledge_mode": "assisted"}
+        campaign.evaluate(raw)
+        view = project(raw)
+        view["errors"] = raw.get("errors", [])
+        return view
 
     def execute(button, verified_before, step):
         """Execute exactly that button, then record a fresh RAM observation."""
@@ -395,7 +385,6 @@ def run(
         status=report["status"],
         pid=os.getpid(),
         video_enabled=video,
-        knowledge_mode=knowledge_mode,
         checkpoint_every=checkpoint_every,
         max_stalled_steps=max_stalled_steps,
         max_recovery_attempts=max_recovery_attempts,
@@ -425,16 +414,15 @@ def run(
             state, manifest = load_state(state_file, profile["rom_sha1"])
             world.load(state)
             tracker, report["progress_memory_source"] = restore_progress(state_file, manifest)
-            campaign, report["campaign_memory_source"] = restore_campaign(state_file, manifest, knowledge_mode=knowledge_mode)
+            campaign, report["campaign_memory_source"] = restore_campaign(state_file, manifest)
 
         campaign.model_planning_enabled = model_planning
-        if knowledge_mode == "observed":
-            report["experience_migration"] = campaign.migration
-            # Legacy progress includes imported strategic hints/history. Do not replay it as fresh observations.
-            if campaign.migration.startswith("legacy_observations_only"):
-                tracker = ProgressTracker()
-                tracker.total_steps = campaign.steps
-                report["progress_memory_source"] = "legacy_progress_not_imported; original_checkpoint_unchanged"
+        report["experience_migration"] = campaign.migration
+        # Legacy progress includes imported strategic hints/history. Do not replay it as fresh observations.
+        if campaign.migration.startswith("legacy_observations_only"):
+            tracker = ProgressTracker()
+            tracker.total_steps = campaign.steps
+            report["progress_memory_source"] = "legacy_progress_not_imported; original_checkpoint_unchanged"
         # Previous unsuccessful HTTP attempts must not suppress planning after an explicit restart.
         campaign.planning_state["last_request_failed"] = False
         first_frame = getattr(world.game, "frame_count", None) if hasattr(world, "game") else None
@@ -480,7 +468,7 @@ def run(
                     completion_evidence=objective.get("completion_evidence"),
                 )
                 break
-            verified_before = observation_for_model(before)
+            verified_before = project(before)
             verified_before["campaign"] = before["campaign"]
             emit("observation", step=step, observation=verified_before)
             screenshot_hash = (
@@ -489,7 +477,7 @@ def run(
 
             decision = decide(before, step)
             review = decision.get("plan_review") or {}
-            if review.get("choice") == "replan" and knowledge_mode == "observed" and model_planning:
+            if review.get("choice") == "replan" and model_planning:
                 report["jev_calls"] += 1
                 report["plan_review_requests"] += 1
                 write_json(output / f"{step - 1:04d}-decision.json", {**decision, "executed": False, "source": "jev"})
@@ -503,7 +491,7 @@ def run(
             button = record_decision(decision, step, screenshot_hash)
             after = execute(button, verified_before, step)
             outcome, activity = record_outcome(button, before, after)
-            verified_after = observation_for_model(after)
+            verified_after = project(after)
             verified_after["campaign"] = after["campaign"]
             report["completed_objectives"] = after["campaign"]["active_objective"].get(
                 "completed_ids", []
@@ -642,7 +630,6 @@ def main():
         help="CI records blocked, never substitutes a fake decision",
     )
     ap.add_argument("--goal", default=DEFAULT_GAME_GOAL)
-    ap.add_argument("--knowledge-mode", choices=("observed", "assisted"), default="observed", help="Observed facts/memory by default; assisted explicitly enables legacy walkthrough and tactics")
     ap.add_argument("--planner-mode", choices=("auto", "deepseek", "local"), default="auto")
     ap.add_argument("--planner-call-budget", type=int, default=50)
     ap.add_argument("--max-seconds", type=int, default=0)
@@ -668,7 +655,6 @@ def main():
                 max_stalled_steps=a.max_stalled_steps,
                 max_recovery_attempts=a.max_recovery_attempts,
                 planner_mode=a.planner_mode,
-                knowledge_mode=a.knowledge_mode,
                 planner_call_budget=a.planner_call_budget,
                 max_seconds=a.max_seconds,
             ),

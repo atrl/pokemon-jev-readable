@@ -10,9 +10,8 @@ from unittest.mock import Mock, call, patch
 import urllib.error
 
 from _paths import ROOT, POKEMON
-from jev import BUTTONS
-from assisted_helpers import choose
-from assisted_helpers import run
+from jev import BUTTONS, choose
+from run import run
 
 TEST_KEY = "fixture-only-not-a-real-key"
 
@@ -82,7 +81,7 @@ class EventTests(unittest.TestCase):
                 return response(answer())
 
             with (
-                patch.dict("os.environ", {"TYPESAFE_API_KEY": TEST_KEY}),
+                patch.dict("os.environ", {"TYPESAFE_API_KEY": TEST_KEY, "DEEPSEEK_API_KEY": ""}),
                 patch("run.Emulator", return_value=world),
                 patch("run.Reader", return_value=reader),
                 patch("urllib.request.urlopen", side_effect=network),
@@ -117,7 +116,7 @@ class EventTests(unittest.TestCase):
                     raise KeyboardInterrupt
 
             with (
-                patch.dict("os.environ", {"TYPESAFE_API_KEY": TEST_KEY}),
+                patch.dict("os.environ", {"TYPESAFE_API_KEY": TEST_KEY, "DEEPSEEK_API_KEY": ""}),
                 patch("run.Emulator", return_value=world),
                 patch("run.Reader", return_value=reader),
                 patch(
@@ -141,7 +140,7 @@ class EventTests(unittest.TestCase):
         }
         busy = urllib.error.HTTPError("https://example.invalid", 503, "busy", {}, None)
         with (
-            patch.dict("os.environ", {"TYPESAFE_API_KEY": TEST_KEY}),
+            patch.dict("os.environ", {"TYPESAFE_API_KEY": TEST_KEY, "DEEPSEEK_API_KEY": ""}),
             patch("urllib.request.urlopen", side_effect=[busy, response(payload)]) as network,
             patch("jev.time.sleep") as sleep,
         ):
@@ -156,7 +155,6 @@ class EventTests(unittest.TestCase):
         self.assertEqual(output[-1]["httpStatus"], 200)
         self.assertNotIn(TEST_KEY, json.dumps([output, result]))
         self.assertNotIn("another-secret", json.dumps([output, result]))
-        self.assertNotIn("money", output[0]["request"]["state"]["game"]["player"])
 
     def test_invalid_response_and_network_errors_are_safe(self):
         for payload in [
@@ -168,7 +166,7 @@ class EventTests(unittest.TestCase):
             output = []
             with (
                 self.subTest(payload=payload),
-                patch.dict("os.environ", {"TYPESAFE_API_KEY": TEST_KEY}),
+                patch.dict("os.environ", {"TYPESAFE_API_KEY": TEST_KEY, "DEEPSEEK_API_KEY": ""}),
                 patch(
                     "urllib.request.urlopen", side_effect=lambda *args, **kwargs: response(payload)
                 ) as network,
@@ -182,7 +180,7 @@ class EventTests(unittest.TestCase):
                 self.assertEqual(output[-1]["phase"], "validation")
         output = []
         with (
-            patch.dict("os.environ", {"TYPESAFE_API_KEY": TEST_KEY}),
+            patch.dict("os.environ", {"TYPESAFE_API_KEY": TEST_KEY, "DEEPSEEK_API_KEY": ""}),
             patch("urllib.request.urlopen", side_effect=urllib.error.URLError(TEST_KEY)) as network,
             patch("jev.time.sleep") as sleep,
         ):
@@ -207,7 +205,7 @@ class EventTests(unittest.TestCase):
                 return response(next(replies))
 
             with (
-                patch.dict("os.environ", {"TYPESAFE_API_KEY": TEST_KEY}),
+                patch.dict("os.environ", {"TYPESAFE_API_KEY": TEST_KEY, "DEEPSEEK_API_KEY": ""}),
                 patch("run.Emulator", return_value=world),
                 patch("run.Reader", return_value=reader),
                 patch("urllib.request.urlopen", side_effect=next_reply) as network,
@@ -224,6 +222,7 @@ class EventTests(unittest.TestCase):
                 [
                     "started",
                     "planner_configuration",
+                    "objective",
                     "observation",
                     "jev_request",
                     "jev_response",
@@ -262,7 +261,7 @@ class EventTests(unittest.TestCase):
             reader = Mock()
             reader.snapshot.return_value = observation()
             with (
-                patch.dict("os.environ", {"TYPESAFE_API_KEY": TEST_KEY}),
+                patch.dict("os.environ", {"TYPESAFE_API_KEY": TEST_KEY, "DEEPSEEK_API_KEY": ""}),
                 patch("run.Emulator", return_value=world),
                 patch("run.Reader", return_value=reader),
                 patch(
@@ -297,7 +296,7 @@ class EventTests(unittest.TestCase):
         invalid.status = 200
         output = []
         with (
-            patch.dict("os.environ", {"TYPESAFE_API_KEY": TEST_KEY}),
+            patch.dict("os.environ", {"TYPESAFE_API_KEY": TEST_KEY, "DEEPSEEK_API_KEY": ""}),
             patch(
                 "urllib.request.urlopen",
                 side_effect=[urllib.error.URLError(TEST_KEY), invalid, response(answer())],
@@ -327,7 +326,7 @@ class EventTests(unittest.TestCase):
         ]:
             with (
                 self.subTest(error=type(error).__name__),
-                patch.dict("os.environ", {"TYPESAFE_API_KEY": TEST_KEY}),
+                patch.dict("os.environ", {"TYPESAFE_API_KEY": TEST_KEY, "DEEPSEEK_API_KEY": ""}),
                 patch("urllib.request.urlopen", side_effect=error) as network,
                 patch("jev.time.sleep") as sleep,
             ):
@@ -351,7 +350,7 @@ class EventTests(unittest.TestCase):
             reader = Mock()
             reader.snapshot.return_value = observation()
             with (
-                patch.dict("os.environ", {"TYPESAFE_API_KEY": TEST_KEY}),
+                patch.dict("os.environ", {"TYPESAFE_API_KEY": TEST_KEY, "DEEPSEEK_API_KEY": ""}),
                 patch("run.Emulator", return_value=world),
                 patch("run.Reader", return_value=reader),
                 patch("urllib.request.urlopen", return_value=response(answer())),
@@ -363,6 +362,7 @@ class EventTests(unittest.TestCase):
                 [
                     "started",
                     "planner_configuration",
+                    "objective",
                     "observation",
                     "jev_request",
                     "jev_response",
@@ -387,7 +387,6 @@ class EventTests(unittest.TestCase):
                 if "step" in row:
                     self.assertEqual(row["step"], 1)
                 if "observation" in row:
-                    self.assertNotIn("money", row["observation"]["player"])
                     self.assertIsNone(row["observation"]["party"])
                     self.assertNotIn("battle_type_raw", row["observation"])
             world.screenshot.assert_not_called()
@@ -425,7 +424,7 @@ class EventTests(unittest.TestCase):
                 reader = Mock()
                 reader.snapshot.return_value = observation()
                 with (
-                    patch.dict("os.environ", {"TYPESAFE_API_KEY": TEST_KEY}),
+                    patch.dict("os.environ", {"TYPESAFE_API_KEY": TEST_KEY, "DEEPSEEK_API_KEY": ""}),
                     patch("run.Emulator", return_value=world),
                     patch("run.Reader", return_value=reader),
                     patch("urllib.request.urlopen", side_effect=error),
@@ -450,7 +449,7 @@ class EventTests(unittest.TestCase):
             bad = {**observation(), "errors": ["invalid memory"]}
             reader.snapshot.side_effect = [observation(), bad, bad]
             with (
-                patch.dict("os.environ", {"TYPESAFE_API_KEY": TEST_KEY}),
+                patch.dict("os.environ", {"TYPESAFE_API_KEY": TEST_KEY, "DEEPSEEK_API_KEY": ""}),
                 patch("run.Emulator", return_value=world),
                 patch("run.Reader", return_value=reader),
                 patch("urllib.request.urlopen", return_value=response(answer())),
@@ -473,7 +472,7 @@ class EventTests(unittest.TestCase):
             reader = Mock()
             reader.snapshot.return_value = observation()
             with (
-                patch.dict("os.environ", {"TYPESAFE_API_KEY": TEST_KEY}),
+                patch.dict("os.environ", {"TYPESAFE_API_KEY": TEST_KEY, "DEEPSEEK_API_KEY": ""}),
                 patch("run.Emulator", return_value=world),
                 patch("run.Reader", return_value=reader),
                 patch("urllib.request.urlopen", return_value=response(answer())),
@@ -494,7 +493,7 @@ class EventTests(unittest.TestCase):
             reader = Mock()
             reader.snapshot.return_value = observation()
             with (
-                patch.dict("os.environ", {"TYPESAFE_API_KEY": TEST_KEY}),
+                patch.dict("os.environ", {"TYPESAFE_API_KEY": TEST_KEY, "DEEPSEEK_API_KEY": ""}),
                 patch("run.Emulator", return_value=world),
                 patch("run.Reader", return_value=reader),
                 patch("urllib.request.urlopen", return_value=response(answer())),

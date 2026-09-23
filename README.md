@@ -74,9 +74,9 @@ FireRed 原上传文件也已恢复到 `roms/`，但只是保留用户资产；*
 | `POKEMON_PYTHON` / `POKEMON_FFMPEG` | Python 和 FFmpeg 可执行路径 |
 | `LIVE_HOST` / `LIVE_PORT` | 默认仅本机 `127.0.0.1:18766`，不应无鉴权公开 |
 
-`--knowledge-mode observed` 是默认值：只提供允许的当前信息和观察记忆，不喂攻略。`--planner-mode deepseek` 缺服务就暂停；`auto` 无规划密钥时明确记录 Jev-only observed；`local` 禁用 System Two，但默认仍不启用手写策略。旧规则对照必须显式指定 `--knowledge-mode assisted --planner-mode local`。三者都需要真实 Jev。
+`--planner-mode deepseek` 缺服务就暂停；`auto` 无规划密钥时明确记录 Jev-only；`local` 禁用 System Two，但运行时不提供任何手写策略。三者都需要真实 Jev。程序只有 observed 一种观察/决策链，不再保留旧规则对照模式。
 
-改 System Two 的固定指令只编辑 [prompts/system2/planner.txt](prompts/system2/planner.txt)，不再到 `planning.py` 找大段字符串。System One 的固定指令在 [prompts/system1/button.txt](prompts/system1/button.txt)。动态状态/候选仍由 Python 组装；两者职责见 [提示词说明](prompts/README.md)。默认提示已改为中立的观察/模型决策协议；旧提示以 `*-assisted.txt` 保留，仅作显式对照。新增 `system1/plan_status.txt` 负责判断是否需要重新规划。修改后需重启控制进程。
+改 System Two 的固定指令只编辑 [prompts/system2/planner.txt](prompts/system2/planner.txt)，不再到 `planning.py` 找大段字符串。System One 的固定指令在 [prompts/system1/button.txt](prompts/system1/button.txt)。动态状态/候选仍由 Python 组装；两者职责见 [提示词说明](prompts/README.md)。`system1/plan_status.txt` 负责判断是否需要重新规划。修改后需重启控制进程。
 
 ## 测试
 

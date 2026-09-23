@@ -301,18 +301,14 @@ class RuntimeTests(unittest.TestCase):
             return io.BytesIO(json.dumps(response(review=next(turn))).encode())
         with (patch.dict(os.environ,{'TYPESAFE_API_KEY':'fixture-jev','DEEPSEEK_API_KEY':'fixture-ds'}),
               patch('run.Emulator',return_value=world),patch('run.Reader',return_value=reader),
-              patch('urllib.request.build_opener',return_value=opener),patch('urllib.request.urlopen',side_effect=lower),
-              patch('campaign.CampaignPlanner.context',side_effect=AssertionError('Legacy planner used')),
-              patch('team_strategy.plan_support',side_effect=AssertionError('Automatic healing used')),
-              patch('battle_strategy.plan_battle',side_effect=AssertionError('Best move used')),
-              patch('route_regions.plan_route',side_effect=AssertionError('Unseen source route used'))):
+              patch('urllib.request.build_opener',return_value=opener),patch('urllib.request.urlopen',side_effect=lower)):
             report=run(Path('OFFLINE.gb'),folder,goal='User supplied goal',steps=len(reviews),planner_mode='deepseek',max_seconds=5)
         return report,world,upper_requests,http_requests
 
     def test_default_dual_loop_has_no_legacy_policy_and_replans_after_completion(self):
         with TemporaryDirectory() as tmp:
             report,world,upper,lower=self.run_double(Path(tmp)/'run')
-            self.assertEqual(report['knowledge_mode'],'observed'); self.assertEqual(report['executed_actions'],2)
+            self.assertEqual(report['observation_policy'],'structured_player_v1'); self.assertEqual(report['executed_actions'],2)
             self.assertEqual(report['planning_calls'],2); self.assertEqual(len(upper),2); self.assertEqual(len(lower),2)
             for sent in lower:
                 self.assertIn('plan_status',sent['questions'])

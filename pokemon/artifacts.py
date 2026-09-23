@@ -77,22 +77,14 @@ def load_state(state_file: Path, rom_sha1: str) -> tuple[bytes, dict]:
     return state, manifest
 
 
-def restore_campaign(state_file: Path, manifest: dict, *, knowledge_mode="assisted"):
-    # Old callers retain their explicit comparator API; the runtime passes observed by default.
+def restore_campaign(state_file: Path, manifest: dict):
     from plan_manager import PlanManager
-    if knowledge_mode == "observed":
-        manager = PlanManager
-    else:
-        from campaign import CampaignPlanner
-        manager = CampaignPlanner
     sidecar = state_file.parent / "last.campaign.json"
     if sidecar.exists():
         saved = json.loads(sidecar.read_text())
         if all(saved.get(key) == manifest.get(key) for key in ("rom_sha1", "state_sha256", "step")):
-            if knowledge_mode == "assisted" and saved["campaign"].get("manager") == "observed_v1":
-                return manager(), "mode_changed_new_assisted_memory; original_observed_sidecar_preserved"
-            return manager(saved["campaign"]), "verified_checkpoint"
-    return manager(), "new_memory"
+            return PlanManager(saved["campaign"]), "verified_checkpoint"
+    return PlanManager(), "new_memory"
 
 
 def save_checkpoint(world, output: Path, rom_sha1: str, step: int, tracker, campaign) -> None:

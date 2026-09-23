@@ -14,7 +14,7 @@ import unittest
 from unittest.mock import Mock, patch
 
 from _paths import ROOT, POKEMON
-from assisted_helpers import run
+from run import run
 
 TEST_KEY = "fixture-only-not-a-real-key"
 PROFILE = {"rom_sha1": "offline-fixture-rom-identity"}
@@ -128,7 +128,7 @@ class LongRunTests(unittest.TestCase):
             reader = Mock()
             reader.snapshot.return_value = OBSERVATION
             with (
-                patch.dict(os.environ, {"TYPESAFE_API_KEY": TEST_KEY}),
+                patch.dict(os.environ, {"TYPESAFE_API_KEY": TEST_KEY, "DEEPSEEK_API_KEY": ""}),
                 patch("run.Emulator", return_value=world),
                 patch("run.Reader", return_value=reader),
                 patch("run.load_profile", return_value=PROFILE),
@@ -157,7 +157,7 @@ class LongRunTests(unittest.TestCase):
                 {key: campaign[key] for key in ("rom_sha1", "state_sha256", "step")},
                 {key: manifest[key] for key in ("rom_sha1", "state_sha256", "step")},
             )
-            self.assertEqual(campaign["campaign"]["steps"], 5)
+            self.assertEqual(campaign["campaign"]["experience"]["steps"], 5)
             self.assertEqual(report["executed_actions"], 5)
             self.assertEqual(report["jev_http_attempts"], 10)
             self.assertEqual(report["model_ms"], 1500)
@@ -199,7 +199,7 @@ class LongRunTests(unittest.TestCase):
                     reader.snapshot.return_value = OBSERVATION
                     output = Path(directory) / str(matching)
                     with (
-                        patch.dict(os.environ, {"TYPESAFE_API_KEY": TEST_KEY}),
+                        patch.dict(os.environ, {"TYPESAFE_API_KEY": TEST_KEY, "DEEPSEEK_API_KEY": ""}),
                         patch("run.Emulator", return_value=world),
                         patch("run.Reader", return_value=reader),
                         patch("run.load_profile", return_value=PROFILE),
@@ -217,8 +217,10 @@ class LongRunTests(unittest.TestCase):
                         report["campaign_memory_source"],
                         "verified_checkpoint" if matching else "new_memory",
                     )
-                    self.assertEqual(memory["steps"], 25 if matching else 1)
-                    self.assertEqual("pokedex_received" in memory["history_facts"], matching)
+                    # Observed memory is model-owned; legacy facts/plans are never imported.
+                    self.assertEqual(memory["manager"], "observed_v1")
+                    self.assertEqual(memory["experience"]["steps"], 1)
+                    self.assertNotIn("history_facts", json.dumps(memory))
 
     @unittest.skipUnless(hasattr(signal, "SIGTERM"), "requires POSIX SIGTERM")
     def test_cli_sigterm_finalizes_a_waiting_run_and_saves_state(self):

@@ -57,7 +57,7 @@ test('test source is only under tests and model prompts have their own directori
 });
 
 test('required data and third-party runtime license remain present', () => {
-  for (const file of ['redstar-profile.json', 'redstar-world.json', 'redstar-route-regions.json'])
+  for (const file of ['redstar-profile.json', 'redstar-world.json'])
     assert.equal(typeof JSON.parse(fs.readFileSync(path.join(root, 'pokemon/data', file),'utf8')), 'object');
   assert.ok(fs.readFileSync(path.join(root, 'live/public/vendor/hls.js.LICENSE'), 'utf8').includes('Apache'));
   assert.ok(fs.statSync(path.join(root, 'live/public/vendor/hls.min.js')).size > 0);

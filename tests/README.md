@@ -25,7 +25,6 @@ npm run test:integration
 | --- | --- |
 | [test_rom.py](integration/test_rom.py) | `python tests/integration/test_rom.py`；默认恢复的 Red Star，生成卧室测试 checkpoint |
 | [test_observation.py](integration/test_observation.py) | `--rom ROM --state STATE --output REPORT`；需要原特定 checkpoint，脚本内校验固定哈希 |
-| [test_campaign.py](integration/test_campaign.py) | `--rom ROM --state STATE --output DIR`；需要原特定 checkpoint，可加 `--checkpoint-dir` |
 | [test_checkpoints.py](integration/test_checkpoints.py) | 命名/战斗初始化的历史私有存档；缺少就明确 skip |
 | [test_video.py](integration/test_video.py) | FFmpeg/ffprobe 与可选真实 ROM；缺依赖明确 skip |
 | [test_dual_models.py](integration/test_dual_models.py) | 真实 DeepSeek + Jev；必须显式 `--allow-model-calls` |
@@ -51,6 +50,6 @@ npm 包装器加载既有 `.env`，并优先使用 `.venv`/`POKEMON_PYTHON`。�
 
 ## observed 默认路径
 
-`tests/python/test_model_agency.py` 检查观察权限、经验来源与真正的模型控制权，使用明确模拟数据/API，不是游戏成绩。旧策略断言通过 `assisted_helpers.py` 明确运行对照，不冒充默认策略。
+`tests/python/test_model_agency.py` 检查观察权限、经验来源与真正的模型控制权，使用明确模拟数据/API，不是游戏成绩。
 
 `test:rom` 在脚本启动回归后还运行 `tests/integration/test_observed_memory.py`，对真实快照做过滤、隐藏字段反事实、记忆往返和两模型请求序列化；不调用模型。真正的双模型试跑仍需要显式 `--allow-model-calls` 和两把密钥。

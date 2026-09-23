@@ -16,19 +16,15 @@ import urllib.request
 from typing import Callable
 
 from controls import BUTTONS
+from controls import DEFAULT_GAME_GOAL as DEFAULT_GAME_GOAL
+
+
 def build_request(observation, goal, history):
-    if observation.get('knowledge_mode') == 'assisted':
-        from prompt import build_request as assisted_request
-        return assisted_request(observation, goal, history)
     from model_context import build_request as observed_request
     return observed_request(observation, goal, history)
 
-# Preserve the small public API while request construction lives in prompt.py.
-from controls import DEFAULT_GAME_GOAL as DEFAULT_GAME_GOAL
+
 def observation_for_model(observation):
-    if observation.get('knowledge_mode') == 'assisted':
-        from prompt import observation_for_model as assisted_observation
-        return assisted_observation(observation)
     from perception import project
     return project(observation)
 

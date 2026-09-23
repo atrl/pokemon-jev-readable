@@ -165,7 +165,7 @@ grep -E '"type": "(planner_configuration|planning_requested|plan|plan_outcome|pl
 
 **根因：** 事实整理、策略、源码知识和候选构造混在同一条链。advisory 标签不意味着没有泄漏答案。
 
-**处理：** 默认 observed 只用 perception 白名单与 Experience 记忆；PlanManager 不调用旧策略。输入保留自身状态、文本/菜单、局部地图和实际经历，目标与策略由模型给出。显式 assisted 才启用历史对照。不要为了“提供更多信息”把 Reader 原始字典重新直接传给模型。
+**处理：** 默认 observed 只用 perception 白名单与 Experience 记忆；PlanManager 不调用旧策略。输入保留自身状态、文本/菜单、局部地图和实际经历，目标与策略由模型给出。不要为了“提供更多信息”把 Reader 原始字典重新直接传给模型。
 
 **续玩：** 源自旧 CampaignPlanner 的攻略计划不会复用；标为 observed_background/observed_dialog 等的实际记录可迁移，原 sidecar 保留。报告 `experience_migration` 说明迁移来源。
 
