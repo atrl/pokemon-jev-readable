@@ -1,0 +1,25 @@
+name: Model agency source snapshot
+on:
+  push:
+    branches: [feat/observed-memory-model-agency]
+    paths: [.github/workflows/agency-review.yml]
+permissions:
+  contents: read
+jobs:
+  source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Archive source only; no credentials, ROMs or saves
+        run: |
+          mkdir -p /tmp/agency-source
+          git archive --format=tar HEAD .env.example .github .gitignore README.md docs live package.json pokemon prompts pyproject.toml tests roms/README.md | gzip > /tmp/agency-source/source.tar.gz
+          git rev-parse HEAD > /tmp/agency-source/commit.txt
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: agency-source
+          path: /tmp/agency-source/
+          retention-days: 3
