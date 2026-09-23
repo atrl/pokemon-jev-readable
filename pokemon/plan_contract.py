@@ -197,6 +197,9 @@ def normalize_observed_plan(data, situation):
             raise ValueError('Unexpected interrupt fields')
     memory = situation.get('memory') or {}
     refs = {situation.get('observation_id')}
+    # A target reference is itself an observed reference; the prompt allows notes
+    # to cite observation, targets or memory.
+    refs.update(catalog)
     refs.update(v.get('evidence_ref') for v in catalog.values())
     for group in ('dialogues', 'recent_actions', 'transitions'):
         for row in memory.get(group, []):

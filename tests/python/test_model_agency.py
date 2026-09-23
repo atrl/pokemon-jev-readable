@@ -219,6 +219,11 @@ class ContractTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             normalize_plan(proposal(memory_updates=[{'text':'I know the future','evidence_refs':['unknown']}]),s)
 
+    def test_memory_note_may_cite_a_target_ref(self):
+        _,_,s=setup(); ref=next(iter(s['targets']))
+        p=normalize_plan(proposal(memory_updates=[{'text':'considered','evidence_refs':[ref]}]), s)
+        self.assertEqual(p['memory_updates'][0]['evidence_refs'],[ref])
+
     def test_unsupported_fields_and_raw_coordinates_rejected(self):
         _,_,s=setup()
         for fields in ({'target_map_id':99},{'buttons':['a']},{'target_ref':'map:99'},{'success':{'type':'eval','code':'x'}}):
