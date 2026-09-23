@@ -367,8 +367,18 @@ def run(
         outcome["milestones_completed"] = sorted(new_verified - old_verified)
         old_enemy = (before.get("battle") or {}).get("enemy") or {}
         new_enemy = (after.get("battle") or {}).get("enemy") or {}
+
+        def enemy_damage_bar(enemy):
+            if type(enemy.get("hp")) is int:
+                return enemy["hp"]
+            # Observed mode exposes a quantized health bar, not exact HP.
+            if type(enemy.get("health_bar_units")) is int:
+                return enemy["health_bar_units"]
+            return None
+
+        old_bar, new_bar = enemy_damage_bar(old_enemy), enemy_damage_bar(new_enemy)
         outcome["battle_damage"] = bool(
-            old_enemy and new_enemy and new_enemy.get("hp", 9999) < old_enemy.get("hp", 0)
+            old_bar is not None and new_bar is not None and new_bar < old_bar
         )
         outcome["new_dialog_clue"] = campaign_effect["new_dialog_clue"]
         outcome["meaningful_progress"] = bool(
@@ -433,6 +443,12 @@ def run(
 
         campaign.model_planning_enabled = model_planning
         report["experience_migration"] = campaign.migration
+        # Restored outcomes are history, not events from this session: do not
+        # replay them into the live stream and inflate plan/outcome counts.
+        emitted_plan_outcomes.update(
+            (event.get("plan_id"), event.get("step"), event.get("status"))
+            for event in getattr(campaign, "plan_history", [])
+        )
         # Legacy progress includes imported strategic hints/history. Do not replay it as fresh observations.
         if campaign.migration.startswith("legacy_observations_only"):
             tracker = ProgressTracker()

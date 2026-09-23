@@ -148,13 +148,18 @@ export function renderCampaign(list, run) {
     objective.id,
     "目标 ID 未提供",
   );
+  const awaitingPlan = objective.id === "awaiting_model_plan";
   $("campaign-intent").textContent = brief(
     objective.intent,
-    "尚未提供当前目标意图",
+    awaitingPlan
+      ? "等待 System Two 规划下一步；期间 Jev 仍按保留的观察与经验选择按键。"
+      : "尚未提供当前目标意图",
   );
   $("campaign-why").textContent = brief(
     objective.why,
-    "此记录未提供目标说明。",
+    awaitingPlan
+      ? "上一计划已结束，处于再次规划前的短暂间隔。"
+      : "此记录未提供目标说明。",
   );
   $("campaign-completion").textContent =
     objective.completion === true
