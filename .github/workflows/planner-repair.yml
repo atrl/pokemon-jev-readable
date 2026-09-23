@@ -1,0 +1,31 @@
+name: Planner repair validation
+on:
+  push:
+    branches: [fix/system-two-plan-lifecycle]
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Source-only review artifact, no ROM or secrets
+        run: |
+          python3 - <<'PY'
+          import pathlib, subprocess, zipfile
+          names = subprocess.check_output(['git','ls-files','-z']).decode().split('\0')
+          with zipfile.ZipFile('/tmp/pokemon-review-source.zip','w',zipfile.ZIP_DEFLATED) as z:
+              for name in names:
+                  p=pathlib.Path(name)
+                  if not name or not p.is_file(): continue
+                  if p.suffix in {'.py','.json','.md','.txt','.mjs','.js','.html','.css','.yml','.toml'} or p.name in {'.env.example','.gitignore'}:
+                      z.write(p,name)
+          PY
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: planner-review-source
+          path: /tmp/pokemon-review-source.zip
+          retention-days: 3
