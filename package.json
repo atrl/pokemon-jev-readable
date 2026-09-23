@@ -9,10 +9,14 @@
   },
   "scripts": {
     "start": "node --env-file-if-exists=.env --env-file-if-exists=pokemon/.env live/pokemon.mjs --live",
-    "test": "node --test tests/*.test.mjs",
+    "test": "node --test tests/web/*.test.mjs",
     "check": "node --check live/server.mjs && node --check live/redact.mjs && node --check live/pokemon.mjs && node --check live/public/app.js && node --check live/public/request-inspector.js && node --check live/public/view-helpers.js && node --check live/public/video-player.js && node --check live/public/campaign-panel.js && node --check live/public/controller-view.js",
     "live": "node --env-file-if-exists=.env --env-file-if-exists=pokemon/.env live/server.mjs",
     "pokemon": "node --env-file-if-exists=.env --env-file-if-exists=pokemon/.env live/pokemon.mjs",
-    "pokemon:live": "node --env-file-if-exists=.env --env-file-if-exists=pokemon/.env live/pokemon.mjs --live"
+    "pokemon:live": "node --env-file-if-exists=.env --env-file-if-exists=pokemon/.env live/pokemon.mjs --live",
+    "test:python": "python3 -m unittest discover -s tests/python -v",
+    "test:rom": "python3 tests/integration/test_rom.py",
+    "test:dual": "node --env-file-if-exists=.env --env-file-if-exists=pokemon/.env tests/integration/run-dual.mjs",
+    "test:integration": "python3 -m unittest discover -s tests/integration -v"
   }
 }

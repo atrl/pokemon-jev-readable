@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from paths import DATA
 from world_data import load_world_data, map_prior, move_prior, named_lookup, type_effectiveness
 
 CHARACTERS = {
@@ -75,7 +76,7 @@ def decode_text(data: bytes, *, terminated: bool = True, unknown: str = "�") -
 
 
 def load_profile() -> dict:
-    return json.loads(Path(__file__).with_name("redstar-profile.json").read_text())
+    return json.loads((DATA / "redstar-profile.json").read_text())
 
 
 class Reader:

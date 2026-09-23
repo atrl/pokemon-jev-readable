@@ -27,7 +27,7 @@ function pythonExecutable(root) {
 /** Choose the newest save whose ROM and content hashes match its manifest. */
 export function findResumeState(root) {
   const runs = path.join(root, 'pokemon/runs');
-  const romSha1 = JSON.parse(fs.readFileSync(path.join(root, 'pokemon/redstar-profile.json'), 'utf8')).rom_sha1;
+  const romSha1 = JSON.parse(fs.readFileSync(path.join(root, 'pokemon/data/redstar-profile.json'), 'utf8')).rom_sha1;
   const candidates = [];
   for (const entry of fs.existsSync(runs) ? fs.readdirSync(runs, { withFileTypes: true }) : []) {
     if (!entry.isDirectory()) continue;

@@ -28,7 +28,7 @@ jobs:
       - name: Core Python regressions (no game or model call)
         run: |
           /tmp/pokemon-venv/bin/python -m compileall -q pokemon
-          /tmp/pokemon-venv/bin/python -m unittest discover -s pokemon/tests -v
+          /tmp/pokemon-venv/bin/python -m unittest discover -s tests/python -v
           /tmp/pokemon-venv/bin/python pokemon/run.py --help > /dev/null
       - name: Ensure checks did not change tracked sources
         run: git diff --exit-code
@@ -37,8 +37,35 @@ jobs:
         run: |
           cat >> "$GITHUB_STEP_SUMMARY" <<'EOF'
           ## Source-only verification
-          This workflow checks source, docs, contracts and tests. It does not boot
-          a ROM, call Jev/DeepSeek, or publish run data to Git.
+          This workflow checks source, docs, contracts and tests. It does not call Jev/DeepSeek or publish run data to Git.
+          A separate scripted ROM job verifies the restored asset and adapter.
           See README.md for local gameplay and docs/TROUBLESHOOTING.md for diagnostics.
           Passing checks is not evidence of gameplay progress or completion.
           EOF
+
+  rom:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      SDL_VIDEODRIVER: dummy
+      SDL_AUDIODRIVER: dummy
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Install actual emulator
+        run: |
+          python3 -m venv /tmp/pokemon-rom-venv
+          /tmp/pokemon-rom-venv/bin/pip install -r pokemon/requirements.txt
+      - name: Scripted real-ROM regression, not AI gameplay
+        run: /tmp/pokemon-rom-venv/bin/python tests/integration/test_rom.py
+      - name: Preserve diagnostics as an artifact only
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: rom-regression-${{ github.run_id }}
+          path: |
+            outputs/tests/rom/*.json
+            outputs/tests/rom/*.png
+          retention-days: 7
+          if-no-files-found: warn

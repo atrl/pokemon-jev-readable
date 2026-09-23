@@ -29,7 +29,7 @@ grep -E '"type": "(planner_configuration|planning_requested|plan|plan_outcome|pl
 
 **根因：** GBA FireRed 与 GB Red/Red Star 是不同平台；第三方 FireRed reader 当时只有占位实现。更换文件名不能修复平台和地址表差异。
 
-**处理：** 当前只支持固定 Red Star 的 PyBoy 适配与哈希检查。FireRed 和旧尝试从当前源码树移除；不会根据扩展名自动猜 reader。更换游戏属于单独适配工作。
+**处理：** 当前只支持固定 Red Star 的 PyBoy 适配与哈希检查。FireRed 原文件已按用户要求恢复在 `roms/`，但控制器仍不支持它；不会根据扩展名自动猜 reader。更换游戏属于单独适配工作。
 
 ### P02 · Red Star 能开机，但不能因此沿用原版 Red 地址
 
@@ -41,7 +41,7 @@ grep -E '"type": "(planner_configuration|planning_requested|plan|plan_outcome|pl
 
 **根因：** 模拟器内存切片与普通 Python `bytes` 的空范围行为不同。
 
-**处理：** `Emulator.read(..., length=0)` 直接返回 `b""`，范围先校验；对应纯测试保留在 `pokemon/tests/test_core.py`。
+**处理：** `Emulator.read(..., length=0)` 直接返回 `b""`，范围先校验；对应纯测试保留在 `tests/python/test_core.py`。
 
 ### P04 · 原地反复按 A 或 WAIT
 
@@ -53,7 +53,7 @@ grep -E '"type": "(planner_configuration|planning_requested|plan|plan_outcome|pl
 
 **根因：** 把原版界面文字当成改版事实。
 
-**处理：** 以真实 Red Star 菜单和游标变化验证识别，不用原版字符串覆盖画面。旧一次性截图和脚本已退出当前树，核心场景/输入合同测试仍保留。
+**处理：** 以真实 Red Star 菜单和游标变化验证识别，不用原版字符串覆盖画面。生成截图不入库；真实菜单回归脚本已恢复至 `tests/integration/test_rom.py`，核心场景/输入合同测试也保留。
 
 ### P06 · 已选初始宝可梦，却误报队伍结构损坏
 
@@ -107,7 +107,7 @@ grep -E '"type": "(planner_configuration|planning_requested|plan|plan_outcome|pl
 
 **根因：** 本机 `.env`、现有进程环境与 GitHub Secrets 是不同环境；Secret 必须显式注入。旧绿色测试运行也可能完全跳过游戏步骤。
 
-**处理：** 严格模式明确报错，记录配置、请求、接受计划和动作次数；两把密钥脱敏。修改 `.env` 后结束旧进程再恢复。目前 CI 已改为纯代码验证，不再提供含密钥的游戏作业；游戏运行使用本地入口。
+**处理：** 严格模式明确报错，记录配置、请求、接受计划和动作次数；两把密钥脱敏。修改 `.env` 后结束旧进程再恢复。目前 CI 检查源码和独立脚本 ROM 回归，不提供含密钥的游戏作业；真实双模型使用本地显式入口。
 
 ### P15 · 运行了看不到结果；evidence/archive 不断膨胀
 
@@ -120,6 +120,24 @@ grep -E '"type": "(planner_configuration|planning_requested|plan|plan_outcome|pl
 **根因：** 编码器和模型线程的节奏不同，单次慢写不等于持续卡死；HLS 天然有缓冲。
 
 **处理：** 视频健康按连续写入进展判断，允许有界重启，终态仍明确记录。手柄依据真实 `executing` 事件，补发历史不冒充新输入；看状态/事件定位，不能只凭视频延迟判断按键失败。
+
+### P17 · 清理误删 ROM 和可复用实机测试
+
+**根因：** 把“不应提交临时输出”扩大成删除用户上传资产与所有实机验证入口，导致更新后找不到游戏。
+
+**处理：** 两个原始文件按原 blob 恢复到 `roms/`；四个已存在的测试脚本从历史恢复到统一集成测试目录。默认 ROM 兼容根目录旧路径，缺失时自动使用 `roms/`。生成日志/截图仍不入 Git；不要求用户再手工提取历史文件。
+
+### P18 · 测试搬家后导入/资源路径失效
+
+**根因：** 测试原先散在根 `tests/` 和 `pokemon/tests/`；测试 fixture 又写死 profile 的旧路径。
+
+**处理：** Python 单测统一 `_paths.py`，实机入口统一 `_bootstrap.py`；Node 测试只位于 `tests/web/`。同步更新 npm、CI、文档和 fixture。资源相对项目而非 cwd 解析，并测试从其他目录执行 `--help`。
+
+### P19 · System Two 的指令埋在 HTTP 模块中
+
+**根因：** `planning.py` 同时容纳大段静态系统提示与请求逻辑，提示修改容易与行为代码混淆。
+
+**处理：** 将原文完整抽到 `prompts/system2/planner.txt`；System One 对应 `prompts/system1/button.txt`。加载器不偷偷替换缺失文本，测试锁定本次抽取的实际内容哈希。动态游戏状态仍由代码组装；有意修改提示需更新合同测试和 ADR，并重启进程。
 
 ## 月见山：尚未闭合的效果验证
 
@@ -137,6 +155,6 @@ grep -E '"type": "(planner_configuration|planning_requested|plan|plan_outcome|pl
 
 ## 清理后的维护规则
 
-不要提交 `.env`、ROM、存档、原始日志、视频或生成回放。不要为了让 CI 绿色而伪造模型返回或跳过失败声明。核心测试使用显式合成数据和临时目录；缺私有 checkpoint 的可选回归明确跳过。
+不要提交 `.env`、新增未明确要求入库的 ROM、存档、原始日志、视频或生成回放；`roms/` 的两份原用户上传文件是明确恢复的例外。不要为了让 CI 绿色而伪造模型返回或跳过失败声明。核心测试使用显式合成数据和临时目录；缺私有 checkpoint 的可选回归明确跳过。
 
 历史原始验证可从清理前提交 `6c0c35c` 查看，不在当前树保留副本。本次没有重写提交历史；有彻底移除历史大文件/敏感内容的需求时，需另行协调克隆、标签和强制更新，不能把普通删文件说成历史已清除。
