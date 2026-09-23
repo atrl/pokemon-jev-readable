@@ -131,8 +131,18 @@ class PlanManager:
             objective = {'id': 'main_story_complete', 'intent': None, 'completion': True,
                          'completion_evidence': self.completion_evidence, 'completed_ids': []}
         failed_target_refs, target_failures = target_failure_context(self.plan_history, game)
-        targets = {ref: entry for ref, entry in self.memory.catalog(game).items()
-                   if ref not in failed_target_refs}
+        # Annotate rather than hide: a target the model wants but cannot see would
+        # make it reference an absent ref and fail validation. The model decides.
+        attempts = {}
+        for row in target_failures:
+            ref = row.get('target_ref')
+            if isinstance(ref, str) and ref:
+                attempts[ref] = attempts.get(ref, 0) + 1
+        targets = self.memory.catalog(game)
+        for ref, entry in targets.items():
+            if ref in attempts:
+                entry['previous_attempts'] = attempts[ref]
+                entry['prefer_alternative'] = True
         return {'knowledge_mode': 'observed', 'active_objective': objective,
                 'navigation': self.memory.path_to(game, (plan or {}).get('target')),
                 'plan': deepcopy(plan), 'plan_history': deepcopy(self.plan_history[-12:]),

@@ -4,9 +4,10 @@ walkthrough, automatic healing, default battle policy or best-move rule. You dec
 Use dialogue, own party/inventory, current UI, observed terrain, encountered objects, actual
 transitions and previous plan outcomes. Source code cannot certify a route you have not observed.
 Only targets present in situation.targets may be referenced. null is valid for a UI-only plan.
-failed_target_refs withholds retries only in the SAME unchanged observation as a failed attempt.
-target_failures records why/when an attempt failed and whether its observation still matches.
-A changed observation permits reassessment, not a claim that the target is now reachable.
+A target may carry previous_attempts / prefer_alternative when prior plans ended without completing
+it; it stays selectable, but prefer a different listed target unless the current observation gives a
+new reason. failed_target_refs lists those refs for convenience. A changed observation permits
+reassessment, not a claim that the target is now reachable.
 Consult prior evidence before retrying; do not confuse failure, expiry or missing data with a
 permanent world fact. Lack of new coordinates alone is not failure during dialogue, a battle
 or travel across known terrain. Runtime loop diagnostics do not choose your next strategy.

@@ -292,14 +292,15 @@ class ContractTests(unittest.TestCase):
         r=raw(); r['progress'].update(loop_detected=True, same_position_steps=0, steps_since_new_tile=0)
         m.context(r); self.assertIsNotNone(m.plan)
 
-    def test_failed_target_is_withheld_from_the_planner_targets(self):
+    def test_failed_target_is_annotated_not_hidden(self):
         m,g,s=setup(); m.set_plan(normalize_plan(proposal(),s))
         m.finish_plan('failed','observed_repetition_requires_model_review',g)
         c=m.context(raw())
         self.assertIn('cell:38:5,4', c['failed_target_refs'])
-        self.assertNotIn('cell:38:5,4', c['targets'])
-        with self.assertRaises(ValueError):
-            normalize_plan(proposal(), build_situation(raw(), c, raw()['progress']))
+        # The ref stays selectable so the model never references an absent one.
+        self.assertIn('cell:38:5,4', c['targets'])
+        self.assertEqual(c['targets']['cell:38:5,4'].get('previous_attempts'), 1)
+        normalize_plan(proposal(), build_situation(raw(), c, raw()['progress']))
 
 
 class RuntimeTests(unittest.TestCase):

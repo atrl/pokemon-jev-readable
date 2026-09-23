@@ -169,12 +169,13 @@ class ManagerIntegrationTests(unittest.TestCase):
         self.assertIsNone(manager.plan)
         self.assertEqual(manager.plan_history[-1]['evidence']['symptom'], 'unchanged_observation')
 
-    def test_changed_object_releases_target_without_erasing_history(self):
+    def test_changed_object_keeps_annotated_history(self):
         from test_model_agency import raw
         manager, game = self.setup_manager()
         manager.finish_plan('failed', 'observed_repetition_requires_model_review', game)
         old = manager.context(raw())
-        self.assertNotIn('cell:38:5,4', old['targets'])
+        self.assertIn('cell:38:5,4', old['targets'])
+        self.assertTrue(old['targets']['cell:38:5,4'].get('prefer_alternative'))
         changed = raw(); changed['world']['objects'][0]['x'] = 3
         new = manager.context(changed)
         self.assertIn('cell:38:5,4', new['targets'])
