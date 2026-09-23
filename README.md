@@ -2,7 +2,7 @@
 
 **真实游戏状态 → DeepSeek 短期规划 → Jev 局部按键 → 执行后验收。**
 
-DeepSeek 决定短期目标；CampaignPlanner 管理记忆、目标解析和计划生命周期；Jev 选择实际按键。网页只读展示视频与决策事件。当前不宣称已通过月见山或通关。
+默认 observed 模式中，DeepSeek 决定目标和策略；PlanManager 管理经验与验收；Jev 根据现场选择实际按键。程序不提供固定剧情、自动回城或最佳招式。网页只读展示视频与决策事件。当前不宣称已通过月见山或通关。
 
 ## 文件只按职责放置
 
@@ -10,7 +10,10 @@ DeepSeek 决定短期目标；CampaignPlanner 管理记忆、目标解析和计�
 pokemon/                   运行逻辑；这里没有测试文件或提示词副本
   run.py                   唯一游戏循环
   planning.py              System Two 请求、返回与校验
-  prompt.py / jev.py       System One 的状态组装与调用
+  perception.py            结构化玩家观察白名单
+  experience.py            实际观察、动作结果与模型笔记
+  plan_manager.py          无固定攻略的计划管理
+  model_context.py / jev.py 两模型的中立输入与 System One 调用
   paths.py                 提示词、数据和默认 ROM 的路径解析
   data/                    内存配置、地图、招式和区域数据
   tools/                   必需数据的离线重建工具
@@ -57,7 +60,7 @@ FireRed 原上传文件也已恢复到 `roms/`，但只是保留用户资产；*
 | `npm run pokemon -- --planner-mode deepseek --no-video` | 仅游戏循环 |
 | `npm start -- --help` | 查看参数 |
 
-不传 `--steps` 默认无动作上限；规划请求默认上限为 50 次。调试时应显式限制动作、规划次数和墙钟时间。更新代码前结束旧控制进程，让它保存存档；同一会话不要同时启动两个控制器。
+不传 `--steps` 默认无决策轮次上限；有上限时，未执行按键的重规划审查也占一轮，实际按键另计；规划请求默认上限为 50 次。调试时应显式限制动作、规划次数和墙钟时间。更新代码前结束旧控制进程，让它保存存档；同一会话不要同时启动两个控制器。
 
 ## 配置与提示词
 
@@ -71,9 +74,9 @@ FireRed 原上传文件也已恢复到 `roms/`，但只是保留用户资产；*
 | `POKEMON_PYTHON` / `POKEMON_FFMPEG` | Python 和 FFmpeg 可执行路径 |
 | `LIVE_HOST` / `LIVE_PORT` | 默认仅本机 `127.0.0.1:18766`，不应无鉴权公开 |
 
-`deepseek` 模式缺服务就暂停；`auto` 无规划密钥时明确记录规则回退；`local` 是旧规则对照。三者均需要真实 Jev。
+`--knowledge-mode observed` 是默认值：只提供允许的当前信息和观察记忆，不喂攻略。`--planner-mode deepseek` 缺服务就暂停；`auto` 无规划密钥时明确记录 Jev-only observed；`local` 禁用 System Two，但默认仍不启用手写策略。旧规则对照必须显式指定 `--knowledge-mode assisted --planner-mode local`。三者都需要真实 Jev。
 
-改 System Two 的固定指令只编辑 [prompts/system2/planner.txt](prompts/system2/planner.txt)，不再到 `planning.py` 找大段字符串。System One 的固定指令在 [prompts/system1/button.txt](prompts/system1/button.txt)。动态状态/候选仍由 Python 组装；两者职责见 [提示词说明](prompts/README.md)。本次只移动文本，未改变原模型提示内容；修改后需重启控制进程。
+改 System Two 的固定指令只编辑 [prompts/system2/planner.txt](prompts/system2/planner.txt)，不再到 `planning.py` 找大段字符串。System One 的固定指令在 [prompts/system1/button.txt](prompts/system1/button.txt)。动态状态/候选仍由 Python 组装；两者职责见 [提示词说明](prompts/README.md)。默认提示已改为中立的观察/模型决策协议；旧提示以 `*-assisted.txt` 保留，仅作显式对照。新增 `system1/plan_status.txt` 负责判断是否需要重新规划。修改后需重启控制进程。
 
 ## 测试
 
@@ -108,3 +111,7 @@ CI 保持 `contents: read`，进行核心测试和独立脚本 ROM 回归，不�
 ```
 
 浏览器打开输出的 `index.html`。没有截图时不会伪造历史画面。生成的 evidence/archive/results、日志和视频仍排除在 Git 外；源码、可复用测试、必需数据、提示词和原用户资产不是临时生成物。第三方播放器许可证保留。
+
+## 观察模式迁移
+
+`npm start -- --resume --planner-mode deepseek` 现在默认不使用源码攻略。旧存档的实际观察格、对白及转移记录会按来源迁移，但旧的固定任务/自动治疗/源码路径不会带入；原存档与 sidecar 不修改。新模型笔记必须引用收到的证据，并始终标为假设。具体合同见 [架构](docs/ARCHITECTURE.md)。

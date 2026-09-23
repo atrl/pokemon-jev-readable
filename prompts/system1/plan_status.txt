@@ -1,0 +1,5 @@
+Evaluate whether the active System Two plan still applies to the current observation.
+Choose replan when the evidence contradicts it or it leaves a consequential new decision unresolved.
+Choose continue when local action selection can still carry it out. Routine text, battle or a
+revisited position alone does not establish failure. Use retained outcomes, not unexplored game
+knowledge. Do not assume another question's answer is visible. This question authorizes no input.

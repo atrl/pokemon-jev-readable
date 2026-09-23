@@ -6,10 +6,11 @@ from pathlib import Path
 from unittest.mock import patch
 
 from _paths import ROOT, POKEMON
-from jev import BUTTONS, build_request, validate_response, choose, observation_for_model
+from jev import BUTTONS, validate_response
+from assisted_helpers import build_request, choose, observation_for_model
 from memory import Reader, decode_text, load_profile
 from emulator import Emulator
-from run import run
+from assisted_helpers import run
 
 
 class FakeMemory:

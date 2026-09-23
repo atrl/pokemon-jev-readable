@@ -11,7 +11,6 @@ import hashlib
 import json
 from pathlib import Path
 
-from campaign import CampaignPlanner
 from jev import redact_secrets
 from progress import ProgressTracker
 
@@ -78,13 +77,22 @@ def load_state(state_file: Path, rom_sha1: str) -> tuple[bytes, dict]:
     return state, manifest
 
 
-def restore_campaign(state_file: Path, manifest: dict) -> tuple[CampaignPlanner, str]:
+def restore_campaign(state_file: Path, manifest: dict, *, knowledge_mode="assisted"):
+    # Old callers retain their explicit comparator API; the runtime passes observed by default.
+    from plan_manager import PlanManager
+    if knowledge_mode == "observed":
+        manager = PlanManager
+    else:
+        from campaign import CampaignPlanner
+        manager = CampaignPlanner
     sidecar = state_file.parent / "last.campaign.json"
     if sidecar.exists():
         saved = json.loads(sidecar.read_text())
         if all(saved.get(key) == manifest.get(key) for key in ("rom_sha1", "state_sha256", "step")):
-            return CampaignPlanner(saved["campaign"]), "verified_checkpoint"
-    return CampaignPlanner(), "new_memory"
+            if knowledge_mode == "assisted" and saved["campaign"].get("manager") == "observed_v1":
+                return manager(), "mode_changed_new_assisted_memory; original_observed_sidecar_preserved"
+            return manager(saved["campaign"]), "verified_checkpoint"
+    return manager(), "new_memory"
 
 
 def save_checkpoint(world, output: Path, rom_sha1: str, step: int, tracker, campaign) -> None:

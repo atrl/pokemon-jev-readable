@@ -14,13 +14,13 @@ from prompt import BUTTON_INSTRUCTIONS
 
 
 class ResourceTests(unittest.TestCase):
-    def test_system_two_prompt_is_identical_to_pre_refactor(self):
-        self.assertEqual(hashlib.sha256(PLANNER_SYSTEM_PROMPT.encode()).hexdigest(), "e34d7e75a4ef3abf743e158ee3a2d17bc67a948bf0e66bb988a295e3c97a264f")
+    def test_assisted_prompt_preserved_and_current_prompt_file_loaded(self):
+        self.assertEqual(hashlib.sha256(paths.load_prompt("system2/planner-assisted.txt").encode()).hexdigest(), "e34d7e75a4ef3abf743e158ee3a2d17bc67a948bf0e66bb988a295e3c97a264f")
         self.assertEqual(PLANNER_SYSTEM_PROMPT, (ROOT / "prompts/system2/planner.txt").read_text())
 
     def test_system_one_prompt_is_identical_to_pre_refactor(self):
         self.assertEqual(hashlib.sha256(BUTTON_INSTRUCTIONS.encode()).hexdigest(), "f609b55ccbfbe0d9030a6a58b7033acf66df27b2d7f6e484a3a78b7c90059c2e")
-        self.assertEqual(BUTTON_INSTRUCTIONS, paths.load_prompt("system1/button.txt", single_line=True))
+        self.assertEqual(BUTTON_INSTRUCTIONS, paths.load_prompt("system1/button-assisted.txt", single_line=True))
 
     def test_loader_rejects_outside_path_and_empty_prompts(self):
         with self.assertRaises(ValueError):

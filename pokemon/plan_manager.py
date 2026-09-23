@@ -1,0 +1,144 @@
+"""Model plan lifecycle + empirical memory, with no story/team/battle policy.
+
+The compatibility name `campaign` remains in events/checkpoints. This manager
+never imports CampaignPlanner, source maps, a damage ranker or healing logic.
+"""
+from __future__ import annotations
+from copy import deepcopy
+from experience import Experience
+from perception import POLICY, project, point, take
+from plan_contract import success_evidence
+
+
+class PlanManager:
+    def __init__(self, snapshot=None):
+        source = snapshot or {}
+        valid = source.get('manager') == 'observed_v1'
+        data = source if valid else {}
+        self.memory = Experience(data.get('experience'))
+        if not valid and source:
+            self.memory.import_legacy_observations(source)
+        self.steps = self.memory.steps
+        self.plan = deepcopy(data.get('plan'))
+        self.plan_history = deepcopy(data.get('plan_history', []))[-32:]
+        self.planning_state = deepcopy(data.get('planning_state', {'last_step': None, 'last_request_failed': False}))
+        self.model_planning_enabled = False
+        self.recovery = None
+        self.completion_evidence = None  # Independent evaluator, not model input/knowledge.
+        self.migration = 'observed_memory_restored' if valid else 'legacy_observations_only; prior_plans_discarded' if source else 'new_observed_memory'
+
+    def evaluate(self, raw):
+        """Terminal-only evaluator. Never turns hidden event flags into a suggested task."""
+        fact = (raw.get('milestones') or {}).get('game_completed') or {}
+        if fact.get('verified') is True and fact.get('value') is True:
+            self.completion_evidence = deepcopy(fact)
+
+    def set_plan(self, plan):
+        if plan.get('schema_version') != 3 or plan.get('observation_policy') != POLICY:
+            raise ValueError('Observed mode requires a validated observed-plan contract')
+        self.plan = deepcopy(plan)
+        self.plan['created_step'] = self.steps
+        self.memory.add_notes(self.plan.get('memory_updates', []), self.plan['plan_id'])
+
+    def finish_plan(self, status, reason, observation=None, evidence=None):
+        if not self.plan:
+            return
+        self.plan_history.append({**take(self.plan, ('plan_id', 'subgoal', 'intent', 'reasoning', 'target_ref',
+                                                    'target', 'success', 'policy', 'resource_policy')),
+                                  'status': status, 'reason': reason, 'step': self.steps,
+                                  'position': point(observation) if observation else None,
+                                  'evidence': deepcopy(evidence)})
+        self.plan_history = self.plan_history[-32:]
+        self.plan = None
+
+    def record(self, button, before, after):
+        effect = self.memory.record(button, before, after)
+        self.steps = self.memory.steps
+        return effect
+
+    def recover(self, observation, *, attempt, reason, failed_button=None):
+        # Failure evidence is retained; no clearing map and no fallback direction.
+        self.recovery = {'attempt': attempt, 'reason': reason, 'failed_button': failed_button,
+                         'position': point(observation), 'source': 'execution_observation'}
+        self.finish_plan('failed', reason, observation, self.recovery)
+
+    def _refresh(self, game, progress):
+        plan = self.plan
+        if not plan:
+            return
+        if plan.get('schema_version') != 3 or plan.get('observation_policy') != POLICY:
+            self.finish_plan('invalidated', 'incompatible_observation_contract', game)
+            return
+        age = self.steps - plan['created_step']
+        kind = plan['success']['type']
+        base = plan['baseline']
+        evidence = None
+        # A zero-action existing condition is never progress caused by this plan.
+        if age > 0:
+            if kind == 'map_changed' and point(game) and base.get('position') and point(game)[0] != base['position'][0]:
+                evidence = {'before': base['position'], 'after': point(game), 'scope': 'map_transition_not_story_completion'}
+            elif kind == 'scene_changed' and game['scene']['verified'] and game['scene']['mode'] != base.get('scene'):
+                evidence = {'scene': game['scene'], 'scope': 'ui_transition_only'}
+            elif kind == 'state_changed' and game['observation_id'] != base.get('observation_id'):
+                evidence = {'observation_id': game['observation_id'], 'scope': 'observable_change_only'}
+            elif kind not in ('map_changed', 'scene_changed', 'state_changed'):
+                evidence = success_evidence(plan, game, progress)
+        if evidence:
+            self.finish_plan('completed', 'predicate_verified', game, evidence)
+        elif age >= plan['expires_steps']:
+            self.finish_plan('expired', 'action_budget_reached', game)
+        elif age >= plan['max_no_effect_steps']:
+            # An unchanged position during dialogue/battle is not automatically failure.
+            tail = self.memory.effects[-plan['max_no_effect_steps']:]
+            unchanged = len(tail) == plan['max_no_effect_steps'] and all(not e['changed_fields'] for e in tail)
+            if unchanged or (game['scene']['mode'] == 'overworld' and progress.get('loop_detected')):
+                self.finish_plan('failed', 'observed_repetition_requires_model_review', game,
+                                 {'recent_actions': deepcopy(tail[-8:])})
+        if self.plan:
+            # Only the planner's explicit interrupt contract may use risk thresholds.
+            for rule in plan.get('replan_when', []):
+                matched = False
+                if rule['type'] == 'scene_changed':
+                    matched = game['scene']['verified'] and game['scene']['mode'] != base.get('scene')
+                elif rule['type'] == 'map_changed':
+                    matched = bool(point(game) and base.get('position') and point(game)[0] != base['position'][0])
+                elif rule['type'] == 'party_hp_below':
+                    party = game.get('party')
+                    if party and all(type(m.get('hp')) is int and type(m.get('max_hp')) is int and m['max_hp'] > 0 for m in party):
+                        matched = sum(m['hp'] for m in party) / sum(m['max_hp'] for m in party) < rule['ratio']
+                if matched:
+                    self.finish_plan('invalidated', 'planner_interrupt_condition', game, rule)
+                    break
+
+    def context(self, observation):
+        game = project(observation)
+        self.memory.observe(game)
+        if self.plan and (self.plan.get('target') or {}).get('kind') == 'object':
+            current = self.memory.catalog(game).get(self.plan.get('target_ref'))
+            if current and current.get('currently_visible'):
+                # Resolve the model-selected entity, do not select a different objective.
+                self.plan['target'] = deepcopy(current)
+        self._refresh(game, observation.get('progress') or {})
+        plan = self.plan
+        objective = {'id': 'plan:' + plan['subgoal'] if plan else 'awaiting_model_plan',
+                     'intent': plan['intent'] if plan else None, 'completion': False, 'completed_ids': [],
+                     'target_map_id': plan.get('target_map_id') if plan else None,
+                     'source': {'quality': 'model_authored' if plan else 'no_plan'}}
+        if self.completion_evidence:
+            objective = {'id': 'main_story_complete', 'intent': None, 'completion': True,
+                         'completion_evidence': self.completion_evidence, 'completed_ids': []}
+        return {'knowledge_mode': 'observed', 'active_objective': objective,
+                'navigation': self.memory.path_to(game, (plan or {}).get('target')),
+                'plan': deepcopy(plan), 'plan_history': deepcopy(self.plan_history[-12:]),
+                'memory': self.memory.context(game), 'targets': self.memory.catalog(game),
+                'recovery': deepcopy(self.recovery), 'model_planning_enabled': self.model_planning_enabled,
+                'plan_suspended': False, 'visited_map_ids': [int(k) for k in self.memory.maps],
+                'recorded_action_count': self.steps, 'migration': self.migration,
+                'roles': {'planner': 'System Two', 'physical_input': 'System One',
+                          'memory': 'observations_and_model_hypotheses_separate',
+                          'runtime': 'contracts_geometry_execution_only'}}
+
+    def snapshot(self):
+        return {'manager': 'observed_v1', 'experience': self.memory.snapshot(),
+                'plan': deepcopy(self.plan), 'plan_history': deepcopy(self.plan_history),
+                'planning_state': deepcopy(self.planning_state)}

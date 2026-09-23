@@ -158,3 +158,17 @@ grep -E '"type": "(planner_configuration|planning_requested|plan|plan_outcome|pl
 不要提交 `.env`、新增未明确要求入库的 ROM、存档、原始日志、视频或生成回放；`roms/` 的两份原用户上传文件是明确恢复的例外。不要为了让 CI 绿色而伪造模型返回或跳过失败声明。核心测试使用显式合成数据和临时目录；缺私有 checkpoint 的可选回归明确跳过。
 
 历史原始验证可从清理前提交 `6c0c35c` 查看，不在当前树保留副本。本次没有重写提交历史；有彻底移除历史大文件/敏感内容的需求时，需另行协调克隆、标签和强制更新，不能把普通删文件说成历史已清除。
+
+## 默认模型输入仍像攻略（ADR-009）
+
+**现象：** 低血量后自动回城；请求含 recommended_move / next_button；未走过的出口已经有目的地。
+
+**根因：** 事实整理、策略、源码知识和候选构造混在同一条链。advisory 标签不意味着没有泄漏答案。
+
+**处理：** 默认 observed 只用 perception 白名单与 Experience 记忆；PlanManager 不调用旧策略。输入保留自身状态、文本/菜单、局部地图和实际经历，目标与策略由模型给出。显式 assisted 才启用历史对照。不要为了“提供更多信息”把 Reader 原始字典重新直接传给模型。
+
+**续玩：** 源自旧 CampaignPlanner 的攻略计划不会复用；标为 observed_background/observed_dialog 等的实际记录可迁移，原 sidecar 保留。报告 `experience_migration` 说明迁移来源。
+
+**重规划但人物没动：** 看 `plan_review` 事件；Jev 判断需要 System Two 时会丢弃同次的按钮答案，所以 `jev_calls` 可能大于 `executed_actions`。这是控制协议，不是成功推进；若持续发生，检查计划/输入内容并观察规划预算，不要强制执行已被否决的按钮。
+
+**仍未闭合：** 当前地图表示不能理解所有地形符号和机关；减少先验后可能需要更多实际探索。测试证明代码边界，不证明真实模型已穿过月见山。

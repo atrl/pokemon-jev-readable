@@ -11,3 +11,11 @@ BUTTONS = {
     "select": "Press SELECT: use the game's context-specific selection function.",
     "wait": "Release all buttons and let text, animation or a transition finish.",
 }
+
+
+DEFAULT_GAME_GOAL = (
+    "Complete Pokemon Red Star's main story: defeat the Pokemon League Champion "
+    "and reach the Hall of Fame. Treat exploration, navigation, team preparation "
+    "and battles as subgoals serving that objective. Claim completion only from "
+    "verified in-game evidence, never from action count, visited coordinates or confidence."
+)

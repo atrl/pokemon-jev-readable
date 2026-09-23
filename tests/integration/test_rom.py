@@ -157,3 +157,5 @@ if __name__ == "__main__":
     ap.add_argument("--checkpoint", type=Path, default=ROOT / "pokemon/.work/bedroom.state")
     a = ap.parse_args()
     verify(a.rom, a.output, a.checkpoint)
+    from test_observed_memory import verify as verify_observed
+    verify_observed(a.rom, a.checkpoint, a.output)

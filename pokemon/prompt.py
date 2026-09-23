@@ -1,4 +1,4 @@
-"""Build the exact JEV input: verified state, current focus, and nine choices.
+"""ASSISTED MODE ONLY. Build the JEV input: verified state, current focus, and nine choices.
 
 This module is pure request construction. It never calls the API or presses a
 button. The static control instructions live in prompts/system1/button.txt.
@@ -14,14 +14,10 @@ from battle_strategy import plan_battle
 from controls import BUTTONS
 from planning import pokeball_count
 
-BUTTON_INSTRUCTIONS = load_prompt("system1/button.txt", single_line=True)
+BUTTON_INSTRUCTIONS = load_prompt("system1/button-assisted.txt", single_line=True)
 
-DEFAULT_GAME_GOAL = (
-    "Complete Pokemon Red Star's main story: defeat the Pokemon League Champion "
-    "and reach the Hall of Fame. Treat exploration, navigation, team preparation "
-    "and battles as subgoals serving that objective. Claim completion only from "
-    "verified in-game evidence, never from action count, visited coordinates or confidence."
-)
+from controls import DEFAULT_GAME_GOAL
+
 
 
 def verified_player(player: dict | None) -> dict | None:

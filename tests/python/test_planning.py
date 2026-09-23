@@ -13,8 +13,8 @@ from _paths import ROOT, POKEMON
 
 import planning
 from campaign import CampaignPlanner
-from jev import build_request
-from run import run
+from assisted_helpers import build_request
+from assisted_helpers import run
 
 TEST_KEY = "fixture-only-not-a-real-key"
 PROFILE = {"rom_sha1": "offline-fixture-rom-identity"}

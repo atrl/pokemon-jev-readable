@@ -48,3 +48,9 @@ npm 包装器加载既有 `.env`，并优先使用 `.venv`/`POKEMON_PYTHON`。�
 没有 opt-in 时，脚本在模型请求前直接退出；缺密钥或没有观测到双模型衔接也返回非零退出码，不以绿色掩盖失败。CI 不调用它，不注入 API 密钥。
 
 所有测试报告、视频、截图与 checkpoint 都留在忽略目录/CI Artifact，不加入 Git。单测替身是明确的合成数据，不算真实模型成绩。固定历史存档不随代码提交，相关测试缺材料时诚实跳过。
+
+## observed 默认路径
+
+`tests/python/test_model_agency.py` 检查观察权限、经验来源与真正的模型控制权，使用明确模拟数据/API，不是游戏成绩。旧策略断言通过 `assisted_helpers.py` 明确运行对照，不冒充默认策略。
+
+`test:rom` 在脚本启动回归后还运行 `tests/integration/test_observed_memory.py`，对真实快照做过滤、隐藏字段反事实、记忆往返和两模型请求序列化；不调用模型。真正的双模型试跑仍需要显式 `--allow-model-calls` 和两把密钥。

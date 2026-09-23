@@ -10,8 +10,9 @@ from unittest.mock import Mock, call, patch
 import urllib.error
 
 from _paths import ROOT, POKEMON
-from jev import BUTTONS, choose
-from run import run
+from jev import BUTTONS
+from assisted_helpers import choose
+from assisted_helpers import run
 
 TEST_KEY = "fixture-only-not-a-real-key"
 

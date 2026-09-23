@@ -42,7 +42,10 @@ def _recent_heal_count(objective_history, window, current_step=None):
 
 
 def build_situation(observation, campaign, progress, *, recent_window=DEFAULT_RECENT_WINDOW):
-    # Local import avoids a module cycle: prompt uses only pokeball_count above.
+    if campaign.get('knowledge_mode') == 'observed':
+        from model_context import build_situation as observed_situation
+        return observed_situation(observation, campaign, progress)
+    # Explicit assisted mode retains the old comparator.
     from prompt import observation_for_model
     game = observation_for_model(observation)
     world = game.get('world') or {}
@@ -116,7 +119,7 @@ def planning_reasons(situation):
         reasons.append('loop_detected')
     if (situation.get('recent_heal_count') or 0) >= DEFAULT_RECENT_HEAL_TRIGGER:
         reasons.append('repeated_healing')
-    if situation.get('pokeballs') == 0 and situation.get('party') and len(situation['party']) < 2:
+    if situation.get('knowledge_mode') != 'observed' and situation.get('pokeballs') == 0 and situation.get('party') and len(situation['party']) < 2:
         reasons.append('small_party_without_balls')  # informational, not an escape-item assertion
     return reasons
 
@@ -209,7 +212,7 @@ def call_planner(situation, goal, *, timeout=45, on_event=None):
     model = (os.environ.get('DEEPSEEK_MODEL') or DEFAULT_MODEL).strip()
     body = {
         'model': model,
-        'messages': [{'role': 'system', 'content': PLANNER_SYSTEM_PROMPT},
+        'messages': [{'role': 'system', 'content': PLANNER_SYSTEM_PROMPT if situation.get('knowledge_mode') == 'observed' else load_prompt('system2/planner-assisted.txt')},
                      {'role': 'user', 'content': json.dumps({'overall_goal': goal, 'situation': situation}, ensure_ascii=False, allow_nan=False)}],
         'temperature': 0.2, 'max_tokens': 4096, 'response_format': {'type': 'json_object'},
     }

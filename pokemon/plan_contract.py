@@ -121,6 +121,8 @@ def _text(value, name, length):
 
 
 def normalize_plan(data, situation):
+    if situation.get('knowledge_mode') == 'observed':
+        return normalize_observed_plan(data, situation)
     if not isinstance(data, dict):
         raise ValueError('Plan must be a JSON object')
     allowed = {'subgoal', 'intent', 'reasoning', 'target_ref', 'success', 'resource_policy',
@@ -268,3 +270,112 @@ def plan_outcome(plan, observation, progress, step, navigation=None):
     if nav.get('status') in ('needs_map_connection', 'no_observed_path') and age >= 8 and stable_position(observation):
         return {'status': 'failed', 'reason': 'route_not_executable', 'navigation': deepcopy(nav)}
     return None
+
+
+def normalize_observed_plan(data, situation):
+    """Contract checks, not gameplay defaults. Intent and preferences belong to the model."""
+    from model_context import OBSERVED_SUCCESS_TYPES
+    from perception import POLICY
+    if not isinstance(data, dict):
+        raise ValueError('Plan must be a JSON object')
+    allowed = {'subgoal', 'intent', 'reasoning', 'target_ref', 'success', 'policy',
+               'resource_policy', 'memory_updates', 'replan_when', 'expires_steps', 'max_no_effect_steps'}
+    if set(data) - allowed:
+        raise ValueError('Unknown plan fields; no coordinates or executable code')
+    catalog = situation.get('targets') or {}
+    ref = data.get('target_ref')
+    if ref is not None and (not isinstance(ref, str) or ref not in catalog):
+        raise ValueError('Target was not present in the supplied observation memory')
+    target = deepcopy(catalog.get(ref))
+    success = data.get('success')
+    if not isinstance(success, dict) or success.get('type') not in OBSERVED_SUCCESS_TYPES:
+        raise ValueError('A supported observable success predicate is required')
+    kind = success['type']
+    if set(success) - ({'type', 'fact'} if kind == 'fact_true' else {'type'}):
+        raise ValueError('Unexpected success arguments')
+    facts = situation.get('milestones') or {}
+    if kind == 'fact_true':
+        name = success.get('fact')
+        if not isinstance(name, str) or name not in facts or verified_value(facts[name]) is True:
+            raise ValueError('Unknown or already satisfied fact')
+    base = deepcopy(situation.get('baseline') or {})
+    if kind == 'target_reached':
+        if target is None:
+            raise ValueError('A target is required')
+        at = base.get('position')
+        sel = target.get('selector') or {}
+        if at and at[0] == target['map_id']:
+            reached = target['kind'] == 'map' or (target['kind'] == 'coordinate' and at[1:] == [sel.get('x'), sel.get('y')])
+            if target['kind'] == 'object' and all(type(sel.get(k)) is int for k in ('x', 'y')):
+                reached = abs(at[1]-sel['x']) + abs(at[2]-sel['y']) <= 1
+            if reached:
+                raise ValueError('Target approach already satisfied; choose an interaction predicate')
+    for name, low, high, default in [('expires_steps', 10, 1000, 160), ('max_no_effect_steps', 8, 80, 24)]:
+        value = data.get(name, default)
+        if type(value) is not int or not low <= value <= high:
+            raise ValueError('Invalid ' + name)
+    increments = {'party_grew': 'party_count', 'balls_increased': 'balls', 'new_tile': 'visited_tiles'}
+    if kind in increments and type(base.get(increments[kind])) is not int:
+        raise ValueError('A known baseline is required')
+    if kind == 'map_changed' and not base.get('position'):
+        raise ValueError('Map transition needs a known starting position')
+    policy = data.get('resource_policy', {})
+    if not isinstance(policy, dict) or set(policy) - {'wild_battle', 'catch_species', 'heal_hp_ratio', 'max_party_size'}:
+        raise ValueError('Invalid optional resource policy')
+    if 'wild_battle' in policy and policy['wild_battle'] not in WILD_POLICIES:
+        raise ValueError('Invalid wild battle preference')
+    if 'heal_hp_ratio' in policy and (type(policy['heal_hp_ratio']) not in (int, float) or not math.isfinite(policy['heal_hp_ratio']) or not 0 <= policy['heal_hp_ratio'] <= 1):
+        raise ValueError('Invalid optional HP preference')
+    if 'max_party_size' in policy and (type(policy['max_party_size']) is not int or not 1 <= policy['max_party_size'] <= 6):
+        raise ValueError('Invalid party size preference')
+    if policy.get('catch_species') is not None:
+        species = _text(policy['catch_species'], 'catch_species', 40)
+        mons = list((situation.get('game') or {}).get('party') or [])
+        mons.append(((situation.get('game') or {}).get('battle') or {}).get('enemy') or {})
+        known = {m.get('species_name_prior') for m in mons}
+        if species not in known:
+            raise ValueError('Capture preference must name an observed species')
+    guidance = data.get('policy', '')
+    if not isinstance(guidance, str) or len(guidance) > 1600:
+        raise ValueError('Invalid policy text')
+    rules = data.get('replan_when', [])
+    if not isinstance(rules, list) or len(rules) > 6:
+        raise ValueError('Invalid interrupt list')
+    for rule in rules:
+        if not isinstance(rule, dict) or rule.get('type') not in ('scene_changed', 'map_changed', 'party_hp_below'):
+            raise ValueError('Unknown interrupt predicate')
+        if rule['type'] == 'party_hp_below':
+            ratio = rule.get('ratio')
+            if set(rule) != {'type', 'ratio'} or type(ratio) not in (int, float) or not math.isfinite(ratio) or not 0 <= ratio <= 1:
+                raise ValueError('Invalid HP interrupt')
+        elif set(rule) != {'type'}:
+            raise ValueError('Unexpected interrupt fields')
+    memory = situation.get('memory') or {}
+    refs = {situation.get('observation_id')}
+    refs.update(v.get('evidence_ref') for v in catalog.values())
+    for group in ('dialogues', 'recent_actions', 'transitions'):
+        for row in memory.get(group, []):
+            refs.update((row.get('ref'), row.get('evidence_ref')))
+    refs.discard(None)
+    notes = data.get('memory_updates', [])
+    if not isinstance(notes, list) or len(notes) > 4:
+        raise ValueError('At most four memory notes per plan')
+    for note in notes:
+        if not isinstance(note, dict) or set(note) != {'text', 'evidence_refs'}:
+            raise ValueError('Notes need text and evidence_refs')
+        _text(note['text'], 'memory note', 600)
+        citations = note['evidence_refs']
+        if not isinstance(citations, list) or not 1 <= len(citations) <= 6 or any(not isinstance(r, str) or r not in refs for r in citations):
+            raise ValueError('Memory note cites unavailable evidence')
+    result = {'schema_version': 3, 'observation_policy': POLICY,
+              'subgoal': _text(data.get('subgoal'), 'subgoal', 80),
+              'intent': _text(data.get('intent'), 'intent', 800),
+              'reasoning': _text(data.get('reasoning') or 'Model-authored plan', 'reasoning', 1600),
+              'target_ref': ref, 'target': target, 'target_map_id': target['map_id'] if target else None,
+              'success': deepcopy(success), 'baseline': base, 'policy': guidance,
+              'resource_policy': deepcopy(policy), 'memory_updates': deepcopy(notes),
+              'replan_when': deepcopy(rules), 'expires_steps': data.get('expires_steps', 160),
+              'max_no_effect_steps': data.get('max_no_effect_steps', 24),
+              'status': 'active', 'situation_id': situation.get('situation_id')}
+    result['plan_id'] = hashlib.sha256(json.dumps(result, sort_keys=True).encode()).hexdigest()[:16]
+    return result

@@ -16,11 +16,35 @@ import urllib.request
 from typing import Callable
 
 from controls import BUTTONS
-from prompt import build_request
+def build_request(observation, goal, history):
+    if observation.get('knowledge_mode') == 'assisted':
+        from prompt import build_request as assisted_request
+        return assisted_request(observation, goal, history)
+    from model_context import build_request as observed_request
+    return observed_request(observation, goal, history)
 
 # Preserve the small public API while request construction lives in prompt.py.
-from prompt import DEFAULT_GAME_GOAL as DEFAULT_GAME_GOAL
-from prompt import observation_for_model as observation_for_model
+from controls import DEFAULT_GAME_GOAL as DEFAULT_GAME_GOAL
+def observation_for_model(observation):
+    if observation.get('knowledge_mode') == 'assisted':
+        from prompt import observation_for_model as assisted_observation
+        return assisted_observation(observation)
+    from perception import project
+    return project(observation)
+
+
+def validate_plan_status(response):
+    answer = response.get('answers', {}).get('plan_status')
+    if not isinstance(answer, dict) or answer.get('type') != 'choice':
+        raise ValueError('Missing plan_status answer')
+    probs = answer.get('probabilities')
+    if not isinstance(probs, dict) or set(probs) != {'continue', 'replan'}:
+        raise ValueError('Invalid plan_status options')
+    if answer.get('choice') not in probs or any(type(v) not in (int, float) or not math.isfinite(v) or not 0 <= v <= 1 for v in [*probs.values(), answer.get('confidence')]):
+        raise ValueError('Invalid plan_status probabilities')
+    if not math.isclose(sum(probs.values()), 1.0, abs_tol=0.02) or probs[answer['choice']] < max(probs.values()) - 1e-6:
+        raise ValueError('Inconsistent plan_status answer')
+    return answer
 
 ENDPOINT = "https://api.typesafe.ai/v1/systemone"
 TRANSIENT_HTTP_STATUSES = (429, 500, 502, 503, 504, 529)
@@ -198,6 +222,7 @@ def choose(
         )
         try:
             answer = validate_response(response)
+            plan_review = validate_plan_status(response) if 'plan_status' in body['questions'] else None
         except (ValueError, TypeError, AttributeError):
             emit("jev_error", attempt=attempt, error="invalid_response", phase="validation")
             if attempt < 3:
@@ -207,6 +232,7 @@ def choose(
         return redact_secrets(
             {
                 "answer": answer,
+                "plan_review": plan_review,
                 "request": body,
                 "response": response,
                 "latency_ms": round((time.monotonic() - started) * 1000),

@@ -1,0 +1,337 @@
+"""Default observed mode: counterfactual leakage checks and dual-model contract tests.
+
+All game/HTTP data here are explicit test doubles. Real adapter smoke tests live
+under tests/integration. These assertions test agency, NOT a completion claim.
+"""
+import io
+import json
+import os
+from copy import deepcopy
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from types import SimpleNamespace
+import unittest
+from unittest.mock import Mock, patch
+from _paths import ROOT, POKEMON
+from perception import POLICY, project
+from experience import Experience
+from plan_manager import PlanManager
+from plan_contract import normalize_plan
+from model_context import build_situation
+from jev import build_request, validate_plan_status, choose
+from controls import BUTTONS
+from run import run
+import planning
+
+
+def raw(x=4, y=4, mid=38):
+    return {'game': 'EXPLICIT OFFLINE DOUBLE', 'frame': 100, 'errors': [],
+            'player': {'name': 'TEST', 'map_id': mid, 'x': x, 'y': y, 'money': 3000,
+                       'facing': 'down', 'facing_quality': 'verified_direction_response'},
+            'scene': {'mode': 'overworld', 'verified': True}, 'dialog': {'open': False, 'text': '', 'awaiting_input': False},
+            'screen_text': {'rows': []}, 'menu_cursor_raw': 0,
+            'party': [], 'party_state': {'ready': True, 'verified': True}, 'bag': [],
+            'battle': {'active': False, 'verified': True},
+            'milestones': {'party_count': {'value': 0, 'verified': True}, 'badge_count': {'value': 0, 'verified': True},
+                           'hidden_plot': {'value': False, 'verified': True}},
+            'world': {'map_id': mid, 'name': 'HIDDEN MAP LABEL', 'width': 24, 'height': 24,
+                      'source_match': True, 'player_position_valid': True, 'input_lock': {},
+                      'objects': [{'object_id': 1, 'x': 5, 'y': 2, 'sprite': 'VISIBLE_SPRITE', 'text_id': 99,
+                                   'active': True, 'visible': True, 'source_x': 999},
+                                  {'object_id': 2, 'x': 20, 'y': 20, 'sprite': 'HIDDEN NURSE',
+                                   'active': True, 'visible': False}],
+                      'warps': [{'warp_id': 0, 'x': 6, 'y': 4, 'destination_map_id': 99,
+                                 'destination_name': 'UNVISITED ANSWER', 'quality': 'verified_current_ram'},
+                                {'warp_id': 1, 'x': 20, 'y': 20, 'destination_map_id': 98, 'quality': 'verified_current_ram'}],
+                      'connections': [{'direction': 'north', 'destination_map_id': 88}],
+                      'script_triggers': [{'x': 1, 'action': 'SPOILER'}]},
+            'local_map': {'verified': True, 'quality': 'advisory_background_only',
+                          'rows': ['.....', '.....', '..@..', '.....', '.....'], 'player_cell': {'x': 2, 'y': 2}},
+            'progress': {'total_steps': 0, 'visited_tiles': 1, 'loop_detected': False,
+                         'same_position_steps': 0, 'steps_since_new_tile': 0}}
+
+
+def setup(raw_observation=None):
+    game = project(raw_observation or raw())
+    game['progress'] = deepcopy((raw_observation or raw())['progress'])
+    manager = PlanManager(); manager.model_planning_enabled = True
+    ctx = manager.context(game)
+    return manager, game, build_situation(game, ctx, game['progress'])
+
+
+def proposal(**changes):
+    value = {'subgoal': 'user_defined', 'intent': 'Test an observed location',
+             'reasoning': 'An explicit offline test, not a strategy',
+             'target_ref': 'cell:38:5,4', 'success': {'type': 'target_reached'},
+             'expires_steps': 40, 'max_no_effect_steps': 8}
+    value.update(changes)
+    return value
+
+
+def response(button='right', review='continue'):
+    return {'answers': {'button': {'type': 'choice', 'choice': button, 'confidence': 1,
+                                  'probabilities': {k: int(k == button) for k in BUTTONS}},
+                        'plan_status': {'type': 'choice', 'choice': review, 'confidence': 1,
+                                        'probabilities': {k: int(k == review) for k in ('continue', 'replan')}}}}
+
+
+def keys(value):
+    if isinstance(value, dict):
+        return set(value) | set().union(*(keys(v) for v in value.values()), set())
+    if isinstance(value, list):
+        return set().union(*(keys(v) for v in value), set())
+    return set()
+
+
+class PerceptionTests(unittest.TestCase):
+    def test_projection_is_pure_and_idempotent(self):
+        r = raw(); original = deepcopy(r)
+        v = project(r)
+        self.assertEqual(v, project(v)); self.assertEqual(r, original)
+
+    def test_unseen_world_changes_do_not_change_model_observation(self):
+        a = raw(); b = deepcopy(a)
+        b['world']['objects'][1]['sprite'] = 'DIFFERENT HIDDEN NPC'
+        b['world']['objects'][1]['x'] = 22
+        b['world']['warps'][0]['destination_map_id'] = 201
+        b['world']['warps'][0]['destination_name'] = 'OTHER FUTURE'
+        b['world']['script_triggers'] = [{'action': 'OTHER SPOILER'}]
+        b['milestones']['hidden_plot']['value'] = True
+        self.assertEqual(project(a), project(b))
+
+    def test_both_model_inputs_invariant_to_hidden_world(self):
+        a = raw(); b = deepcopy(a)
+        b['world']['warps'][0]['destination_map_id'] = 200
+        b['world']['objects'][1]['sprite'] = 'NO SPOILER'
+        b['milestones']['hidden_plot']['value'] = True
+        ma, ga, sa = setup(a); mb, gb, sb = setup(b)
+        self.assertEqual(sa, sb)
+        ga['campaign'] = ma.context(ga); gb['campaign'] = mb.context(gb)
+        self.assertEqual(build_request(ga, 'same goal', []), build_request(gb, 'same goal', []))
+
+    def test_own_status_is_allowed_but_no_auto_strategy(self):
+        r = raw(); r['party'] = [{'hp': 1, 'max_hp': 40, 'level': 8, 'status_bits': 8, 'moves': []}]
+        r['milestones']['party_count']['value'] = 1
+        m, g, s = setup(r)
+        self.assertEqual(s['game']['party'][0]['hp'], 1)
+        self.assertIsNone(m.plan)
+        self.assertNotIn('heal_party', json.dumps(s))
+        self.assertNotIn('recommended_move', keys(s))
+
+    def test_opponent_internal_stats_and_exact_hp_are_not_exposed(self):
+        r = raw(); r['scene']['mode'] = 'battle'
+        r['battle'] = {'active': True, 'verified': True, 'type': 'wild', 'menu': 'command',
+                       'enemy': {'level': 12, 'hp': 50, 'max_hp': 100, 'attack': 90, 'defense': 55, 'moves': ['secret']}}
+        g = project(r)
+        self.assertEqual(g['battle']['enemy']['health_bar_units'], 24)
+        self.assertTrue({'hp','max_hp','attack','defense','moves'}.isdisjoint(g['battle']['enemy']))
+        r['battle']['enemy'].update(hp=100, max_hp=200, defense=999)
+        self.assertEqual(g, project(r))
+
+    def test_visible_entities_not_offscreen_roles(self):
+        g = project(raw())
+        self.assertEqual(len(g['world']['objects']), 1)
+        self.assertEqual(len(g['world']['warps']), 1)
+        self.assertFalse({'text_id','source_x','script_triggers','destination_map_id'} & keys(g))
+        self.assertEqual(g['world']['connections'], [])
+
+    def test_missing_inventory_is_unknown_not_empty(self):
+        r=raw(); r['party']=None; r['bag']=None
+        g=project(r); self.assertIsNone(g['party']); self.assertIsNone(g['bag'])
+
+    def test_unverified_geometry_cannot_create_known_targets(self):
+        r=raw(); r['world']['source_match']=False
+        m,g,s=setup(r)
+        self.assertEqual(s['targets'], {}); self.assertEqual(m.memory.maps, {})
+
+    def test_legacy_strategy_in_raw_progress_cannot_enter_projection(self):
+        r=raw(); r['progress']['current_focus']='DO_PREWRITTEN_ROUTE'
+        r['campaign']={'story_objective': {'intent': 'SPOILER'}}
+        self.assertNotIn('DO_PREWRITTEN_ROUTE', json.dumps(project(r)))
+        self.assertNotIn('SPOILER', json.dumps(build_request(r,'goal',[])))
+
+    def test_frame_and_blink_do_not_fake_state_change(self):
+        a=raw(); a['scene']['mode']='dialog'; a['dialog'].update(open=True,text='Hello▼')
+        b=deepcopy(a); b['frame'] += 500; b['dialog']['text']='Hello'
+        self.assertEqual(project(a)['observation_id'],project(b)['observation_id'])
+
+
+class ExperienceTests(unittest.TestCase):
+    def test_actual_transition_learns_destination_not_reverse(self):
+        m=Experience(); a=raw(); b=raw(mid=37)
+        m.observe(a); self.assertNotIn('map:37',m.catalog(project(a)))
+        m.record('right',a,b)
+        self.assertEqual(m.transitions[0]['to'][0],37)
+        self.assertEqual(m.transitions[0]['reversible'],'unknown')
+        self.assertEqual(len(m.transitions),1)
+
+    def test_blackout_is_not_a_walk_connection(self):
+        m=Experience(); a=raw(); a['scene']['mode']='battle'
+        m.record('a',a,raw(mid=37)); self.assertEqual(m.transitions,[])
+
+    def test_remembered_objects_marked_stale_not_fresh(self):
+        m=Experience(); m.observe(raw()); later=raw(); later['world']['objects'][0]['visible']=False
+        m.observe(later); candidate=m.catalog(project(later))['object:38:1']
+        self.assertFalse(candidate['currently_visible']); self.assertEqual(candidate['last_seen_step'],0)
+
+    def test_geometry_has_no_recommended_button(self):
+        m,g,s=setup(); target=s['targets']['cell:38:5,4']
+        path=m.memory.path_to(g,target)
+        self.assertEqual(path['coordinates'],[[4,4],[5,4]])
+        self.assertNotIn('next_button',path)
+
+    def test_no_target_selection_without_model_plan(self):
+        m,g,_=setup(); c=m.context(g)
+        self.assertIsNone(c['active_objective']['intent'])
+        self.assertEqual(c['navigation']['status'],'no_model_target')
+
+    def test_new_memory_survives_json_checkpoint(self):
+        m,g,s=setup(); m.memory.record('right',raw(),raw(x=5))
+        restored=PlanManager(json.loads(json.dumps(m.snapshot())))
+        self.assertEqual(restored.memory.snapshot(),m.memory.snapshot())
+
+    def test_legacy_migration_keeps_observations_not_prior_instructions(self):
+        old={'version':1,'steps':100,'tiles':{'38':{'1,1':{'passable':True,'source':'observed_background'},
+                                                  '2,2':{'passable':True,'source':'source_prior'}}},
+             'plan':{'intent':'SPOILER'},'history_facts':{'secret':True},'support':{'id':'heal_party'},
+             'clues':[{'id':'t','map_id':38,'position':[1,1],'text':'A recorded clue','source':'observed_dialog'}]}
+        m=PlanManager(old)
+        self.assertIn('1,1',m.memory.maps['38']['cells']); self.assertNotIn('2,2',m.memory.maps['38']['cells'])
+        self.assertIsNone(m.plan); self.assertNotIn('SPOILER',json.dumps(m.snapshot()))
+        self.assertEqual(m.memory.dialogues[0]['text'],'A recorded clue'); self.assertEqual(m.steps,100)
+
+    def test_recovery_preserves_all_observed_terrain(self):
+        m,g,s=setup(); before=deepcopy(m.memory.maps)
+        m.recover(g,attempt=1,reason='test',failed_button='up')
+        self.assertEqual(before,m.memory.maps); self.assertNotIn('instruction',m.recovery)
+
+
+class ContractTests(unittest.TestCase):
+    def test_no_defaults_for_flee_heal_or_team_size(self):
+        _,_,s=setup(); p=normalize_plan(proposal(),s)
+        self.assertEqual(p['resource_policy'],{}); self.assertEqual(p['policy'],''); self.assertEqual(p['replan_when'],[])
+
+    def test_notes_need_existing_evidence_and_remain_hypotheses(self):
+        m,g,s=setup()
+        p=normalize_plan(proposal(memory_updates=[{'text':'This may be an exit','evidence_refs':[g['observation_id']]}]),s)
+        m.set_plan(p)
+        self.assertEqual(m.memory.notes[0]['source'],'system2_hypothesis_not_verified_fact')
+        with self.assertRaises(ValueError):
+            normalize_plan(proposal(memory_updates=[{'text':'I know the future','evidence_refs':['unknown']}]),s)
+
+    def test_unsupported_fields_and_raw_coordinates_rejected(self):
+        _,_,s=setup()
+        for fields in ({'target_map_id':99},{'buttons':['a']},{'target_ref':'map:99'},{'success':{'type':'eval','code':'x'}}):
+            with self.subTest(fields=fields), self.assertRaises(ValueError): normalize_plan(proposal(**fields),s)
+
+    def test_model_plan_completed_then_new_plan_requested(self):
+        m,g,s=setup(); m.set_plan(normalize_plan(proposal(),s))
+        m.record('right',g,raw(x=5)); c=m.context(raw(x=5))
+        self.assertIsNone(m.plan); self.assertEqual(c['plan_history'][-1]['status'],'completed')
+        self.assertTrue(planning.needs_planning(build_situation(raw(x=5),c,{'total_steps':1})))
+
+    def test_gameplay_risk_does_not_replace_model_plan(self):
+        m,g,s=setup(); m.set_plan(normalize_plan(proposal(),s))
+        danger=raw(); danger['party']=[{'hp':1,'max_hp':90,'status_bits':8,'moves':[]}]
+        danger['milestones']['party_count']['value']=1
+        c=m.context(danger)
+        self.assertEqual(c['active_objective']['id'],'plan:user_defined'); self.assertFalse(c['plan_suspended'])
+
+    def test_only_model_authored_risk_interrupt_is_executed(self):
+        m,g,s=setup(); m.set_plan(normalize_plan(proposal(replan_when=[{'type':'party_hp_below','ratio':0.3}]),s))
+        danger=raw(); danger['party']=[{'hp':1,'max_hp':90,'moves':[]}]; danger['milestones']['party_count']['value']=1
+        c=m.context(danger)
+        self.assertIsNone(m.plan); self.assertEqual(c['plan_history'][-1]['reason'],'planner_interrupt_condition')
+        self.assertNotIn('heal_party',json.dumps(c))
+
+    def test_unknown_path_not_automatically_failure(self):
+        m,g,s=setup(); m.set_plan(normalize_plan(proposal(),s)); m.steps=10
+        c=m.context(g); self.assertIsNotNone(m.plan)
+
+    def test_old_contract_cannot_be_a_default_plan(self):
+        m,_,_=setup()
+        with self.assertRaises(ValueError): m.set_plan({'schema_version':2,'intent':'old guide'})
+
+    def test_no_completion_on_plan_creation(self):
+        m,g,s=setup(); m.set_plan(normalize_plan(proposal(target_ref=None,success={'type':'state_changed'}),s))
+        m.context(g); self.assertIsNotNone(m.plan)
+
+    def test_expiry_is_not_success(self):
+        m,g,s=setup(); m.set_plan(normalize_plan(proposal(expires_steps=10),s)); m.steps=10
+        m.context(g); self.assertEqual(m.plan_history[-1]['status'],'expired')
+
+    def test_enemy_full_details_cannot_appear_in_plan_situation(self):
+        r=raw(); r['scene']['mode']='battle'; r['battle']={'active':True,'verified':True,'enemy':{'hp':1,'max_hp':10,'defense':999,'moves':['secret']}}
+        _,_,s=setup(r); self.assertNotIn('defense',s['game']['battle']['enemy'])
+
+
+class RuntimeTests(unittest.TestCase):
+    def run_double(self, folder, reviews=('continue','continue')):
+        current=raw(); world=Mock(); world.game=SimpleNamespace(frame_count=100); world.save.return_value=b'EXPLICIT OFFLINE STATE'
+        reader=Mock(); reader.snapshot.side_effect=lambda:deepcopy(current)
+        def press(button,**_):
+            if button=='right': current['player']['x']+=1
+            current['frame']+=48
+        world.press.side_effect=press
+        http_requests=[]; upper_requests=[]; turn=iter(reviews)
+        def upper(request,**_):
+            body=json.loads(request.data); upper_requests.append(body)
+            situation=json.loads(body['messages'][1]['content'])['situation']
+            x=situation['game']['player']['x']
+            plan=proposal(target_ref=f'cell:38:{x+1},4')
+            return io.BytesIO(json.dumps({'model':'EXPLICIT TEST DOUBLE','choices':[{'finish_reason':'stop','message':{'content':json.dumps(plan)}}]}).encode())
+        opener=Mock(); opener.open.side_effect=upper
+        def lower(request,**_):
+            body=json.loads(request.data); http_requests.append(body)
+            return io.BytesIO(json.dumps(response(review=next(turn))).encode())
+        with (patch.dict(os.environ,{'TYPESAFE_API_KEY':'fixture-jev','DEEPSEEK_API_KEY':'fixture-ds'}),
+              patch('run.Emulator',return_value=world),patch('run.Reader',return_value=reader),
+              patch('urllib.request.build_opener',return_value=opener),patch('urllib.request.urlopen',side_effect=lower),
+              patch('campaign.CampaignPlanner.context',side_effect=AssertionError('Legacy planner used')),
+              patch('team_strategy.plan_support',side_effect=AssertionError('Automatic healing used')),
+              patch('battle_strategy.plan_battle',side_effect=AssertionError('Best move used')),
+              patch('route_regions.plan_route',side_effect=AssertionError('Unseen source route used'))):
+            report=run(Path('OFFLINE.gb'),folder,goal='User supplied goal',steps=len(reviews),planner_mode='deepseek',max_seconds=5)
+        return report,world,upper_requests,http_requests
+
+    def test_default_dual_loop_has_no_legacy_policy_and_replans_after_completion(self):
+        with TemporaryDirectory() as tmp:
+            report,world,upper,lower=self.run_double(Path(tmp)/'run')
+            self.assertEqual(report['knowledge_mode'],'observed'); self.assertEqual(report['executed_actions'],2)
+            self.assertEqual(report['planning_calls'],2); self.assertEqual(len(upper),2); self.assertEqual(len(lower),2)
+            for sent in lower:
+                self.assertIn('plan_status',sent['questions'])
+                self.assertTrue({'recommended_move','next_button','story_reference','story_objective','heal_party'}.isdisjoint(keys(sent)))
+                self.assertEqual(sent['questions']['button']['criteria'],BUTTONS)
+            self.assertEqual(world.press.call_count,2)
+
+    def test_system_one_replan_withholds_parallel_button(self):
+        with TemporaryDirectory() as tmp:
+            report,world,_,_=self.run_double(Path(tmp)/'run',('replan','continue'))
+            self.assertEqual(report['jev_calls'],2); self.assertEqual(report['executed_actions'],1)
+            self.assertEqual(report['plan_review_requests'],1); self.assertEqual(world.press.call_count,1)
+            rows=[json.loads(x) for x in (Path(tmp)/'run/events.jsonl').read_text().splitlines()]
+            self.assertTrue(any(r['type']=='plan_review' for r in rows))
+            self.assertEqual(sum(r['type']=='executing' for r in rows),1)
+
+    def test_missing_required_key_does_not_start_game(self):
+        with TemporaryDirectory() as tmp, patch.dict(os.environ,{'TYPESAFE_API_KEY':'fixture','DEEPSEEK_API_KEY':''}), patch('run.Emulator') as emulator:
+            report=run(Path('OFFLINE.gb'),Path(tmp)/'run',goal='test',steps=1,planner_mode='deepseek')
+        self.assertEqual(report['status'],'blocked_missing_planner_key'); emulator.assert_not_called()
+
+    def test_plan_review_response_must_be_complete(self):
+        for value in (None, {}, {'type':'choice','choice':'continue','probabilities':{'continue':1}}):
+            with self.assertRaises(ValueError): validate_plan_status({'answers':{'plan_status':value}})
+        self.assertEqual(validate_plan_status(response())['choice'],'continue')
+
+    def test_wrong_review_or_provider_failure_never_executes_a_button(self):
+        m,g,s=setup(); m.set_plan(normalize_plan(proposal(),s)); g['campaign']=m.context(g)
+        payload=response(); del payload['answers']['plan_status']
+        with (patch.dict(os.environ,{'TYPESAFE_API_KEY':'fixture'}),patch('jev.time.sleep'),
+              patch('urllib.request.urlopen',side_effect=lambda *a,**k:io.BytesIO(json.dumps(payload).encode())) as network,
+              self.assertRaises(ValueError)):
+            choose(g,'goal',[])
+        self.assertEqual(network.call_count,3)
+
+
+if __name__=='__main__': unittest.main()

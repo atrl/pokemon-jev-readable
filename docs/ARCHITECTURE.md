@@ -1,161 +1,110 @@
-# 当前架构
+# 当前架构：模型决定玩法，代码提供观察、记忆与执行
 
-本文描述当前执行路径；历史方案和取舍见 [DECISIONS.md](DECISIONS.md)，故障经验见 [TROUBLESHOOTING.md](TROUBLESHOOTING.md)。安装、配置和输出位置只在 [README](../README.md) 维护。
+设计演进见 [DECISIONS.md](DECISIONS.md)，问题与未验证边界见 [TROUBLESHOOTING.md](TROUBLESHOOTING.md)。安装入口是 [README](../README.md)。
 
-## 0. 目录与修改入口
-
-| 责任 | 唯一目录/入口 |
-| --- | --- |
-| 游戏循环、状态、模型调用、计划与执行 | `pokemon/` |
-| 内存配置、地图、招式和区域静态数据 | `pokemon/data/` |
-| Jev / DeepSeek 固定指令 | `prompts/system1/button.txt` / `prompts/system2/planner.txt` |
-| 全部测试 | `tests/python/`、`tests/web/`、`tests/integration/` |
-| 只读视频与事件网页 | `live/` |
-| 两份原始用户资产 | `roms/`，内容未改变 |
-| 本地会话、存档、视频、日志 | `pokemon/runs/` / `outputs/`，不进 Git |
-
-`pokemon/paths.py` 统一资源位置；`live/pokemon.mjs` 读取同一 `pokemon/data/redstar-profile.json`。原运行命令、存档目录及 sidecar 合同不变。System Two 系统提示从 Python 常量抽出，原文逐字保留；动态状态与候选不改成静态模板。
-
-## 1. 边界与职责
-
-```mermaid
-flowchart TD
-  ROM[恢复的或用户显式指定的 ROM] --> E[PyBoy / emulator.py]
-  E --> O[Reader.snapshot: 只读观察]
-  O --> M[ProgressTracker + CampaignPlanner]
-  M --> P[planning: 带来源的现场摘要]
-  P --> D[DeepSeek: 一个短期计划]
-  D --> C[plan_contract: 引用及验收校验]
-  C --> M
-  M --> J[prompt + Jev: 当前计划内的一次按键选择]
-  J --> V[校验选项与响应]
-  V --> E
-  O --> R[验收 / 失效 / 暂停 / 重规划]
-  R --> M
-  E --> H[RGB → FFmpeg → HLS]
-  M --> L[events.jsonl / checkpoint]
-  L --> UI[只读网页: SSE]
-  H --> UI
-```
-
-| 模块 | 职责 | 不承担什么 |
-| --- | --- | --- |
-| `memory.py` / `emulator.py` | 读取真实内存、检查 ROM 身份、执行物理输入 | 不选择剧情，不修改 RAM |
-| `planning.py` / DeepSeek | 综合当前场景、记忆和失败结果，提出短期子目标与资源策略 | 不生成坐标、代码或按键序列 |
-| `plan_contract.py` | 提供可引用目标、验证计划结构、根据真实新状态验收 | 不把模型声明当事实 |
-| `campaign.py` | 管理世界记忆、计划生命周期、导航建议和紧急治疗仲裁 | 双模型模式不强制执行固定剧情目录 |
-| `progress.py` / `activity.py` | 记录动作效果、循环及可观察活动 | 不把走到新坐标等同于剧情完成 |
-| `prompt.py` / `jev.py` | 构造当前唯一意图及候选，调用 Jev 并校验响应 | 不用本地假答案掩盖模型失败 |
-| `team_strategy.py` / `battle_strategy.py` | 基于可用 HP/PP/状态和招式数据给出补给、战斗建议 | 不是完整战斗搜索，不提供精确胜率 |
-| `live/` / `video.py` | 运行入口、只读状态展示、原生视频 | 网页不发控制输入，不以截图冒充视频 |
-
-当前仍然是 **Jev 逐键控制**。导航器的 `next_button` 只是建议，执行器只执行校验后的 Jev 回答。将确定路径改成程序自动执行可以另行设计，但不能在不更新架构记录的情况下把它混进当前系统。
-
-## 2. 跟踪一次实际输入
-
-从 [run.py](../pokemon/run.py) 的 `run()` 开始：
+## 1. 默认控制链
 
 ```text
-Reader.snapshot()
-→ tracker.context() + campaign.context()
-→ maybe_plan()：无有效计划时请求 DeepSeek
-→ 必要时重建 campaign context
-→ Jev choose()
-→ 接受的 decision 先写事件
-→ Emulator.press()
-→ 新 snapshot()
-→ record_outcome() / 计划验收 / checkpoint
+Reader.snapshot() —— 完整内部状态只供解码/独立验收
+       ↓ perception.project()：明确的结构化玩家观察白名单
+Experience —— 实际视野、已访问地图、历史对白、输入前后结果
+       ↓
+System Two / DeepSeek —— 子目标、策略、验收条件、带证据引用的笔记
+       ↓ normalize_observed_plan() 校验
+PlanManager —— 持久计划与事实验收，不选剧情、不自动治疗
+       ↓
+System One / Jev —— 按键 + 是否需要重新规划（同次请求的独立问题）
+       ├─ replan：丢弃并行的按键答案，回到 System Two
+       └─ continue：执行被选中的一个按键
+                         ↓
+              重新观察、记录、完成/失效/到期后再规划
 ```
 
-Game Boy 提供九个有限输入：上、下、左、右、A、B、Start、Select、wait。动作集合固定是设备接口，不等于行动顺序固定。一次方向输入可能只转身、撞墙或移动菜单，必须读回结果。
+没有隐藏按键宏。路径是对**模型已选择目标**的几何计算，不是目标选择器；所有实际按键仍由 Jev 返回。默认输入中不存在 `recommended_move`、`next_button`、固定剧情目录或 `heal_party` 仲裁。
 
-## 3. 观察与知识合同
+## 2. 目录与阅读顺序
 
-事实携带 `verified`、`quality`、`source`；未初始化、不一致或尚未验证的数据保持未知。DeepSeek 和 Jev 共用 `observation_for_model()` 的质量过滤边界。
+| 文件/目录 | 职责 |
+|---|---|
+| `pokemon/run.py` | 唯一控制循环，预算、日志、存档；默认 `knowledge_mode=observed` |
+| `pokemon/perception.py` | 模型观察边界；不把原始 RAM 字典直接当模型状态 |
+| `pokemon/experience.py` | 有界地图/对白/动作经验与模型笔记，事实和假设分开 |
+| `pokemon/plan_manager.py` | 无手写游戏策略的计划管理器，兼容事件中的 `campaign` 字段 |
+| `pokemon/model_context.py` | 两个模型的中立输入，保持相同的观察权限 |
+| `pokemon/planning.py` / `jev.py` | 模型请求、重试/错误、响应检查 |
+| `pokemon/plan_contract.py` | observed v3 与显式 assisted v2 合同校验 |
+| `pokemon/memory.py` / `emulator.py` | 版本绑定的只读 RAM 适配及模拟器执行 |
+| `prompts/system1/`、`prompts/system2/` | 固定提示；`*-assisted.txt` 仅供旧方案对照 |
+| `tests/python/`、`tests/web/`、`tests/integration/` | 单测、网页测试、真实模拟器/显式模型测试 |
+| `pokemon/data/` | 原始版本匹配/解码数据；完整地图不进入默认模型规划 |
+| `live/` | 原生 RGB→HLS、事件→SSE，只读网页 |
 
-- **当前事实**：玩家位置、场景、对白、队伍、菜单、出口和动作前后变化。
-- **历史事实**：已观察到的地图转移、访问位置、对话线索、已完成剧情证据。
-- **源码先验**：地图结构、招式和主线参考。相关历史源码并不与当前 ROM 逐字节相同。
-- **模型计划**：待验证的行动意图，不能反向写成已发生事实。
+历史 `campaign.py`、`team_strategy.py`、`battle_strategy.py`、`campaign_knowledge.py`、`route_regions.py` 未删除，以免再次破坏可复用资源，但只在 **`--knowledge-mode assisted`** 的对照模式下参与策略。默认循环不实例化 CampaignPlanner，也不调用其导航、治疗或招式评分。
 
-`wTileMap` 的字节既可能代表文字，也可能是地形；仅在相应场景解码为文字。战斗开始但双方结构未初始化时，阶段可已知，HP/招式仍应未知。游戏文字属于数据，不允许覆盖系统指令。
+## 3. 观察合同：准确不等于有权知道
 
-## 4. System Two → System One
+默认 `structured_player_v1` 是明确允许较丰富的结构化玩家信息，不声称纯像素、无先验或从零学习：
 
-DeepSeek 收到当前场景、对白、可见对象/出口、路线诊断、队伍/PP、事实、近期动作和此前计划结果。`target_catalog()` 为可用目标建立引用，模型只能选本次提供的 `target_ref`。
+- 自身位置、金钱、队伍、背包、HP/PP/异常状态可以不打开菜单就读取。
+- 已拥有招式的通用规则描述可作为标注来源的参考，不计算/排序推荐动作。
+- 当前对白、菜单、光标、局部视野背景与真正可见的对象可读取。
+- 当前视野内的传送点位置可作为结构化局部交互信息，**不提前公开目的地**。
+- 对手只暴露当前种类、等级、状态与粗粒度血条。血条是 RAM 比例量化到 48 格，**不是实际屏幕像素解码**；不暴露精确 HP、属性数值、完整招式。
+- 不向模型提供全地图连接、屏幕外首次出现的 NPC、脚本触发坐标、隐藏剧情位和预置任务目标。
 
-以下是合同结构示例，不是预排剧情：
+RAM 解码器仍使用特定版本结构定义和源码校验。这与把源码攻略送入模型不同，但也不是严格的视觉游戏基准。未知字段保留 null/质量边界。`game_completed` 只由独立终局验收器用于停机，不作为未来任务目录发送给模型。
+
+## 4. 记忆是什么
+
+`Experience` 保存已看见的地形格、当前/过去见过的对象及最后观察时间、真实方向输入后的跨图连接、已读对白、动作前后变化。跨图边是有向经验，不凭空补反向路径；战斗失败/脚本移动不当作可自由重放的道路。
+
+模型输入包含当前地图最多 65×65 的已观察窗口、已访问地图概览、最近 64 条连接、40 条对白及 12 次动作前后摘要。完整持久容器也有上限（256 图、每图 12000 格、512 连接、160 对白、64 动作、32 条模型笔记），不是无限日志。远处裁剪和遗忘在输入中说明，不能把“不在保留窗口”解释成“从未发生”。
+
+DeepSeek 可以输出最多 4 条 `memory_updates`，每条必须引用本次收到的观察/对白/动作/目标证据。记录固定标为 `system2_hypothesis_not_verified_fact`，带 plan_id、步骤和可用的证据摘录；**模型推断不会写进已验证事实或地图**。对白/笔记都是数据，不能改变系统/API指令。
+
+旧存档只迁移带 `observed_background` / `observed_player_position` / `observed_dialog` 等明确来源的历史记录，以及实际记录的跨图边；不导入旧攻略计划、治疗目标、源码路径或全剧情事实。迁移不改动原 sidecar，新的运行输出写入新会话目录。
+
+## 5. 计划合同与模型主导权
+
+生产模型返回 `target_ref` 或 null，引用必须来自本次实际观察/经验目录。不能编造地图 ID、坐标、代码或按钮脚本。模型选择当前目标，代码可在已观察地形上给出到此目标的路径坐标，但不返回“建议下一键”，也不自动走路。路径未知不等于不可达。
 
 ```json
 {
-  "subgoal": "use_observed_exit",
-  "intent": "进入当前已观察出口连接的区域，然后重新评估",
-  "reasoning": "选择当前有证据支持的短程目标",
-  "target_ref": "由本次 targets 提供的引用",
-  "success": {"type": "target_reached"},
-  "resource_policy": {
-    "wild_battle": "run",
-    "catch_species": null,
-    "heal_hp_ratio": 0.5,
-    "max_party_size": 2
-  },
+  "subgoal": "model_chosen_identifier",
+  "intent": "模型根据现场决定的短期目标",
+  "reasoning": "证据、理由和未解决的不确定性",
+  "target_ref": null,
+  "success": {"type": "state_changed"},
+  "policy": "模型自己的执行策略；可为空",
+  "resource_policy": {},
+  "memory_updates": [],
+  "replan_when": [],
   "expires_steps": 160,
   "max_no_effect_steps": 24
 }
 ```
 
-程序解析真实地图/坐标，不接受模型任意生成的 ID 或坐标。`success.type` 支持 `target_reached`、`fact_true`、`dialog_closed`、`party_grew`、`balls_increased`、`new_tile`、`battle_finished`。`fact_true` 还需引用本次提供的事实。
+这是格式示例，不是固定流程。`resource_policy` 缺失时就是空，不补默认逃跑、半血治疗或两只队伍。即使模型显式写了资源偏好，它也只交给 Jev 判断；程序不自动替换动作。如果模型需要某种风险触发重新规划，应明确写 `replan_when`，例如 `party_hp_below` 与阈值。
 
-语义必须谨慎：走近 NPC 不等于已交谈；战斗结束不等于获胜；局部目标完成不等于通关。Jev 读取计划与新状态，再选择当前输入，不负责重新推导全主线。
+验收支持接近目标、地图/场景/可观察状态变化、对白关闭、队伍/球/新格增加、战斗结束、已提供事实为真。这些是**测量合同**，不是剧情目录：走近不等于交互成功，战斗结束不等于赢，state_changed 特别弱，不能当成剧情进展。终局用独立证据。
 
-## 5. 计划生命周期与降级
+生命周期：`active → completed / failed / invalidated / expired`。默认没有自动治疗导致的 suspended；错误计划可提前结束。Jev 的独立 `plan_status` 也可以请求重规划，这会在任何按键执行之前丢弃该次并行按键答案。空密钥、非法响应、服务故障不触发伪造动作。
 
-```text
-无有效计划 → 请求 → 规范化校验 → active
-active → completed / failed / invalidated / expired → 保存结果 → 重规划
-active → suspended（紧急治疗，暂停 TTL）→ 恢复后重新评估
-```
+## 6. 模式、费用和可观察性
 
-结束记录写入 `plan_history`，包含目标、期望条件、实际证据与原因，并随 checkpoint 保存。旧格式计划没有可执行验收合同时失效，不盲目复用。失败请求有独立记录，不能保留已经无效的计划继续猜按键。
+两个正交开关：
 
-`--planner-mode deepseek` 要求真实规划服务；`auto` 无密钥时显式记录规则回退；`local` 使用 `campaign_knowledge.py` 的固定主线规则作对照。该目录在双模型模式只是带来源的参考。紧急补给可暂停模型计划，但此时只向 Jev 暴露当前有效的治疗意图。
+- `--knowledge-mode observed`（默认）：上述观察/记忆；`assisted`：显式旧攻略与策略对照。
+- `--planner-mode deepseek`：要求规划服务；`auto`：有密钥则双模型，缺少时为 Jev-only observed；`local`：禁用 System Two。要复现实验旧规则，用 `assisted + local`。
 
-## 6. 导航与资源
+`--steps` 现在限制决策轮次，包含 Jev 请求重规划但未执行按键的轮次；`executed_actions` 单独计数。`plan_review_requests`、`knowledge_mode`、`observation_policy` 写入报告。规划调用另有预算；暂停和存档不是通关。
 
-`route_regions.py` 使用“地图 ID + 连通区域”而非仅地图 ID 建图，处理不同入口、单向台阶和柜台交互站位。它是有限范围的源码先验；首个出口与当前观察不符时返回未知，不把静态连接当作一定可通过。
+当前 UI 继续展示事件、计划及可展开的真实请求，不是静态的示意状态。测试与运行结果只放被忽略的 outputs/runs 或 Actions Artifact。
 
-`campaign.py` 保存观察地形、失败方向和实际地图转移，提供局部 BFS 建议。恢复不整图清除历史地形；动态观察继续修正过期信息。静态地形路由仍不完整覆盖剧情锁、后期机关或所有野外技能。月见山仍需用实际 checkpoint 做端到端评估，不能因为地图表有它就宣称通过。
+## 7. 验证边界
 
-治疗依据真实 HP、异常状态、最大 PP 和经过校验的资源阈值。捕获只在有效野外战斗、确有可用球且目标/队伍限制满足时给出建议。野外逃跑策略不同于训练家战斗；捕获菜单方向需要匹配当下光标，不能只凭一段固定文字。
+默认路径测试必须证明：改变隐藏字段不改变两模型输入；低血量不自动回城；招式不自动排名；经验只由观察更新；笔记不会变成事实；完成/失败确实触发重规划；Jev 要求重规划时并行按键不会执行。
 
-## 7. 持久化、视频与安全
+旧策略测试通过 `tests/python/assisted_helpers.py` 显式选择 assisted，保留对照，不冒充默认模式测试。`test_model_agency.py` 专门检查默认控制链。真实 ROM 由 integration 分别验证 raw→过滤→记忆→序列化；模拟 API 的测试不等于真实模型对局。
 
-[artifacts.py](../pokemon/artifacts.py) 是 checkpoint/JSON 读写模块，不是生成目录，必须保留。状态文件与 manifest、progress/campaign 旁文件共享身份校验；不同会话不得随意拼接。
-
-模型请求期间模拟器暂停。`video.py` 在模型线程读取 RGB，再交给编码线程；FFmpeg 输出 H.264/HLS。`live/server.mjs` 读取 JSONL，通过 SSE 展示实际请求和动作。视频缓冲与事件可能存在时差，不能用手柄闪烁代替执行证据。
-
-请求/响应日志脱敏，不记录密钥；展示端只读且默认监听本机。单一 runner 锁防止重复启动。临时 Jev 不可用时保留画面和 checkpoint，规划请求失败在严格模式明确暂停。动作、规划和墙钟预算是停止条件，不是成功条件。
-
-## 8. 版本控制边界
-
-| 进入 Git | 不进入 Git |
-| --- | --- |
-| 运行源码、启动配置、依赖清单 | `.env`、认证资料 |
-| 内存适配、地图/招式 JSON、重建工具及两份原上传资产 | 其他未明确授权入库的 ROM、存档、旁文件 |
-| HLS 播放器及许可证 | 视频片段、截图、GIF、回放页面 |
-| 核心及可复用实机测试源码、架构文档 | 运行日志、测试输出、evidence/archive/results、历史实测夹具 |
-
-必需数据集中在 `pokemon/data/`：`redstar-profile.json`、`redstar-world.json`、`redstar-route-regions.json`。重建入口：
-
-```bash
-.venv/bin/python pokemon/world_data.py /path/to/redstarbluestar
-.venv/bin/python pokemon/route_regions.py /path/to/redstarbluestar
-```
-
-生成器要求固定源码 `Rangi42/redstarbluestar@08deafad427f0904f285e515c360003efc19d3dc`。修改地址/知识后必须重新做对应 ROM 的适配验证；成功解析源码不是实机正确的证明。
-
-旧实验通过 Git 提交和 PR 查询，不在工作树复制一套 archive。新的人工可读结论进入决策/问题文档，原始运行数据留在本地或受控附件；CI 没有回写权限。
-
-## 9. 阅读顺序
-
-[run.py](../pokemon/run.py) → [planning.py](../pokemon/planning.py) / [plan_contract.py](../pokemon/plan_contract.py) → [campaign.py](../pokemon/campaign.py) → [prompt.py](../pokemon/prompt.py) / [jev.py](../pokemon/jev.py) → [memory.py](../pokemon/memory.py) / [emulator.py](../pokemon/emulator.py)。最后再看 [live/](../live/) 和数据生成器，不必先读几万行地图数据。
+本次重构不能证明月见山或整场游戏成功；模型可能仍选错目标、反复修改计划，当前背景图也不识别所有机关/招牌语义。需要对应存档与真实两模型运行才能测量策略效果。

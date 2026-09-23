@@ -14,7 +14,7 @@ import unittest
 from unittest.mock import Mock, patch
 
 from _paths import ROOT, POKEMON
-from run import run
+from assisted_helpers import run
 
 TEST_KEY = "fixture-only-not-a-real-key"
 PROFILE = {"rom_sha1": "offline-fixture-rom-identity"}

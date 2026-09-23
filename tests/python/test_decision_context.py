@@ -9,9 +9,11 @@ import unittest
 from unittest.mock import Mock, patch
 
 from _paths import ROOT, POKEMON
-from jev import BUTTONS, build_request, observation_for_model
+from jev import BUTTONS
+from assisted_helpers import build_request, observation_for_model
 from progress import ProgressTracker
-from run import run, restore_progress
+from run import restore_progress
+from assisted_helpers import run
 
 
 def world_state(x=3, mode="overworld", verified=True):

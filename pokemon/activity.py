@@ -29,8 +29,9 @@ def observable_state(observation):
             else "\n".join((observation.get("screen_text") or {}).get("rows") or [])
         )
         result["text"] = normalized_text(text)
-    if mode == "main_menu" and type(observation.get("menu_cursor_raw")) is int:
-        result["menu_cursor"] = observation["menu_cursor_raw"]
+    cursor = observation.get("main_menu_cursor", observation.get("menu_cursor_raw"))
+    if mode == "main_menu" and type(cursor) is int:
+        result["menu_cursor"] = cursor
     battle = observation.get("battle") or {}
     if battle.get("verified") is True or battle.get("phase_verified") is True:
         result["battle_phase"] = (battle.get("active"), battle.get("phase"), battle.get("menu"))
@@ -45,7 +46,7 @@ def observable_state(observation):
             if isinstance(mon, dict):
                 result[name] = {
                     k: mon.get(k)
-                    for k in ("species_internal_id", "level", "hp", "max_hp", "status_bits")
+                    for k in ("species_internal_id", "level", "hp", "max_hp", "health_bar_units", "status_bits")
                 }
                 result[name]["moves"] = [
                     (m.get("move_id"), m.get("pp")) for m in (mon.get("moves") or [])
@@ -67,6 +68,11 @@ def observable_state(observation):
             )
             for m in party
         ]
+    if observation.get("observation_policy") == "structured_player_v1":
+        if isinstance(observation.get("bag"), list):
+            result["bag"] = [(v.get("item_id"), v.get("quantity")) for v in observation["bag"]]
+        if type(player.get("money")) is int:
+            result["money"] = player["money"]
     return result
 
 
