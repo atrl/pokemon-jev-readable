@@ -1,7 +1,0 @@
-runs/
-.work/
-__pycache__/
-.env
-*.state
-*.state.json
-*.sav
