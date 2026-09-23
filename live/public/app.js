@@ -541,6 +541,10 @@ function eventSummary(event) {
     }
     case "planning_error":
       return `高层规划失败：${brief(event.error)}${event.http_status ? ` · HTTP ${event.http_status}` : ""}`;
+    case "progress": {
+      const p = Array.isArray(event.position) ? ` · 位置 ${event.position.join("/")}` : "";
+      return `已执行 ${event.executed_actions} 个动作：新格 ${event.new_tiles} · 移动 ${event.movement} · 换图 ${event.map_changes} · 规划 ${event.planning_calls}（计划 ${event.plans}）${event.loop_detected ? " · 检测到循环" : ""}${p}`;
+    }
     case "objective":
       return (
         event.objective?.intent ??

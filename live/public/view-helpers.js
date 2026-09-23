@@ -53,6 +53,7 @@ export const eventNames = {
   video_started: "游戏视频已连接",
   video_restarted: "游戏视频已重连",
   checkpoint: "已自动存档",
+  progress: "每 100 步进展",
   objective: "主线目标更新",
   planner_configuration: "规划模式与模型",
   planner_request: "DeepSeek 规划请求",

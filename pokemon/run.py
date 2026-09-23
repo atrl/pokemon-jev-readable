@@ -548,6 +548,21 @@ def run(
             if report["executed_actions"] % checkpoint_every == 0:
                 save_checkpoint()
                 emit("checkpoint", step=step, saved_step=report["executed_actions"])
+            if report["executed_actions"] and report["executed_actions"] % 100 == 0:
+                emit(
+                    "progress",
+                    step=step,
+                    executed_actions=report["executed_actions"],
+                    new_tiles=report["new_tiles_this_run"],
+                    movement=report["movement_actions"],
+                    map_changes=report["map_changes"],
+                    planning_calls=report["planning_calls"],
+                    plans=report["plans"],
+                    plan_review_requests=report["plan_review_requests"],
+                    active_objective=after["campaign"]["active_objective"].get("id"),
+                    loop_detected=after["progress"].get("loop_detected"),
+                    position=[after["player"].get(k) for k in ("map_id", "x", "y")],
+                )
             save_report()
             if activity["should_recover"]:
                 attempt = stall_monitor.begin_recovery()
