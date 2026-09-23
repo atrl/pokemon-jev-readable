@@ -68,6 +68,8 @@ jobs:
               dest.write_bytes(content)
           for name in delta['delete']:
               path(name).unlink()
+          for directory in ('pokemon/tests', 'pokemon/prompts'):
+              path(directory).rmdir()
           shutil.rmtree(parts)
           path('.github/workflows/layout-review.yml').unlink()
           path('.github/layout-0.b64').unlink(missing_ok=True)
