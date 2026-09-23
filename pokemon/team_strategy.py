@@ -84,7 +84,7 @@ def _damaging(move):
     return None, "needs_data"
 
 
-def assess_recovery(snapshot):
+def assess_recovery(snapshot, *, low_hp_ratio=LOW_HP_RATIO):
     """Describe current need and full recovery with explicit unknowns.
 
     Full-PP evidence is either per-move verified max_pp or a verified,
@@ -174,7 +174,7 @@ def assess_recovery(snapshot):
     reasons = result["trigger_reasons"]
     if not viable:
         reasons.append("no_viable_party")
-    elif result["hp_ratio"] < LOW_HP_RATIO:
+    elif result["hp_ratio"] < low_hp_ratio:
         reasons.append(
             "last_viable_member_low_hp" if len(viable) == 1 else "combined_viable_hp_low"
         )
@@ -360,7 +360,7 @@ def _refresh_clinic_route(snapshot, objective, stable_overworld, world_data, rou
         }
 
 
-def plan_support(snapshot, active=None, *, world_data=None, route_planner=None):
+def plan_support(snapshot, active=None, *, world_data=None, route_planner=None, resource_policy=None):
     """Return a latched ``heal_party`` objective or None; never select inputs.
 
     None with no active support means no verified critical trigger in a safe
@@ -372,7 +372,10 @@ def plan_support(snapshot, active=None, *, world_data=None, route_planner=None):
     """
     snapshot = snapshot if isinstance(snapshot, dict) else {}
     active = active if isinstance(active, dict) and active.get("id") == "heal_party" else None
-    assessment = assess_recovery(snapshot)
+    threshold = (resource_policy or {}).get("heal_hp_ratio", LOW_HP_RATIO)
+    if type(threshold) not in (int, float) or not 0.15 <= threshold <= 0.9:
+        threshold = LOW_HP_RATIO
+    assessment = assess_recovery(snapshot, low_hp_ratio=threshold)
     if active:
         if assessment["full_recovery"] is True and assessment["stable_overworld"]:
             return None

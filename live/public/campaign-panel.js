@@ -131,6 +131,8 @@ export function renderCampaign(list, run) {
     objective.completion === true;
   $("campaign-status").textContent = done
     ? "主线已验证完成"
+    : campaign.plan_suspended ? "模型计划暂停：正在治疗"
+    : objective.id === "awaiting_model_plan" ? "等待 DeepSeek 规划"
     : ({ active: "目标推进中", needs_data: "目标需要验证数据" }[
         objective.status
       ] ?? brief(objective.status, "等待目标"));
@@ -195,7 +197,9 @@ export function renderCampaign(list, run) {
   }
   const source = objective.source;
   $("campaign-knowledge-source").textContent = campaignRecord(source)
-    ? `目标知识来源：${source.repository ?? "未提供仓库"}${source.commit ? ` @ ${source.commit}` : ""} · ${source.quality ?? "未注明质量"}${source.full_source_binary_match === false ? " · 源码与 ROM 非逐字节一致" : ""}`
+    ? source.quality === "planner_model_advisory"
+      ? `System Two：${source.model ?? "未记录模型"} · 计划 ${campaign.plan?.plan_id ?? "未知"} · ${campaign.plan?.status ?? "active"}`
+      : `目标知识来源：${source.repository ?? "未提供仓库"}${source.commit ? ` @ ${source.commit}` : ""} · ${source.quality ?? "未注明质量"}${source.full_source_binary_match === false ? " · 源码与 ROM 非逐字节一致" : ""}`
     : source
       ? `目标知识来源：${brief(source)}`
       : "此记录未附目标知识来源。";

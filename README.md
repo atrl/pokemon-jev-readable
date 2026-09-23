@@ -4,6 +4,10 @@
 
 **从 [源码阅读路线](docs/READING.md) 开始。** 安装和运行参数见 [运行说明](pokemon/README.md)。
 
+## 双模型修复
+
+[System Two + System One 合同、生命周期与实测入口](pokemon/docs/DUAL_MODEL.md)。配置 DeepSeek 后由模型制定短期计划，CampaignPlanner 负责记忆和验收；只在显式 local 模式回退到固定主线。
+
 ## 启动
 
 需要 Node.js 22.16+、Python 3.12（支持 3.10+）和 FFmpeg。Node 端只使用内置模块；HLS 浏览器依赖已随仓库提供。

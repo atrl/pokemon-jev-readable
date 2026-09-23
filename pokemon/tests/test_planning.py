@@ -53,7 +53,9 @@ def observation(**overrides):
             }
         ],
         "bag": [],
-        "milestones": {"badge_count": {"value": 1, "verified": True}},
+        "milestones": {"badge_count": {"value": 1, "verified": True},
+                       "party_count": {"value": 1, "verified": True}},
+        "party_state": {"ready": True, "verified": True},
         "battle": {"active": False},
     }
     base.update(overrides)
@@ -109,7 +111,7 @@ class SituationTests(unittest.TestCase):
         self.assertEqual(situation["position"], [25, 12])
         self.assertEqual(situation["pokeballs"], 0)
         self.assertEqual(situation["badges"], 1)
-        self.assertEqual(situation["party"][0]["species"], "CHARMELEON")
+        self.assertEqual(situation["party"][0]["species_name_prior"], "CHARMELEON")
         self.assertFalse(situation["plan_active"])
 
     def test_triggers_fire_on_stall_signals(self):
@@ -240,7 +242,7 @@ class PromptPlanTests(unittest.TestCase):
         request = build_request(raw, "Complete the story", [])
         focus = request["state"]["current_focus"]
         self.assertIn("逃跑", focus)
-        self.assertIn("RUN is the bottom-right", request["questions"]["button"]["criteria"]["down"]["current_battle_advice"])
+        self.assertIn("RUN is the bottom-right", request["questions"]["button"]["criteria"]["right"]["current_battle_advice"])
         self.assertEqual(
             request["state"]["game"]["battle"]["battle_policy"]["policy"], "run"
         )
@@ -257,7 +259,7 @@ class PromptPlanTests(unittest.TestCase):
         )
         request = build_request(raw, "Complete the story", [])
         self.assertIn("精灵球", request["state"]["current_focus"])
-        self.assertIn("ITEM", request["questions"]["button"]["criteria"]["up"]["current_battle_advice"])
+        self.assertIn("ITEM", request["questions"]["button"]["criteria"]["down"]["current_battle_advice"])
 
     def test_plan_intent_reaches_overworld_focus(self):
         raw = observation(
@@ -274,6 +276,9 @@ class PromptPlanTests(unittest.TestCase):
 class RunLoopPlannerTests(unittest.TestCase):
     def test_run_loop_records_plan_and_feeds_it_forward(self):
         plan = {
+            "schema_version": 2, "success": {"type": "target_reached"},
+            "target": {"kind": "map", "map_id": 60}, "baseline": {},
+            "max_no_effect_steps": 24,
             "subgoal": "exit_mt_moon_3",
             "intent": "从月见山 3 层走到 2 层",
             "target_map_id": 60,

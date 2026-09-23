@@ -154,6 +154,7 @@ def observation_for_model(observation: dict) -> dict:
 def compact_campaign(game: dict, campaign: dict) -> dict:
     """Keep the current task and relevant world fields in the model budget."""
     if campaign:
+        campaign = {k: v for k, v in campaign.items() if k != "cell_visits"}
         objective = campaign.get("active_objective") or {}
         wanted = set((objective.get("completion_evidence") or {})) | {
             "party_count",
@@ -259,7 +260,16 @@ def _battle_policy(game: dict, campaign: dict) -> tuple[str, bool, int]:
     wild = battle.get("type") == "wild"
     balls = pokeball_count(game.get("bag"))
     plan = campaign.get("plan") if isinstance(campaign.get("plan"), dict) else {}
-    policy = (plan.get("resource_policy") or {}).get("wild_battle")
+    if campaign.get("plan_suspended") or plan.get("status") == "suspended":
+        plan = {}
+    resources = plan.get("resource_policy") or {}
+    policy = resources.get("wild_battle")
+    wanted = resources.get("catch_species")
+    enemy_name = ((game.get("battle") or {}).get("enemy") or {}).get("species_name_prior")
+    if policy == "catch" and wanted and str(enemy_name or "").upper().strip("@") != str(wanted).upper().strip("@"):
+        policy = "run"
+    if policy == "catch" and isinstance(game.get("party"), list) and len(game["party"]) >= resources.get("max_party_size", 6):
+        policy = "run"
     if not wild:
         return "fight", False, balls
     if policy == "catch" and balls > 0:
@@ -290,8 +300,10 @@ def focus_and_choices(game: dict, campaign: dict, progress: dict, feedback: dict
     current_focus = (campaign.get("active_objective") or {}).get("intent") or progress.get(
         "current_focus", "Use verified observations to advance the goal."
     )
-    if plan and not battle_active:
-        current_focus = f"模型规划的子目标：{plan.get('intent')}。" + current_focus
+    if plan and not battle_active and not campaign.get("plan_suspended") and plan.get("status") != "suspended":
+        current_focus = plan.get("intent") or current_focus
+    elif campaign.get("plan_suspended"):
+        current_focus = "Emergency team recovery temporarily suspends the model plan. " + current_focus
     disengage = False
     if battle_active:
         current_focus = "Resolve the current battle UI first. Advancing battle introduction/text usually needs A; choose FIGHT and a usable damaging move when its menu appears. Resume the story objective after battle."
@@ -332,6 +344,8 @@ def focus_and_choices(game: dict, campaign: dict, progress: dict, feedback: dict
                     "这是野外战斗，默认逃跑以节省时间：把指令光标移到 RUN（右下）并用 A 确认。"
                     "遇到训练家战斗不能逃跑，改为选择 FIGHT + 有效伤害招式。"
                 )
+            if battle.get("menu") not in ("command", "move"):
+                current_focus = "Resolve the current battle text/animation first; acknowledge completed text with A. The resource policy (" + policy + ") applies only after a command menu is visible."
             if battle.get("menu") == "move":
                 current_focus += " 当前在招式列表：先按 B 返回指令菜单，再移动到目标指令。"
             battle["battle_policy"] = {
@@ -356,12 +370,17 @@ def focus_and_choices(game: dict, campaign: dict, progress: dict, feedback: dict
 
         if (game.get("battle") or {}).get("menu") == "move":
             _note("b", "CURRENT MENU: B leaves the move list and returns to the command menu.")
-        elif policy == "catch":
-            _note("up", "CURRENT MENU: ITEM is the bottom-left battle command; move there to open the bag.")
-            _note("left", "CURRENT MENU: ITEM is the bottom-left battle command; move there to open the bag.")
-        else:
-            _note("down", "CURRENT MENU: RUN is the bottom-right battle command; move there to flee.")
-            _note("right", "CURRENT MENU: RUN is the bottom-right battle command; move there to flee.")
+        elif (game.get("battle") or {}).get("menu") == "command":
+            positions = {"FIGHT": (0, 0), "PKMN": (1, 0), "POKéMON": (1, 0),
+                         "ITEM": (0, 1), "BAG": (0, 1), "RUN": (1, 1)}
+            current = positions.get((game.get("battle") or {}).get("selected_command"))
+            command = "ITEM" if policy == "catch" else "RUN"
+            if current is not None:
+                tx, ty = positions[command]
+                cx, cy = current
+                suggested = "left" if tx < cx else "right" if tx > cx else "up" if ty < cy else "down" if ty > cy else "a"
+                _note(suggested, f"CURRENT MENU: {command} is the {'bottom-left' if command == 'ITEM' else 'bottom-right'} battle command. Current cursor={current}; next input {suggested}.")
+                current_focus += f" Current selected command is {game['battle'].get('selected_command')}; next menu input: {suggested}."
     strategy = (game.get("battle") or {}).get("strategy") or {}
     recommended = strategy.get("next_button")
     if recommended in BUTTONS and not disengage:
