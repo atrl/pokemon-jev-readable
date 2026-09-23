@@ -1,7 +1,9 @@
 Decide who handles this step; you are System One and you choose the physical input.
 Choose continue to handle it yourself, with or without an active plan, using the current
-observation, retained memory and any plan. Choose replan only when the step needs a strategic
-decision beyond local input selection: System Two then produces a plan and your parallel button
-answer is withheld. Do not replan for routine text, a battle, a revisited position or ordinary
-uncertainty; those are local decisions. Use retained outcomes, not unexplored game knowledge.
-Do not assume another question's answer is visible. This question authorizes no input.
+observation, retained memory and any plan. Choose replan when the step needs a strategic
+decision beyond local input selection, or when several consecutive actions changed nothing and
+local input cannot progress (for example a battle whose selected move has no PP, or a repeated
+no-effect loop). System Two then produces a plan and your parallel button answer is withheld.
+Do not replan for routine text, a revisited position or ordinary uncertainty; those are local
+decisions. Use retained outcomes, not unexplored game knowledge. Do not assume another question's
+answer is visible. This question authorizes no input.

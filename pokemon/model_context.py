@@ -73,6 +73,19 @@ def build_situation(observation, campaign, progress):
     return result
 
 
+def _battle_focus(battle):
+    """Neutral UI routing: an active battle is resolved before any retained plan."""
+    if battle.get('menu') == 'move':
+        return ("A battle move menu is open. A confirms the selected move; a move with 0 PP is rejected and changes "
+                "nothing, so move the cursor to a move with PP above 0 first. The retained plan does not apply until "
+                "the battle ends.")
+    if battle.get('menu') == 'command':
+        return ("A battle command menu is open. Choose a command to resolve the battle. The retained plan does not "
+                "apply until the battle ends.")
+    return ("Resolve the active battle UI (text, animation or menu). Waiting does not advance completed text. The "
+            "retained plan does not apply until the battle ends.")
+
+
 def build_request(observation, goal, history):
     game = project(observation)
     context = observation.get('campaign') or {}
@@ -85,8 +98,29 @@ def build_request(observation, goal, history):
     campaign['plan_history'] = _compact_history(campaign.get('plan_history'))
     campaign['memory'] = _compact_memory(campaign.get('memory') or {})
     plan = campaign.get('plan') or {}
+    battle = game.get('battle') or {}
+    battle_active = battle.get('active') is True and (
+        battle.get('verified') is True or battle.get('phase_verified') is True)
+    criteria = dict(BUTTONS)
+    if battle_active:
+        current_focus = _battle_focus(battle)
+        if battle.get('menu') == 'move':
+            moves = (battle.get('player') or {}).get('moves') or []
+            slot = battle.get('selected_move_slot')
+            row = next((m for m in moves if m.get('slot') == slot), None)
+            if isinstance(row, dict):
+                name = (row.get('knowledge') or {}).get('name') or row.get('move_id')
+                criteria['a'] = (
+                    f"Press A to confirm the selected move. CURRENT: selected move {name} has {row.get('pp')} PP; "
+                    "if PP is 0 the game rejects it and no input advances, so move the cursor to a move with PP above 0 first.")
+                criteria['up'] += " CURRENT: moves the move cursor; use it to reach a move with PP above 0."
+                criteria['down'] += " CURRENT: moves the move cursor; use it to reach a move with PP above 0."
+        criteria['wait'] += " CURRENT: waiting does not advance completed battle text or a battle menu."
+    else:
+        current_focus = plan.get('intent') or (
+            "No active System Two plan. Use the nearby background grid, untried directions and retained memory to explore.")
     questions = {'button': {
-        'type': 'choice', 'criteria': dict(BUTTONS),
+        'type': 'choice', 'criteria': criteria,
         'instructions': load_prompt('system1/button.txt'),
     }}
     if campaign.get('model_planning_enabled'):
@@ -94,12 +128,12 @@ def build_request(observation, goal, history):
             'type': 'choice', 'instructions': load_prompt('system1/plan_status.txt'),
             'criteria': {
                 'continue': 'Handle this step yourself. Valid with or without an active plan: use the current observation, retained memory and any active plan to choose the button. No System Two call is made.',
-                'replan': 'Escalate to System Two and wait for a new plan before any input. Your parallel button answer is withheld. Use it when the situation needs a strategic decision you should not improvise.',
+                'replan': 'Escalate to System Two and wait for a new plan before any input. Your parallel button answer is withheld. Prefer it when several consecutive actions changed nothing or a strategic decision is needed.',
             },
         }
     return {'model': os.environ.get('TYPESAFE_MODEL', 'jev-latest'),
             'state': {'goal': goal, 'game': game, 'campaign': campaign,
-                      'current_focus': plan.get('intent') or goal,
+                      'current_focus': current_focus,
                       'feedback': take(observation.get('progress'), PROGRESS_FIELDS),
                       'recent_actions': deepcopy((campaign.get('memory') or {}).get('recent_actions', [])),
                       'input_policy': 'No ranked actions or default game strategy. A plan_status=replan answer withholds the parallel button answer.'},
