@@ -224,6 +224,14 @@ class ContractTests(unittest.TestCase):
         p=normalize_plan(proposal(memory_updates=[{'text':'considered','evidence_refs':[ref]}]), s)
         self.assertEqual(p['memory_updates'][0]['evidence_refs'],[ref])
 
+    def test_memory_note_may_cite_a_nested_action_observation(self):
+        _,_,s=setup(); s=dict(s)
+        s['memory']=dict(s.get('memory') or {})
+        s['memory']['recent_actions']=[{'after':{'observation_id':'obs:abc123'}}]
+        p=normalize_plan(proposal(target_ref=None,success={'type':'state_changed'},
+                                  memory_updates=[{'text':'seen','evidence_refs':['obs:abc123']}]), s)
+        self.assertEqual(p['memory_updates'][0]['evidence_refs'],['obs:abc123'])
+
     def test_unsupported_fields_and_raw_coordinates_rejected(self):
         _,_,s=setup()
         for fields in ({'target_map_id':99},{'buttons':['a']},{'target_ref':'map:99'},{'success':{'type':'eval','code':'x'}}):

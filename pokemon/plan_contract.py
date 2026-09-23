@@ -10,6 +10,7 @@ from copy import deepcopy
 import hashlib
 import json
 import math
+import re
 
 WILD_POLICIES = ('fight', 'run', 'catch')
 
@@ -63,6 +64,21 @@ def _text(value, name, length):
     if not isinstance(value, str) or not value.strip() or len(value) > length:
         raise ValueError(f'Invalid plan {name}')
     return value.strip()
+
+
+REF_PATTERN = re.compile(r'^(obs|action|legacy|memory|object|portal|cell|map):')
+
+
+def _collect_refs(value, out):
+    """Collect every reference token actually present in the supplied situation."""
+    if isinstance(value, dict):
+        for child in value.values():
+            _collect_refs(child, out)
+    elif isinstance(value, (list, tuple)):
+        for child in value:
+            _collect_refs(child, out)
+    elif isinstance(value, str) and REF_PATTERN.match(value):
+        out.add(value)
 
 
 def success_evidence(plan, observation, progress):
@@ -198,12 +214,12 @@ def normalize_observed_plan(data, situation):
     memory = situation.get('memory') or {}
     refs = {situation.get('observation_id')}
     # A target reference is itself an observed reference; the prompt allows notes
-    # to cite observation, targets or memory.
+    # to cite observation, targets or memory. Collect every reference token that
+    # was actually present in the situation, including nested action before/after
+    # observation ids.
     refs.update(catalog)
-    refs.update(v.get('evidence_ref') for v in catalog.values())
-    for group in ('dialogues', 'recent_actions', 'transitions'):
-        for row in memory.get(group, []):
-            refs.update((row.get('ref'), row.get('evidence_ref')))
+    for section in (memory, situation.get('game'), situation.get('active_plan'), catalog):
+        _collect_refs(section, refs)
     refs.discard(None)
     notes = data.get('memory_updates', [])
     if not isinstance(notes, list) or len(notes) > 4:
