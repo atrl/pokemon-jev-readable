@@ -116,6 +116,13 @@ class Experience:
         """All visible candidate kinds, plus encountered objects/maps. No ranking by strategy."""
         p = point(game)
         result = {}
+        # Remembered maps stay offered even when the current position cannot be
+        # aligned, so a plan can still reference a previously visited map.
+        for key, record in sorted(self.maps.items()):
+            if p is None or int(key) != p[0]:
+                result[f'map:{key}'] = {'map_id': int(key), 'kind': 'map', 'label': 'previously_visited_map',
+                    'selector': None, 'quality': 'observed_then_remembered',
+                    'last_seen_step': record['last_seen_step'], 'evidence_ref': f'memory:map:{key}'}
         if not p:
             return result
         mid = p[0]
@@ -142,11 +149,6 @@ class Experience:
                 if glyph == '.' and [x, y] != p[1:] and (record.get('cells') or {}).get(f'{x},{y}'):
                     result[f'cell:{mid}:{x},{y}'] = {'map_id': mid, 'kind': 'coordinate', 'label': 'observed_floor',
                         'selector': {'x': x, 'y': y}, 'quality': 'observed_background_only', 'evidence_ref': game['observation_id']}
-        for key, record in sorted(self.maps.items()):
-            if int(key) != mid:
-                result[f'map:{key}'] = {'map_id': int(key), 'kind': 'map', 'label': 'previously_visited_map',
-                    'selector': None, 'quality': 'observed_then_remembered',
-                    'last_seen_step': record['last_seen_step'], 'evidence_ref': f'memory:map:{key}'}
         return result
 
     def spatial(self, game):

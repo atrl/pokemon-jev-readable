@@ -343,7 +343,19 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual(len(calls),2); self.assertEqual(report['plans'],1)
         self.assertTrue(any(r['type']=='planning_retry' for r in rows))
 
-    def test_missing_required_key_does_not_start_game(self):
+    def test_remembered_maps_remain_targets_when_position_is_unaligned(self):
+        m=Experience(); m.observe(raw())
+        unaligned=raw(); unaligned['world']['source_match']=False
+        self.assertIn('map:38', m.catalog(project(unaligned)))
+
+    def test_null_target_ui_plan_is_valid_without_a_catalog(self):
+        _,_,s=setup(); s=dict(s); s['targets']={}
+        p=normalize_plan({'subgoal':'probe','intent':'press a once and observe','reasoning':'no aligned target yet',
+                          'target_ref':None,'success':{'type':'state_changed'},
+                          'expires_steps':20,'max_no_effect_steps':8}, s)
+        self.assertIsNone(p['target_ref'])
+
+
         with TemporaryDirectory() as tmp, patch.dict(os.environ,{'TYPESAFE_API_KEY':'fixture','DEEPSEEK_API_KEY':''}), patch('run.Emulator') as emulator:
             report=run(Path('OFFLINE.gb'),Path(tmp)/'run',goal='test',steps=1,planner_mode='deepseek')
         self.assertEqual(report['status'],'blocked_missing_planner_key'); emulator.assert_not_called()

@@ -10,6 +10,9 @@ A changed observation permits reassessment, not a claim that the target is now r
 Consult prior evidence before retrying; do not confuse failure, expiry or missing data with a
 permanent world fact. Lack of new coordinates alone is not failure during dialogue, a battle
 or travel across known terrain. Runtime loop diagnostics do not choose your next strategy.
+If situation.targets is empty, target_ref MUST be null; never name a portal, object, cell or map
+that is not listed. When baseline.position is null, map_changed and target_reached cannot be
+verified, so choose a null-safe predicate such as state_changed or dialog_closed instead.
 A portal target gives its observed location, NOT its unexplored destination. Remembered objects
 may move. Unknown paths are insufficient information, not proof of impossibility. A map transition
 edge is directed and does not imply a reverse route. Your pretrained game knowledge is a hypothesis,
