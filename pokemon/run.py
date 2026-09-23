@@ -9,6 +9,7 @@ The live progress stream contains structured observations, never screenshots.
 from __future__ import annotations
 import argparse
 from datetime import datetime, timezone
+import itertools
 import json
 import os
 from pathlib import Path
@@ -22,6 +23,7 @@ from jev import choose, observation_for_model, redact_secrets, DEFAULT_GAME_GOAL
 from progress import ProgressTracker
 from campaign import CampaignPlanner
 from activity import StallMonitor
+import planning
 from artifacts import (
     write_json,
     load_state,
@@ -46,8 +48,8 @@ def run(
     max_stalled_steps: int = 80,
     max_recovery_attempts: int = 3,
 ) -> dict:
-    if type(steps) is not int or not 1 <= steps <= 100_000:
-        raise ValueError("steps must be an integer in 1..100000")
+    if type(steps) is not int or not 0 <= steps <= 100_000:
+        raise ValueError("steps must be an integer in 0..100000 (0 runs without a step limit)")
     if type(checkpoint_every) is not int or not 1 <= checkpoint_every <= 1000:
         raise ValueError("checkpoint_every must be an integer in 1..1000")
     if type(max_stalled_steps) is not int or not 12 <= max_stalled_steps <= 10000:
@@ -64,6 +66,7 @@ def run(
     reader = None
     first_frame = None
     video_restarts = 0
+    planning_state = {"last_step": None, "count": 0}
     tracker = ProgressTracker()
     campaign = CampaignPlanner()
     stall_monitor = StallMonitor(max_stalled_steps, max_recovery_attempts)
@@ -87,6 +90,8 @@ def run(
         "max_recovery_attempts": max_recovery_attempts,
         "recovery_attempts": 0,
         "recovery_count": 0,
+        "planning_calls": 0,
+        "plans": 0,
     }
 
     def elapsed_ms() -> int:
@@ -122,6 +127,46 @@ def run(
         write_checkpoint(
             world, output, profile["rom_sha1"], report["executed_actions"], tracker, campaign
         )
+
+    def maybe_plan(before, step) -> bool:
+        """Escalate to the planner model on deterministic stall signals.
+
+        Returns True when a new plan was stored (so campaign context is rebuilt
+        once). All planner failures degrade silently to the existing policy.
+        """
+        campaign_ctx = before.get("campaign") or {}
+        progress_ctx = before.get("progress") or {}
+        situation = planning.build_situation(before, campaign_ctx, progress_ctx)
+        last = planning_state["last_step"]
+        situation["steps_since_plan"] = None if last is None else step - last
+        if not planning.needs_planning(situation):
+            return False
+        reasons = planning.planning_reasons(situation)
+        planning_state["last_step"] = step
+        if not planning.planner_configured():
+            emit(
+                "planning_skipped",
+                step=step,
+                reasons=reasons,
+                reason="planner_not_configured",
+            )
+            return False
+        report["planning_calls"] = report.get("planning_calls", 0) + 1
+        save_report()
+        emit("planning_requested", step=step, reasons=reasons, situation=situation)
+        try:
+            plan = planning.call_planner(situation, goal)
+        except Exception as exc:  # network/schema failures never stop play
+            emit("planning_error", step=step, error=type(exc).__name__)
+            return False
+        campaign.set_plan(plan)
+        planning_state["count"] += 1
+        report["plans"] = planning_state["count"]
+        report["plan_subgoal"] = plan.get("subgoal")
+        report["plan_target_map_id"] = plan.get("target_map_id")
+        save_report()
+        emit("plan", step=step, plan=plan, reasons=reasons)
+        return True
 
     def decide(before, step):
         """Request one decision, keeping the same observation during network outages."""
@@ -327,7 +372,9 @@ def run(
             world.tick(600)
         report["status"] = "running"
         save_report()
-        for i in range(steps):
+        # steps == 0 means no action budget: run until the story is completed
+        # or a bounded recovery pause is saved.
+        for i in (range(steps) if steps else itertools.count()):
             step = i + 1
             report["current_step"] = step
             save_report()
@@ -336,6 +383,8 @@ def run(
                 raise RuntimeError("Memory sanity check failed before action")
             before["progress"] = tracker.context(before)
             before["campaign"] = campaign.context(before)
+            if maybe_plan(before, step):
+                before["campaign"] = campaign.context(before)
             objective = before["campaign"]["active_objective"]
             if report.get("active_objective") != objective["id"]:
                 report["active_objective"] = objective["id"]
@@ -470,7 +519,12 @@ def main():
     ap.add_argument("--rom", type=Path, default=Path("red-star-2020-08-18.gb"))
     ap.add_argument("--output", type=Path, default=Path("pokemon/runs/session"))
     ap.add_argument("--state", type=Path)
-    ap.add_argument("--steps", type=int, default=5000)
+    ap.add_argument(
+        "--steps",
+        type=int,
+        default=0,
+        help="Maximum actions; 0 (default) runs without a step limit. Budget end is not a win.",
+    )
     ap.add_argument(
         "--video",
         action=argparse.BooleanOptionalAction,

@@ -13,10 +13,10 @@ python3 -m venv .venv
 .venv/bin/pip install -r pokemon/requirements.txt
 cp -n .env.example .env
 # 在 .env 中设置 TYPESAFE_API_KEY
-npm start -- --steps 5000
+npm start
 ```
 
-打开 http://127.0.0.1:18766 。已有存档时使用 `npm start -- --resume --steps 5000`。当前正在运行的会话不需要因阅读或更新代码而重新启动。
+打开 http://127.0.0.1:18766 。默认不设步数上限；已有存档时使用 `npm start -- --resume`。当前正在运行的会话不需要因阅读或更新代码而重新启动。
 
 ## 代码结构
 
@@ -26,6 +26,7 @@ npm start -- --steps 5000
 | `pokemon/memory.py`、`emulator.py` | 读取真实 RAM、执行真实输入 |
 | `pokemon/campaign.py`、`progress.py` | 持续任务、地图与最近动作记忆 |
 | `pokemon/prompt.py`、`prompts/button.txt` | 模型状态、`current_focus` 和按键候选 |
+| `pokemon/planning.py` | 停滞信号、态势报告与可选的高层规划模型（DeepSeek） |
 | `pokemon/jev.py` | JEV HTTP、重试、答案校验 |
 | `pokemon/artifacts.py`、`activity.py` | 存档/日志与停滞恢复 |
 | `live/` | 启动入口和只读直播网站 |

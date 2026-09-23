@@ -11,18 +11,19 @@ python3 -m venv .venv
 .venv/bin/pip install -r pokemon/requirements.txt
 cp -n .env.example .env
 # 在 .env 中填写 TYPESAFE_API_KEY
-npm start -- --steps 5000
+npm start
 ```
 
 打开 http://127.0.0.1:18766 ，观看原生 H.264/HLS 视频、JEV 请求/返回、当前状态、任务证据和时间统计。视频下方的手柄回显真实执行的方向键、A/B、START/SELECT 和等待状态。它是只读动作显示，不发送玩家输入；按键事件可能先于视频画面。正常运行不生成截图。
 
 | 命令 | 用途 |
 | --- | --- |
-| `npm start -- --steps 5000` | 游戏与直播网页一起启动 |
-| `npm start -- --resume --steps 5000` | 从最近有效存档继续 |
+| `npm start` | 游戏与直播网页一起启动，不设步数上限 |
+| `npm start -- --resume` | 从最近有效存档继续 |
 | `npm run live` | 只启动只读网页 |
-| `npm run pokemon -- --resume --steps 5000` | 只运行游戏，配合已有网页 |
-| `npm run pokemon:live -- --steps 5000` | `npm start` 的兼容别名 |
+| `npm run pokemon -- --resume` | 只运行游戏，配合已有网页 |
+| `npm run pokemon:live` | `npm start` 的兼容别名 |
+| `npm start -- --steps 5000` | 限定本轮最多执行 5000 个动作后保存退出 |
 | `npm start -- --help` | 查看参数，不启动游戏、网页或占用锁 |
 
 启动入口读取根 `.env` 与 `pokemon/.env`，后者优先。直接运行 Python 不会读取 `.env`，需自行导出环境变量。已有运行进程时，独占锁会拒绝第二个控制器。
@@ -33,16 +34,26 @@ npm start -- --steps 5000
 | --- | --- |
 | `TYPESAFE_API_KEY` | 必需，保存在本机环境或 Actions Secret |
 | `TYPESAFE_MODEL` | `jev-latest` |
+| `DEEPSEEK_API_KEY` | 可选；配置后卡住时调用 DeepSeek 高层规划（OpenAI 兼容接口） |
+| `DEEPSEEK_MODEL` | `deepseek-chat` |
+| `DEEPSEEK_BASE_URL` | `https://api.deepseek.com` |
 | `LIVE_HOST` / `LIVE_PORT` | `127.0.0.1` / `18766` |
 | `POKEMON_PYTHON` | 默认仓库 `.venv/bin/python` |
 | `POKEMON_FFMPEG` | 可指定 FFmpeg 路径 |
-| `--steps` | 默认 5000，支持 1..100000；预算结束不等于通关 |
+| `--steps` | 默认 0（不设步数上限），支持 0..100000；预算结束不等于通关 |
 | `--checkpoint-every` | 默认每 50 步存档 |
 | `--max-stalled-steps` | 默认 80，识别无效果操作或明确循环 |
 | `--max-recovery-attempts` | 默认 3 次有界恢复，然后保存暂停 |
 | `--no-video` | 纯结构化状态测试；无需 FFmpeg |
 
 总体目标是击败联盟冠军并登记名人堂。`--goal` 设置传给模型的总体目标文字；任务规则仍是 Red Star 主线规则库，并非任意自然语言任务规划器。
+
+## 高层规划与战斗资源策略
+
+- 本地确定性层负责识别停滞：连续无新坐标、位置循环、短窗口内反复回城。命中后生成紧凑态势报告，并在配置了 `DEEPSEEK_API_KEY` 时调用 DeepSeek 高层规划模型。
+- 规划模型只输出**建议**：一个子目标、目标地图/可交互对象、战斗资源策略（野外逃跑/捕获/开打）和理由；写入存档后可跨步保留、到期或完成时清除。**每个物理按键仍由 JEV 选择**，不接入按钮序列。
+- 未配置规划模型时自动退化为纯本地策略，不影响运行。
+- 野外战斗默认鼓励逃跑以节省时间（训练家战斗不能逃）；背包有已验证的精灵球且规划要求时，模型会被引导用 ITEM 菜单投球。若规划不可用，抓宠/购买精灵球只作为建议出现，不伪造道具。
 
 ## 存档与事件
 

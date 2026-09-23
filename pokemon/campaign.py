@@ -59,6 +59,7 @@ class CampaignPlanner:
         self.failed_edge_steps = deepcopy(data.get("failed_edge_steps", {}))
         self.steps = int(data.get("steps", 0))
         self._last_position = data.get("last_position")
+        self.plan = deepcopy(data.get("plan"))
         self.selector = selector or objective_for
 
     def _observe(self, observation):
@@ -479,6 +480,65 @@ class CampaignPlanner:
             "instruction": "Re-read the current UI and refreshed path. Repeating the failed input without a changed state was ineffective. Compare alternative inputs against current battle/UI/navigation guidance. All physical inputs still require a JEV decision.",
         }
 
+    def set_plan(self, plan):
+        """Store one planner-model plan as advisory guidance; JEV still executes."""
+        plan = deepcopy(plan) if isinstance(plan, dict) else None
+        if plan is not None:
+            plan["created_step"] = self.steps
+        self.plan = plan
+
+    def clear_plan(self, reason=None):
+        if self.plan is not None and reason:
+            self.plan["cleared_reason"] = reason
+        self.plan = None
+
+    def _plan_expired(self, observation):
+        if not isinstance(self.plan, dict):
+            return False
+        created = self.plan.get("created_step", self.steps)
+        ttl = self.plan.get("expires_steps", 80)
+        if type(ttl) is not int or ttl < 1:
+            ttl = 80
+        if self.steps - created >= ttl:
+            return True
+        complete_when = self.plan.get("complete_when")
+        if isinstance(complete_when, str) and complete_when:
+            facts = dict(self.history_facts)
+            facts.update(observation.get("milestones") or {})
+            record = facts.get(complete_when)
+            if trustworthy(record) and record.get("value") is True:
+                return True
+        return False
+
+    def _plan_objective(self, observation, story_objective):
+        """Turn the active planner plan into a navigable advisory objective."""
+        plan = self.plan if isinstance(self.plan, dict) else None
+        if not plan:
+            return None
+        selectors = [row for row in (plan.get("selectors") or []) if isinstance(row, dict)]
+        target = deepcopy(selectors[0]) if selectors else None
+        return {
+            "id": "plan:" + str(plan.get("subgoal") or "subgoal"),
+            "intent": plan.get("intent") or plan.get("subgoal"),
+            "why": plan.get("reasoning") or "模型规划的当前子目标",
+            "status": "active",
+            "completion": False,
+            "target_map_id": plan.get("target_map_id"),
+            "target": target,
+            "interaction_selectors": deepcopy(selectors),
+            "milestones": list(plan.get("milestones") or []),
+            "resource_policy": deepcopy(plan.get("resource_policy") or {}),
+            "completed_ids": story_objective.get("completed_ids", []),
+            "completion_evidence": story_objective.get("completion_evidence", {}),
+            "unknown_facts": [],
+            "plan": deepcopy(plan),
+            "source": {
+                "quality": "planner_model_advisory",
+                "model": plan.get("model"),
+                "note": "高层计划仅作建议；每个物理按键仍由 JEV 选择，完成以经验证事实为准。",
+            },
+        }
+
     def _select_objective(self, observation, world):
         """Select the story task, then apply a persistent recovery override."""
         facts = dict(observation.get("milestones") or {})
@@ -508,7 +568,8 @@ class CampaignPlanner:
 
     def _remember_objective(self, objective):
         previous = self.active.get("id") if self.active else None
-        if objective.get("id") != previous:
+        is_plan = str(objective.get("id", "")).startswith("plan:")
+        if objective.get("id") != previous and not is_plan:
             self.objective_history.append(
                 {
                     "step": self.steps,
@@ -530,8 +591,15 @@ class CampaignPlanner:
             or self.recovery.get("phase") != (observation.get("scene") or {}).get("mode")
         ):
             self.recovery = None
+        if self.plan is not None and self._plan_expired(observation):
+            self.clear_plan("expired_or_completed")
         world = observation.get("world") or {}
         objective, story_objective = self._select_objective(observation, world)
+        plan_objective = None
+        if str(objective.get("id", "")) != "heal_party":
+            plan_objective = self._plan_objective(observation, story_objective)
+        if plan_objective is not None:
+            objective = plan_objective
         self._remember_objective(objective)
         target, route = self._target_for(observation, objective)
         navigation = self._navigation(observation, target)
@@ -540,6 +608,7 @@ class CampaignPlanner:
             "active_objective": objective,
             "navigation": navigation,
             "recovery": deepcopy(self.recovery),
+            "plan": deepcopy(self.plan),
             "story_objective": {
                 "id": story_objective.get("id"),
                 "intent": story_objective.get("intent"),
@@ -557,6 +626,7 @@ class CampaignPlanner:
             "roles": {
                 "story": "data-driven prerequisite planner",
                 "navigation": "observed-background BFS guidance",
+                "planner": "advisory high-level plan from an external model; JEV still selects inputs",
                 "physical_input": "JEV choice",
             },
         }
@@ -574,6 +644,7 @@ class CampaignPlanner:
                 "active": self.active,
                 "support": self.support,
                 "recovery": self.recovery,
+                "plan": self.plan,
                 "objective_history": self.objective_history,
                 "failed_edges": self.failed_edges,
                 "failed_edge_steps": self.failed_edge_steps,

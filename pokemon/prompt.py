@@ -12,6 +12,7 @@ from pathlib import Path
 
 from battle_strategy import plan_battle
 from controls import BUTTONS
+from planning import pokeball_count
 
 BUTTON_INSTRUCTIONS = " ".join(
     (Path(__file__).parent / "prompts/button.txt").read_text().splitlines()
@@ -199,6 +200,9 @@ def compact_campaign(game: dict, campaign: dict) -> dict:
                     "completion",
                     "completion_evidence",
                     "unknown_facts",
+                    "target_map_id",
+                    "milestones",
+                    "resource_policy",
                 )
             },
             "observed_map_connections": campaign.get("observed_map_connections", [])[-8:],
@@ -245,6 +249,28 @@ def recent_actions(progress: dict, history: list[dict]) -> list[dict]:
     return recent
 
 
+def _battle_policy(game: dict, campaign: dict) -> tuple[str, bool, int]:
+    """Return (policy, disengage, pokeballs).
+
+    Wild battles default to fleeing to save real time; a planner plan may ask to
+    catch or fight instead. Trainer battles never flee.
+    """
+    battle = game.get("battle") or {}
+    wild = battle.get("type") == "wild"
+    balls = pokeball_count(game.get("bag"))
+    plan = campaign.get("plan") if isinstance(campaign.get("plan"), dict) else {}
+    policy = (plan.get("resource_policy") or {}).get("wild_battle")
+    if not wild:
+        return "fight", False, balls
+    if policy == "catch" and balls > 0:
+        return "catch", True, balls
+    if policy in ("run", "catch"):
+        return "run", True, balls
+    if policy == "fight":
+        return "fight", False, balls
+    return "run", True, balls
+
+
 def focus_and_choices(game: dict, campaign: dict, progress: dict, feedback: dict):
     """Overlay task intent, battle text, then a concrete battle-menu suggestion.
 
@@ -260,9 +286,13 @@ def focus_and_choices(game: dict, campaign: dict, progress: dict, feedback: dict
     )
     neighbors = (game.get("local_map") or {}).get("neighbors") or {}
     battle_active = (game.get("battle") or {}).get("active") is True
+    plan = campaign.get("plan") if isinstance(campaign.get("plan"), dict) else {}
     current_focus = (campaign.get("active_objective") or {}).get("intent") or progress.get(
         "current_focus", "Use verified observations to advance the goal."
     )
+    if plan and not battle_active:
+        current_focus = f"模型规划的子目标：{plan.get('intent')}。" + current_focus
+    disengage = False
     if battle_active:
         current_focus = "Resolve the current battle UI first. Advancing battle introduction/text usually needs A; choose FIGHT and a usable damaging move when its menu appears. Resume the story objective after battle."
         criteria["a"] = (
@@ -290,6 +320,25 @@ def focus_and_choices(game: dict, campaign: dict, progress: dict, feedback: dict
             criteria["wait"] = (
                 "CURRENT STATE: completed trainer challenge awaiting acknowledgement. WAIT leaves this message unchanged; missing combatant data is not a reason to keep waiting. A is the relevant acknowledgement input."
             )
+        policy, disengage, balls = _battle_policy(game, campaign)
+        if disengage:
+            if policy == "catch":
+                current_focus = (
+                    f"这是野外战斗，可以捕获且背包有 {balls} 个精灵球：在指令菜单中选择 ITEM（左下），"
+                    "选中 POKé BALL 并用 A 确认；投球后再按提示推进文本。"
+                )
+            else:
+                current_focus = (
+                    "这是野外战斗，默认逃跑以节省时间：把指令光标移到 RUN（右下）并用 A 确认。"
+                    "遇到训练家战斗不能逃跑，改为选择 FIGHT + 有效伤害招式。"
+                )
+            if battle.get("menu") == "move":
+                current_focus += " 当前在招式列表：先按 B 返回指令菜单，再移动到目标指令。"
+            battle["battle_policy"] = {
+                "policy": policy,
+                "pokeballs": balls,
+                "source": "deterministic wild-battle time policy plus planner resource_policy; advisory, JEV selects the input",
+            }
     visits = feedback.get("neighbor_visits") or {}
     for direction in ("up", "down", "left", "right"):
         criteria[direction] = {
@@ -298,9 +347,24 @@ def focus_and_choices(game: dict, campaign: dict, progress: dict, feedback: dict
             "observed_neighbor_visits": visits.get(direction),
             "meaning": "One physical directional input; may first turn, move if possible, or move a menu cursor. Background is advisory, not proof of a clear path.",
         }
+    if disengage:
+        def _note(name, text):
+            if isinstance(criteria[name], dict):
+                criteria[name] = {**criteria[name], "current_battle_advice": text}
+            else:
+                criteria[name] += " " + text
+
+        if (game.get("battle") or {}).get("menu") == "move":
+            _note("b", "CURRENT MENU: B leaves the move list and returns to the command menu.")
+        elif policy == "catch":
+            _note("up", "CURRENT MENU: ITEM is the bottom-left battle command; move there to open the bag.")
+            _note("left", "CURRENT MENU: ITEM is the bottom-left battle command; move there to open the bag.")
+        else:
+            _note("down", "CURRENT MENU: RUN is the bottom-right battle command; move there to flee.")
+            _note("right", "CURRENT MENU: RUN is the bottom-right battle command; move there to flee.")
     strategy = (game.get("battle") or {}).get("strategy") or {}
     recommended = strategy.get("next_button")
-    if recommended in BUTTONS:
+    if recommended in BUTTONS and not disengage:
         selected = (game.get("battle") or {}).get("selected_move_slot")
         current_focus = f"Current battle menu: use the disclosed damage estimate to select {strategy.get('recommended_move')} (slot {strategy.get('recommended_slot')}); visible selected move slot is {selected}. Suggested next input is {recommended}; inspect the result before another input."
         advice = {

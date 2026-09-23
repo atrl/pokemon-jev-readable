@@ -50,6 +50,10 @@ export const eventNames = {
   video_restarted: "游戏视频已重连",
   checkpoint: "已自动存档",
   objective: "主线目标更新",
+  planning_requested: "请求高层规划",
+  plan: "接入模型规划",
+  planning_skipped: "未配置规划模型",
+  planning_error: "高层规划失败",
 };
 const buttonNames = {
   up: "↑ 上",

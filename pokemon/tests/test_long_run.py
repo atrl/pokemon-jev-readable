@@ -56,6 +56,33 @@ class LongRunTests(unittest.TestCase):
             emulator.assert_not_called()
             choose.assert_not_called()
 
+    def test_zero_steps_means_no_budget_and_negative_is_rejected(self):
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            patch.dict(os.environ, {"TYPESAFE_API_KEY": ""}),
+            patch("run.Emulator") as emulator,
+        ):
+            output = Path(directory) / "unlimited-run"
+            report = run(
+                Path("NO-ROM.gb"),
+                output,
+                goal="Offline validation",
+                steps=0,
+                allow_missing_key=True,
+            )
+            self.assertEqual(report["status"], "blocked_missing_key")
+            self.assertEqual(events(output)[0]["maxSteps"], 0)
+            emulator.assert_not_called()
+        with tempfile.TemporaryDirectory() as directory:
+            with self.assertRaises(ValueError):
+                run(
+                    Path("NO-ROM.gb"),
+                    Path(directory) / "run",
+                    goal="Offline validation",
+                    steps=-1,
+                    allow_missing_key=True,
+                )
+
     def test_checkpoints_are_available_during_run_with_verified_hash_and_step(self):
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / "offline-run"
