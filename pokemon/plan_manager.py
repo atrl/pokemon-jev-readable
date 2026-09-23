@@ -7,7 +7,7 @@ from __future__ import annotations
 from copy import deepcopy
 from experience import Experience
 from perception import POLICY, project, point, take
-from plan_contract import success_evidence
+from plan_contract import counter_growth, success_evidence
 
 
 class PlanManager:
@@ -91,7 +91,13 @@ class PlanManager:
             # An unchanged position during dialogue/battle is not automatically failure.
             tail = self.memory.effects[-plan['max_no_effect_steps']:]
             unchanged = len(tail) == plan['max_no_effect_steps'] and all(not e['changed_fields'] for e in tail)
-            if unchanged or (game['scene']['mode'] == 'overworld' and progress.get('loop_detected')):
+            # Repetition is judged from this plan's own window; a loop inherited
+            # from before the plan must not end it before it produced evidence.
+            same_position_growth = counter_growth(base, progress, 'same_position_steps', plan['max_no_effect_steps'])
+            no_tile_growth = counter_growth(base, progress, 'steps_since_new_tile', plan['max_no_effect_steps'])
+            no_plan_baseline = base.get('same_position_steps') is None and base.get('steps_since_new_tile') is None
+            if unchanged or same_position_growth or no_tile_growth or (
+                    no_plan_baseline and game['scene']['mode'] == 'overworld' and progress.get('loop_detected')):
                 self.finish_plan('failed', 'observed_repetition_requires_model_review', game,
                                  {'recent_actions': deepcopy(tail[-8:])})
         if self.plan:
@@ -127,10 +133,17 @@ class PlanManager:
         if self.completion_evidence:
             objective = {'id': 'main_story_complete', 'intent': None, 'completion': True,
                          'completion_evidence': self.completion_evidence, 'completed_ids': []}
+        failed_target_refs = sorted({
+            row['target_ref'] for row in self.plan_history
+            if row.get('status') == 'failed' and isinstance(row.get('target_ref'), str) and row['target_ref']
+        })
+        targets = {ref: entry for ref, entry in self.memory.catalog(game).items()
+                   if ref not in failed_target_refs}
         return {'knowledge_mode': 'observed', 'active_objective': objective,
                 'navigation': self.memory.path_to(game, (plan or {}).get('target')),
                 'plan': deepcopy(plan), 'plan_history': deepcopy(self.plan_history[-12:]),
-                'memory': self.memory.context(game), 'targets': self.memory.catalog(game),
+                'memory': self.memory.context(game), 'targets': targets,
+                'failed_target_refs': failed_target_refs,
                 'recovery': deepcopy(self.recovery), 'model_planning_enabled': self.model_planning_enabled,
                 'plan_suspended': False, 'visited_map_ids': [int(k) for k in self.memory.maps],
                 'recorded_action_count': self.steps, 'migration': self.migration,

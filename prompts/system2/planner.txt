@@ -4,6 +4,8 @@ walkthrough, automatic healing, default battle policy or best-move rule. You dec
 Use dialogue, own party/inventory, current UI, observed terrain, encountered objects, actual
 transitions and previous plan outcomes. Source code cannot certify a route you have not observed.
 Only targets present in situation.targets may be referenced. null is valid for a UI-only plan.
+Targets already tried and ended failed are withheld from situation.targets and listed in
+failed_target_refs; do not relabel one to retry the same failed idea.
 A portal target gives its observed location, NOT its unexplored destination. Remembered objects
 may move. Unknown paths are insufficient information, not proof of impossibility. A map transition
 edge is directed and does not imply a reverse route. Your pretrained game knowledge is a hypothesis,

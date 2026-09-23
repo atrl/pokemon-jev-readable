@@ -39,15 +39,26 @@ def ball_count(bag):
 
 
 def baseline(observation):
+    progress = observation.get('progress') or {}
     return {
         'position': stable_position(observation),
         'party_count': verified_value((observation.get('milestones') or {}).get('party_count')),
         'balls': ball_count(observation.get('bag')),
-        'visited_tiles': (observation.get('progress') or {}).get('visited_tiles'),
+        'visited_tiles': progress.get('visited_tiles'),
+        # Loop counters at plan creation; repetition is judged relative to these
+        # so a loop inherited from older history cannot end a fresh plan.
+        'same_position_steps': progress.get('same_position_steps'),
+        'steps_since_new_tile': progress.get('steps_since_new_tile'),
         'dialog_open': (observation.get('dialog') or {}).get('open'),
         'battle_active': (observation.get('battle') or {}).get('active')
         if (observation.get('battle') or {}).get('verified') else None,
     }
+
+
+def counter_growth(base, progress, key, limit):
+    """True when a monotonic progress counter grew by at least ``limit`` since plan start."""
+    before, now = (base or {}).get(key), (progress or {}).get(key)
+    return type(before) is int and type(now) is int and now - before >= limit
 
 
 def target_catalog(game, campaign):

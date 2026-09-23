@@ -264,6 +264,21 @@ class ContractTests(unittest.TestCase):
         r=raw(); r['scene']['mode']='battle'; r['battle']={'active':True,'verified':True,'enemy':{'hp':1,'max_hp':10,'defense':999,'moves':['secret']}}
         _,_,s=setup(r); self.assertNotIn('defense',s['game']['battle']['enemy'])
 
+    def test_inherited_loop_does_not_end_a_fresh_plan(self):
+        # A loop that predates the plan must not fail it before it produced evidence.
+        m,g,s=setup(); m.set_plan(normalize_plan(proposal(),s)); m.steps=20
+        r=raw(); r['progress'].update(loop_detected=True, same_position_steps=0, steps_since_new_tile=0)
+        m.context(r); self.assertIsNotNone(m.plan)
+
+    def test_failed_target_is_withheld_from_the_planner_targets(self):
+        m,g,s=setup(); m.set_plan(normalize_plan(proposal(),s))
+        m.finish_plan('failed','observed_repetition_requires_model_review',g)
+        c=m.context(raw())
+        self.assertIn('cell:38:5,4', c['failed_target_refs'])
+        self.assertNotIn('cell:38:5,4', c['targets'])
+        with self.assertRaises(ValueError):
+            normalize_plan(proposal(), build_situation(raw(), c, raw()['progress']))
+
 
 class RuntimeTests(unittest.TestCase):
     def run_double(self, folder, reviews=('continue','continue')):
