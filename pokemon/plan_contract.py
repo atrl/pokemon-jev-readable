@@ -221,16 +221,22 @@ def normalize_observed_plan(data, situation):
     for section in (memory, situation.get('game'), situation.get('active_plan'), catalog):
         _collect_refs(section, refs)
     refs.discard(None)
-    notes = data.get('memory_updates', [])
-    if not isinstance(notes, list) or len(notes) > 4:
+    names = data.get('memory_updates', [])
+    if not isinstance(names, list) or len(names) > 4:
         raise ValueError('At most four memory notes per plan')
-    for note in notes:
+    notes = []
+    for note in names:
         if not isinstance(note, dict) or set(note) != {'text', 'evidence_refs'}:
             raise ValueError('Notes need text and evidence_refs')
         _text(note['text'], 'memory note', 600)
         citations = note['evidence_refs']
-        if not isinstance(citations, list) or not 1 <= len(citations) <= 6 or any(not isinstance(r, str) or r not in refs for r in citations):
-            raise ValueError('Memory note cites unavailable evidence')
+        if not isinstance(citations, list) or not 1 <= len(citations) <= 6:
+            raise ValueError('Notes need 1..6 evidence_refs')
+        # Ground each note; drop field names or hallucinated refs, and skip a note
+        # that has none left rather than failing the whole plan.
+        valid = [r for r in citations if isinstance(r, str) and r in refs]
+        if valid:
+            notes.append({**note, 'evidence_refs': valid})
     result = {'schema_version': 3, 'observation_policy': POLICY,
               'subgoal': _text(data.get('subgoal'), 'subgoal', 80),
               'intent': _text(data.get('intent'), 'intent', 800),

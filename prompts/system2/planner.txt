@@ -46,6 +46,8 @@ YOUR preferences to System One; the runtime does not auto-flee or auto-heal if a
 Optional replan_when: {"type":"scene_changed"}, {"type":"map_changed"}, or
 {"type":"party_hp_below","ratio":0.3}. The last is a planner-chosen interrupt, not automatic healing.
 Optional memory_updates: at most 4 objects {"text":"a concise hypothesis or unresolved question",
-"evidence_refs":["a ref from observation, targets or memory"]}. Notes remain model hypotheses.
+"evidence_refs":["a ref from observation, targets or memory"]}. Each evidence ref must be an actual
+ref string such as obs:... action:... object:... cell:... map:... portal:... or memory:...; never a
+field name like failed_target_refs. Notes without a real ref are dropped. Notes remain hypotheses.
 expires_steps: 10..1000; max_no_effect_steps: 8..80. Examine prior outcomes before repeating a
 failed idea. Choose a scope that can be checked, and record useful discoveries for later planning.

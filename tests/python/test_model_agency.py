@@ -216,8 +216,9 @@ class ContractTests(unittest.TestCase):
         p=normalize_plan(proposal(memory_updates=[{'text':'This may be an exit','evidence_refs':[g['observation_id']]}]),s)
         m.set_plan(p)
         self.assertEqual(m.memory.notes[0]['source'],'system2_hypothesis_not_verified_fact')
-        with self.assertRaises(ValueError):
-            normalize_plan(proposal(memory_updates=[{'text':'I know the future','evidence_refs':['unknown']}]),s)
+        # A note with no real evidence ref is dropped, not accepted as a hypothesis.
+        p=normalize_plan(proposal(memory_updates=[{'text':'I know the future','evidence_refs':['unknown']}]),s)
+        self.assertEqual(p['memory_updates'],[])
 
     def test_memory_note_may_cite_a_target_ref(self):
         _,_,s=setup(); ref=next(iter(s['targets']))
