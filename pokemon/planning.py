@@ -129,6 +129,10 @@ def call_planner(situation, goal, *, timeout=45, on_event=None):
         content = choice['message'].get('content')
         if not isinstance(content, str) or not content.strip():
             raise PlannerError('empty_response')
+        if on_event:
+            on_event({'type': 'planner_response', 'model': payload.get('model', model),
+                      'usage': payload.get('usage'),
+                      'latency_ms': round((time.monotonic()-start)*1000), 'content': content})
         plan = valid_plan(json.loads(content), situation)
     except PlannerError:
         raise
@@ -136,7 +140,9 @@ def call_planner(situation, goal, *, timeout=45, on_event=None):
         status = exc.code
         exc.close()
         raise PlannerError('http_error', status) from None
-    except (ValueError, KeyError, IndexError, TypeError):
+    except (ValueError, KeyError, IndexError, TypeError) as exc:
+        if on_event:
+            on_event({'type': 'planner_validation_error', 'error': str(exc)[:200]})
         raise PlannerError('invalid_plan_or_json') from None
     except (OSError, TimeoutError):
         raise PlannerError('network_error') from None

@@ -12,17 +12,49 @@ OBSERVED_SUCCESS_TYPES = ('target_reached', 'fact_true', 'dialog_closed', 'party
                           'scene_changed', 'state_changed')
 
 
+def _short(value, limit=240):
+    return value[:limit] if isinstance(value, str) else value
+
+
+def _compact_history(rows, limit=8):
+    """Keep the outcome of recent plans without their long reasoning/policy text."""
+    out = []
+    for row in (rows or [])[-limit:]:
+        if not isinstance(row, dict):
+            continue
+        out.append({'subgoal': _short(row.get('subgoal'), 80), 'status': row.get('status'),
+                    'reason': _short(row.get('reason'), 80), 'target_ref': row.get('target_ref'),
+                    'success': row.get('success'), 'step': row.get('step')})
+    return out
+
+
+def _compact_memory(memory, *, transitions=8, dialogues=8, actions=6, notes=8):
+    """Bound the request: keep recent evidence, truncate long free text."""
+    if not isinstance(memory, dict):
+        return memory
+    result = {k: deepcopy(memory.get(k)) for k in ('policy', 'current_map', 'maps', 'objects',
+                                                   'retention', 'limitations') if k in memory}
+    result['transitions'] = deepcopy((memory.get('transitions') or [])[-transitions:])
+    result['dialogues'] = [{**deepcopy(row), 'text': _short(row.get('text'), 200)}
+                           for row in (memory.get('dialogues') or [])[-dialogues:] if isinstance(row, dict)]
+    result['recent_actions'] = deepcopy((memory.get('recent_actions') or [])[-actions:])
+    result['notes'] = [{**deepcopy(row), 'text': _short(row.get('text'), 200)}
+                       for row in (memory.get('notes') or [])[-notes:] if isinstance(row, dict)]
+    return result
+
+
 def build_situation(observation, campaign, progress):
     game = project(observation)
-    memory = deepcopy(campaign.get('memory') or {})
+    memory = _compact_memory(campaign.get('memory') or {})
     plan = deepcopy(campaign.get('plan'))
+    history = _compact_history(campaign.get('plan_history'), 12)
     result = {
         'knowledge_mode': 'observed', 'observation_policy': POLICY,
         'step': progress.get('total_steps'), 'planning_enabled': campaign.get('model_planning_enabled'),
         'observation_id': game['observation_id'], 'game': game,
         'memory': memory, 'active_plan': plan, 'plan_active': bool(plan),
-        'previous_plan_outcomes': deepcopy(campaign.get('plan_history', [])[-12:]),
-        'failed_plans': deepcopy(campaign.get('plan_history', [])[-12:]),
+        'previous_plan_outcomes': deepcopy(history),
+        'failed_plans': deepcopy(history),
         'targets': deepcopy(campaign.get('targets') or {}),
         'failed_target_refs': deepcopy(campaign.get('failed_target_refs') or []),
         'target_failures': deepcopy(campaign.get('target_failures') or []),
@@ -50,6 +82,8 @@ def build_request(observation, goal, history):
     campaign = take(context, ('knowledge_mode', 'active_objective', 'plan', 'plan_history',
                               'memory', 'navigation', 'recovery', 'model_planning_enabled',
                               'failed_target_refs', 'target_failures'))
+    campaign['plan_history'] = _compact_history(campaign.get('plan_history'))
+    campaign['memory'] = _compact_memory(campaign.get('memory') or {})
     plan = campaign.get('plan') or {}
     questions = {'button': {
         'type': 'choice', 'criteria': dict(BUTTONS),

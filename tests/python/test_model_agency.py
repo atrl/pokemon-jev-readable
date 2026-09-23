@@ -355,7 +355,30 @@ class RuntimeTests(unittest.TestCase):
                           'expires_steps':20,'max_no_effect_steps':8}, s)
         self.assertIsNone(p['target_ref'])
 
+    def test_model_requests_bound_history_and_memory_text(self):
+        from model_context import _compact_history, _compact_memory
+        rows=[{'subgoal':'a','intent':'x'*500,'reasoning':'y'*5000,'status':'failed','reason':'r',
+               'target_ref':None,'success':{'type':'state_changed'},'step':i} for i in range(30)]
+        compact=_compact_history(rows,8)
+        self.assertEqual(len(compact),8); self.assertNotIn('reasoning',compact[0])
+        memory={'transitions':[{'a':i} for i in range(64)],'dialogues':[{'text':'z'*900} for _ in range(40)],
+                'recent_actions':[{} for _ in range(12)],'notes':[{'text':'n'*900} for _ in range(32)]}
+        m=_compact_memory(memory)
+        self.assertLessEqual(len(m['transitions']),8); self.assertLessEqual(len(m['dialogues']),8)
+        self.assertLessEqual(len(m['recent_actions']),6); self.assertLessEqual(len(m['notes']),8)
+        self.assertTrue(all(len(d.get('text',''))<=200 for d in m['dialogues']))
 
+    def test_planner_response_is_streamed_even_when_invalid(self):
+        _,_,s=setup(); seen=[]
+        body={'choices':[{'message':{'content':'{"subgoal":"x"}'},'finish_reason':'stop'}],'model':'test','usage':{}}
+        opener=Mock(); opener.open.return_value=io.BytesIO(json.dumps(body).encode())
+        with patch.dict(os.environ,{'DEEPSEEK_API_KEY':'k'}), \
+             patch('urllib.request.build_opener',return_value=opener), self.assertRaises(planning.PlannerError):
+            planning.call_planner(s,'goal',on_event=seen.append)
+        self.assertTrue(any(e['type']=='planner_response' for e in seen))
+        self.assertTrue(any(e['type']=='planner_validation_error' for e in seen))
+
+    def test_missing_required_key_does_not_start_game(self):
         with TemporaryDirectory() as tmp, patch.dict(os.environ,{'TYPESAFE_API_KEY':'fixture','DEEPSEEK_API_KEY':''}), patch('run.Emulator') as emulator:
             report=run(Path('OFFLINE.gb'),Path(tmp)/'run',goal='test',steps=1,planner_mode='deepseek')
         self.assertEqual(report['status'],'blocked_missing_planner_key'); emulator.assert_not_called()

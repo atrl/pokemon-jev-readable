@@ -503,8 +503,38 @@ function renderComparison() {
   target.replaceChildren(fragment);
   target.dataset.signature = signature;
 }
+function plannerReturnValue(event) {
+  try {
+    return { content: JSON.parse(event.content), model: event.model, usage: event.usage };
+  } catch {
+    return { content: event.content, model: event.model, usage: event.usage };
+  }
+}
 function eventSummary(event) {
   switch (event.type) {
+    case "planner_request":
+      return `调用 ${brief(event.request?.model ?? event.model, "DeepSeek")}；发送总目标与结构化 situation。`;
+    case "planner_response": {
+      let plan = null;
+      try {
+        plan = JSON.parse(event.content);
+      } catch {
+        plan = null;
+      }
+      if (plan && typeof plan === "object")
+        return `返回子目标 ${brief(plan.subgoal)} · 验收 ${brief(plan.success?.type)}${plan.reasoning ? `\n${brief(plan.reasoning)}` : ""}`;
+      return `返回正文 ${brief(event.content)}`;
+    }
+    case "planner_validation_error":
+      return `模型返回未通过合同校验：${brief(event.error)}。已原样记录，未执行任何按键。`;
+    case "planning_retry":
+      return `第 ${event.attempt ?? "?"} 次返回无法校验（${brief(event.error)}），重新请求高层规划。`;
+    case "plan":
+      return `计划 ${brief(event.plan?.subgoal)} · 验收 ${brief(event.plan?.success?.type)}${event.plan?.intent ? `\n${brief(event.plan.intent)}` : ""}`;
+    case "plan_outcome":
+      return `计划 ${brief(event.status)} · ${brief(event.reason)}${event.subgoal ? ` · ${brief(event.subgoal)}` : ""}`;
+    case "planning_error":
+      return `高层规划失败：${brief(event.error)}${event.http_status ? ` · HTTP ${event.http_status}` : ""}`;
     case "objective":
       return (
         event.objective?.intent ??
@@ -699,15 +729,19 @@ function renderTimeline(list) {
           ? event.request
           : event.type === "jev_response"
             ? event.response
-            : event;
+            : event.type === "planner_response"
+              ? plannerReturnValue(event)
+              : event;
       const label =
         event.type === "jev_request"
           ? "展开请求 JSON"
           : event.type === "jev_response"
             ? "展开响应 JSON"
-            : event.type === "result"
-              ? "展开执行结果 JSON"
-              : "展开事件 JSON";
+            : event.type === "planner_response"
+              ? "展开 DeepSeek 返回 JSON"
+              : event.type === "result"
+                ? "展开执行结果 JSON"
+                : "展开事件 JSON";
       item.append(
         jsonDetails(label, detailValue, `${state.selected}:${event.id}`),
       );
