@@ -1,0 +1,27 @@
+name: Layout repair source snapshot
+on:
+  push:
+    branches: [fix/restore-assets-and-organize-layout]
+    paths: ['.github/workflows/layout-review.yml']
+permissions:
+  contents: read
+jobs:
+  snapshot:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+      - name: Export exact current source tree, without credentials or runtime output
+        run: |
+          git archive --format=zip --output=/tmp/layout-source.zip 71a9cd822505893ed7f3bf48d9144dad396a6834
+          git ls-tree -r 71a9cd822505893ed7f3bf48d9144dad396a6834 > /tmp/layout-source-tree.txt
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: layout-source
+          path: |
+            /tmp/layout-source.zip
+            /tmp/layout-source-tree.txt
+          retention-days: 3
