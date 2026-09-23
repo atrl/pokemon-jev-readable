@@ -158,28 +158,21 @@ def run(
                 emit("plan_outcome", **event)
         report["active_plan_status"] = (campaign.plan or {}).get("status")
 
-    def maybe_plan(before, step) -> bool:
-        """Primary planning on bootstrap/completion/failure, never a hidden fallback."""
+    def request_plan(before, step) -> bool:
+        """System One escalated: produce one grounded plan; never a hidden fallback."""
         if not model_planning:
             return False
         situation = planning.build_situation(before, before.get("campaign") or {}, before.get("progress") or {})
         situation["planning_enabled"] = True
-        if (before.get("campaign", {}).get("active_objective") or {}).get("id") == "main_story_complete":
-            return False
         previous = campaign.planning_state
-        last = previous.get("last_step")
-        situation["steps_since_plan"] = None if last is None else campaign.steps - last
         situation["last_request_failed"] = previous.get("last_request_failed", False)
-        if not planning.needs_planning(situation):
-            return False
         if report["planning_calls"] >= planner_call_budget:
             report.update(status="planner_budget_reached", reason="Planning call limit; checkpoint preserved")
             raise PlanningPause()
-        reasons = planning.planning_reasons(situation)
         campaign.planning_state.update(last_step=campaign.steps, last_request_failed=False)
         report["planning_calls"] += 1
         save_report()
-        emit("planning_requested", step=step, reasons=reasons, situation=situation)
+        emit("planning_requested", step=step, situation=situation)
         clock = time.monotonic()
         plan = None
         try:
@@ -213,7 +206,7 @@ def run(
         report.update(plan_subgoal=plan.get("subgoal"), plan_target_map_id=plan.get("target_map_id"),
                       planner_model=plan.get("model"))
         save_report()
-        emit("plan", step=step, plan=plan, reasons=reasons)
+        emit("plan", step=step, plan=plan)
         save_checkpoint()
         return True
 
@@ -479,8 +472,6 @@ def run(
             before["progress"] = tracker.context(before)
             before["campaign"] = campaign.context(before)
             emit_plan_lifecycle()
-            if maybe_plan(before, step):
-                before["campaign"] = campaign.context(before)
             objective = before["campaign"]["active_objective"]
             if report.get("active_objective") != objective["id"]:
                 report["active_objective"] = objective["id"]
@@ -508,17 +499,26 @@ def run(
 
             decision = decide(before, step)
             review = decision.get("plan_review") or {}
-            if review.get("choice") == "replan" and model_planning:
-                report["jev_calls"] += 1
-                report["plan_review_requests"] += 1
-                write_json(output / f"{step - 1:04d}-decision.json", {**decision, "executed": False, "source": "jev"})
-                emit("plan_review", step=step, answer=review, button_withheld=decision["answer"]["choice"])
-                campaign.finish_plan("invalidated", "system1_requested_replan", before,
-                                     {"observation_id": before.get("observation_id"), "review": review})
-                emit_plan_lifecycle()
-                save_checkpoint()
-                save_report()
-                continue
+            if review:
+                emit("plan_review", step=step, answer=review,
+                     button_withheld=decision["answer"]["choice"],
+                     withheld=review.get("choice") == "replan")
+            if review.get("choice") == "replan":
+                if model_planning:
+                    report["jev_calls"] += 1
+                    report["plan_review_requests"] += 1
+                    write_json(output / f"{step - 1:04d}-decision.json", {**decision, "executed": False, "source": "jev"})
+                    campaign.finish_plan("invalidated", "system1_requested_replan", before,
+                                         {"observation_id": before.get("observation_id"), "review": review})
+                    emit_plan_lifecycle()
+                    # Refresh the context so the planner sees the outcome it is replacing.
+                    before["campaign"] = campaign.context(before)
+                    request_plan(before, step)
+                    save_checkpoint()
+                    save_report()
+                    continue
+                # No planner configured: escalation cannot run, and no plan is fabricated.
+                emit("planning_skipped", step=step, reason="planner_not_configured")
             button = record_decision(decision, step, screenshot_hash)
             after = execute(button, verified_before, step)
             outcome, activity = record_outcome(button, before, after)

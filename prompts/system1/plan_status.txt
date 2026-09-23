@@ -1,5 +1,7 @@
-Evaluate whether the active System Two plan still applies to the current observation.
-Choose replan when the evidence contradicts it or it leaves a consequential new decision unresolved.
-Choose continue when local action selection can still carry it out. Routine text, battle or a
-revisited position alone does not establish failure. Use retained outcomes, not unexplored game
-knowledge. Do not assume another question's answer is visible. This question authorizes no input.
+Decide who handles this step; you are System One and you choose the physical input.
+Choose continue to handle it yourself, with or without an active plan, using the current
+observation, retained memory and any plan. Choose replan only when the step needs a strategic
+decision beyond local input selection: System Two then produces a plan and your parallel button
+answer is withheld. Do not replan for routine text, a battle, a revisited position or ordinary
+uncertainty; those are local decisions. Use retained outcomes, not unexplored game knowledge.
+Do not assume another question's answer is visible. This question authorizes no input.

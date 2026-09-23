@@ -237,17 +237,20 @@ class ContractTests(unittest.TestCase):
         for fields in ({'target_map_id':99},{'buttons':['a']},{'target_ref':'map:99'},{'success':{'type':'eval','code':'x'}}):
             with self.subTest(fields=fields), self.assertRaises(ValueError): normalize_plan(proposal(**fields),s)
 
-    def test_model_plan_completed_then_new_plan_requested(self):
+    def test_model_plan_completed_returns_to_system_one_control(self):
         m,g,s=setup(); m.set_plan(normalize_plan(proposal(),s))
         m.record('right',g,raw(x=5)); c=m.context(raw(x=5))
         self.assertIsNone(m.plan); self.assertEqual(c['plan_history'][-1]['status'],'completed')
-        self.assertTrue(planning.needs_planning(build_situation(raw(x=5),c,{'total_steps':1})))
+        # No runtime auto-plan: the next step is System One's to decide.
+        self.assertEqual(c['active_objective']['id'],'awaiting_model_plan')
 
-    def test_replanning_cools_down_between_consecutive_plans(self):
-        _,_,s=setup(); s=dict(s); s.update(plan_active=False, planning_enabled=True)
-        s['steps_since_plan']=1; self.assertFalse(planning.needs_planning(s))
-        s['steps_since_plan']=planning.DEFAULT_REPLAN_COOLDOWN; self.assertTrue(planning.needs_planning(s))
-        s['steps_since_plan']=None; self.assertTrue(planning.needs_planning(s))
+    def test_system_one_is_always_asked_when_a_planner_is_configured(self):
+        from model_context import build_request
+        _,g,s=setup(); g['campaign']={**s, 'model_planning_enabled':True, 'plan':None,
+                                      'active_objective':{'id':'awaiting_model_plan'}}
+        request=build_request(g,'goal',[])
+        self.assertIn('plan_status',request['questions'])
+        self.assertEqual(set(request['questions']['plan_status']['criteria']),{'continue','replan'})
 
     def test_gameplay_risk_does_not_replace_model_plan(self):
         m,g,s=setup(); m.set_plan(normalize_plan(proposal(),s))
@@ -324,23 +327,23 @@ class RuntimeTests(unittest.TestCase):
             report=run(Path('OFFLINE.gb'),folder,goal='User supplied goal',steps=len(reviews),planner_mode='deepseek',max_seconds=5)
         return report,world,upper_requests,http_requests
 
-    def test_default_dual_loop_has_no_legacy_policy_and_cools_down(self):
+    def test_system_one_decides_and_no_auto_plan(self):
         with TemporaryDirectory() as tmp:
             report,world,upper,lower=self.run_double(Path(tmp)/'run')
             self.assertEqual(report['observation_policy'],'structured_player_v1'); self.assertEqual(report['executed_actions'],2)
-            # The completed plan is not immediately re-planned: one paid call per action is wasteful.
-            self.assertEqual(report['planning_calls'],1); self.assertEqual(len(upper),1); self.assertEqual(len(lower),2)
-            self.assertIn('plan_status',lower[0]['questions'])
+            # System One said continue: no planner call, both buttons executed.
+            self.assertEqual(report['planning_calls'],0); self.assertEqual(len(upper),0); self.assertEqual(len(lower),2)
             for sent in lower:
+                self.assertIn('plan_status',sent['questions'])
                 self.assertTrue({'recommended_move','next_button','story_reference','story_objective','heal_party'}.isdisjoint(keys(sent)))
                 self.assertEqual(sent['questions']['button']['criteria'],BUTTONS)
             self.assertEqual(world.press.call_count,2)
 
-    def test_replans_again_after_the_cooldown(self):
+    def test_system_one_can_escalate_without_a_runtime_trigger(self):
         with TemporaryDirectory() as tmp:
-            report,world,upper,lower=self.run_double(Path(tmp)/'run',('continue',)*6)
-            self.assertEqual(report['planning_calls'],2); self.assertEqual(len(upper),2)
-            self.assertEqual(report['executed_actions'],6)
+            report,world,upper,_=self.run_double(Path(tmp)/'run',('replan','continue','continue','continue'))
+            self.assertEqual(report['planning_calls'],1); self.assertEqual(len(upper),1)
+            self.assertEqual(report['executed_actions'],3)
 
     def test_system_one_replan_withholds_parallel_button(self):
         with TemporaryDirectory() as tmp:
@@ -359,10 +362,14 @@ class RuntimeTests(unittest.TestCase):
             return good
         world=Mock(); world.game=SimpleNamespace(frame_count=0); world.save.return_value=b'EXPLICIT OFFLINE STATE'
         reader=Mock(); reader.snapshot.return_value=raw()
+        decision={'answer':{'choice':'wait'},
+                  'plan_review':{'type':'choice','choice':'replan','confidence':1.0,
+                                 'probabilities':{'continue':0.0,'replan':1.0}},
+                  'source':'offline-test-double'}
         with TemporaryDirectory() as tmp, \
              patch.dict(os.environ,{'TYPESAFE_API_KEY':'fixture-jev','DEEPSEEK_API_KEY':'fixture-ds'}), \
              patch('run.Emulator',return_value=world), patch('run.Reader',return_value=reader), \
-             patch('run.choose',Mock(return_value={'answer':{'choice':'wait'},'source':'offline-test-double'})), \
+             patch('run.choose',Mock(return_value=decision)), \
              patch('planning.call_planner',side_effect=planner):
             report=run(Path('OFFLINE.gb'),Path(tmp)/'run',goal='g',steps=1,planner_mode='deepseek')
             rows=[json.loads(x) for x in (Path(tmp)/'run/events.jsonl').read_text().splitlines()]

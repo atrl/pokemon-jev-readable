@@ -89,12 +89,12 @@ def build_request(observation, goal, history):
         'type': 'choice', 'criteria': dict(BUTTONS),
         'instructions': load_prompt('system1/button.txt'),
     }}
-    if plan and campaign.get('model_planning_enabled'):
+    if campaign.get('model_planning_enabled'):
         questions['plan_status'] = {
             'type': 'choice', 'instructions': load_prompt('system1/plan_status.txt'),
             'criteria': {
-                'continue': 'The current model-authored plan still applies; local input selection is sufficient.',
-                'replan': 'Current evidence contradicts the plan or presents an unresolved strategic decision; request System Two before acting.',
+                'continue': 'Handle this step yourself. Valid with or without an active plan: use the current observation, retained memory and any active plan to choose the button. No System Two call is made.',
+                'replan': 'Escalate to System Two and wait for a new plan before any input. Your parallel button answer is withheld. Use it when the situation needs a strategic decision you should not improvise.',
             },
         }
     return {'model': os.environ.get('TYPESAFE_MODEL', 'jev-latest'),

@@ -533,6 +533,12 @@ function eventSummary(event) {
       return `计划 ${brief(event.plan?.subgoal)} · 验收 ${brief(event.plan?.success?.type)}${event.plan?.intent ? `\n${brief(event.plan.intent)}` : ""}`;
     case "plan_outcome":
       return `计划 ${brief(event.status)} · ${brief(event.reason)}${event.subgoal ? ` · ${brief(event.subgoal)}` : ""}`;
+    case "plan_review": {
+      const choice = event.answer?.choice;
+      return choice === "replan"
+        ? `System One 认为需要战略决策：交给 System Two 规划，本次按键已扣留（原答案 ${actionName(event.button_withheld)} 未执行）。`
+        : `System One 选择自行处理（continue）；本次直接按键，不调用 System Two。`;
+    }
     case "planning_error":
       return `高层规划失败：${brief(event.error)}${event.http_status ? ` · HTTP ${event.http_status}` : ""}`;
     case "objective":

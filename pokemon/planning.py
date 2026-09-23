@@ -1,8 +1,8 @@
 """System Two bridge: grounded situation -> short plan -> validated contract.
 
-No button execution lives here. Network failure is reported by the caller;
-missing data remains unknown. The situation exposes observation and memory only;
-strategy belongs to the models.
+System One decides when it needs a plan (its plan_status question); this module
+only builds the situation and performs the request. No button execution lives
+here; network failure is reported by the caller and missing data stays unknown.
 """
 from __future__ import annotations
 
@@ -17,12 +17,6 @@ from plan_contract import normalize_plan
 
 DEFAULT_BASE_URL = 'https://api.deepseek.com'
 DEFAULT_MODEL = 'deepseek-flash'
-DEFAULT_PLAN_TTL = 160
-DEFAULT_MIN_INTERVAL = 8
-DEFAULT_NO_TILE_TRIGGER = 120
-# Do not re-plan on consecutive steps: a completed weak plan or a System One
-# replan should not spend one paid planning call per action.
-DEFAULT_REPLAN_COOLDOWN = 4
 # A malformed or unverifiable reply is a model formatting error, not an outage;
 # re-ask a bounded number of times before pausing. Never substitute an action.
 DEFAULT_PLAN_ATTEMPTS = 3
@@ -33,41 +27,6 @@ RETRYABLE_PLAN_ERRORS = ('invalid_plan_or_json', 'empty_response', 'truncated_re
 def build_situation(observation, campaign, progress):
     from model_context import build_situation as observed_situation
     return observed_situation(observation, campaign, progress)
-
-
-def planning_reasons(situation):
-    reasons = []
-    if not situation.get('plan_active'):
-        reasons.append('no_active_plan')
-    if situation.get('plan_invalid'):
-        reasons.append('plan_invalidated')
-    if (situation.get('steps_since_new_tile') or 0) >= DEFAULT_NO_TILE_TRIGGER:
-        reasons.append('no_new_tile')
-    if situation.get('loop_detected'):
-        reasons.append('loop_detected')
-    return reasons
-
-
-def needs_planning(situation, *, min_interval=DEFAULT_MIN_INTERVAL, cooldown=DEFAULT_REPLAN_COOLDOWN):
-    if situation.get('suspended'):
-        return False
-    if situation.get('plan_active') and not situation.get('plan_invalid'):
-        return False
-    # Failure invalidates a plan independently; only failed HTTP attempts cool down.
-    if situation.get('last_request_failed'):
-        since = situation.get('steps_since_plan')
-        if type(since) is int and since < min_interval:
-            return False
-    if situation.get('planning_enabled'):
-        since = situation.get('steps_since_plan')
-        # Bootstrap has no previous plan; afterwards wait a few steps so an
-        # immediately-completed weak plan does not trigger one call per action.
-        if since is None:
-            return True
-        return type(since) is int and since >= cooldown
-    if type(situation.get('steps_since_plan')) is int and situation['steps_since_plan'] < min_interval:
-        return False
-    return any(r in ('no_new_tile', 'loop_detected') for r in planning_reasons(situation))
 
 
 def planner_configured():
