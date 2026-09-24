@@ -373,6 +373,20 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual(report['executed_actions'],2)
         choose.assert_not_called()
 
+    def test_unusable_planner_reply_does_not_pause_the_run(self):
+        world=Mock(); world.game=SimpleNamespace(frame_count=0); world.save.return_value=b'EXPLICIT OFFLINE STATE'
+        reader=Mock(); reader.snapshot.return_value=raw()
+        choose=Mock(return_value={'answer':{'choice':'wait'}})
+        bad=planning.PlannerError('invalid_plan_or_json')
+        with TemporaryDirectory() as tmp, \
+             patch.dict(os.environ,{'TYPESAFE_API_KEY':'fixture-jev','DEEPSEEK_API_KEY':'fixture-ds'}), \
+             patch('run.Emulator',return_value=world), patch('run.Reader',return_value=reader), \
+             patch('run.choose',choose), patch('planning.call_planner',side_effect=bad):
+            report=run(Path('OFFLINE.gb'),Path(tmp)/'run',goal='g',steps=6,planner_mode='deepseek')
+        self.assertEqual(report['plans'],0)
+        self.assertGreaterEqual(report['executed_actions'],1)
+        self.assertNotEqual(report['status'],'planner_unavailable')
+
     def test_code_triggers_a_bootstrap_plan_then_executes(self):
         with TemporaryDirectory() as tmp:
             report,world,upper,lower=self.run_double(Path(tmp)/'run')

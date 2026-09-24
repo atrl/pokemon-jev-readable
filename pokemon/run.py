@@ -206,12 +206,18 @@ def run(
                         continue
                     raise
         except Exception as exc:
+            code = getattr(exc, "code", type(exc).__name__)
             campaign.planning_state["last_request_failed"] = True
             report["planning_failures"] += 1
-            report.update(status="planner_unavailable", reason=getattr(exc, "code", type(exc).__name__))
-            emit("planning_error", step=step, error=getattr(exc, "code", type(exc).__name__),
+            emit("planning_error", step=step, error=code,
                  http_status=getattr(exc, "http_status", None))
-            # Do not resume the old invalid plan or invent a button.
+            if code in planning.RETRYABLE_PLAN_ERRORS:
+                # The model answered but its reply is unusable: log it, cool down,
+                # and let System One continue instead of pausing the run.
+                report["status"] = "running"
+                return False
+            report.update(status="planner_unavailable", reason=code)
+            # No planner reachable: do not resume the old invalid plan or invent a button.
             raise PlanningPause() from None
         finally:
             report["planning_ms"] += round((time.monotonic()-clock)*1000)

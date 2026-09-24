@@ -217,6 +217,21 @@ class PlanManager:
                     if entry.get('kind') in ('coordinate', 'object') and abs(selector['x'] - ax) + abs(selector['y'] - ay) <= 1:
                         del targets[ref]
                         blocked_backtrack.append(ref)
+        # A remembered resume target must stay selectable, or the planner citing it
+        # fails validation and the run pauses.
+        resume = self.resume_target or {}
+        resume_ref = resume.get('target_ref')
+        if isinstance(resume_ref, str) and resume_ref not in targets:
+            parts = resume_ref.split(':')
+            if len(parts) == 3 and parts[0] == 'cell' and ',' in parts[2]:
+                x_text, y_text = parts[2].split(',', 1)
+                if x_text.lstrip('-').isdigit() and y_text.lstrip('-').isdigit():
+                    targets[resume_ref] = {
+                        'map_id': int(parts[1]), 'kind': 'coordinate', 'label': 'remembered resume target',
+                        'selector': {'kind': 'coordinate', 'x': int(x_text), 'y': int(y_text)},
+                        'quality': 'observed_background_only',
+                        'evidence_ref': f'memory:cell:{parts[1]}:{parts[2]}',
+                    }
         return {'knowledge_mode': 'observed', 'active_objective': objective,
                 'navigation': self.memory.path_to(game, (plan or {}).get('target')),
                 'plan': deepcopy(plan), 'plan_history': deepcopy(self.plan_history[-12:]),
