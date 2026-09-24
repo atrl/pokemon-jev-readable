@@ -35,6 +35,9 @@ from artifacts import (
 )
 
 
+KNOWN_SCENES = ("overworld", "battle", "dialog", "main_menu", "name_entry", "species_preview")
+
+
 class PlanningPause(RuntimeError):
     """Stop with an explicit report and checkpoint, without a fallback action."""
 
@@ -55,6 +58,7 @@ def run(
     max_recovery_attempts: int = 3,
     planner_mode: str = "auto",
     planner_call_budget: int = 200,
+    review_every: int = 40,
     max_seconds: int = 0,
 ) -> dict:
     if type(steps) is not int or not 0 <= steps <= 100_000:
@@ -73,6 +77,8 @@ def run(
         raise ValueError("planner_call_budget must be 1..1000")
     if type(max_seconds) is not int or max_seconds < 0:
         raise ValueError("max_seconds must be a nonnegative integer")
+    if type(review_every) is not int or not 0 <= review_every <= 10000:
+        raise ValueError("review_every must be an integer in 0..10000")
     model_planning = planner_mode != "local" and planning.planner_configured()
     output.mkdir(parents=True, exist_ok=True)
     if any(output.iterdir()):
@@ -84,6 +90,7 @@ def run(
     video_restarts = 0
     emitted_plan_outcomes = set()
     consecutive_holds = 0
+    last_review_step = 0
     tracker = ProgressTracker()
     campaign = PlanManager()
     stall_monitor = StallMonitor(max_stalled_steps, max_recovery_attempts)
@@ -506,6 +513,41 @@ def run(
             before["progress"] = tracker.context(before)
             before["campaign"] = campaign.context(before)
             emit_plan_lifecycle()
+            planned_this_step = False
+            scene = (before.get("scene") or {}).get("mode")
+            plan_scene = ((campaign.plan or {}).get("baseline") or {}).get("scene")
+            if (
+                model_planning
+                and scene in KNOWN_SCENES
+                and plan_scene in KNOWN_SCENES
+                and plan_scene != scene
+            ):
+                # The active plan was authored for another scene; ask the brain
+                # for a scene-appropriate plan before System One acts.
+                campaign.finish_plan("invalidated", "scene_changed_requires_replan", before,
+                                     {"from": plan_scene, "to": scene})
+                emit_plan_lifecycle()
+                emit("scene_change", step=step, from_scene=plan_scene, to_scene=scene)
+                before["campaign"] = campaign.context(before)
+                request_plan(before, step)
+                planned_this_step = True
+                before["campaign"] = campaign.context(before)
+            elif (
+                model_planning
+                and review_every
+                and report["executed_actions"] - last_review_step >= review_every
+            ):
+                # Periodic review keeps the brain iterating on strategy, not only
+                # reacting to stalls.
+                last_review_step = report["executed_actions"]
+                if campaign.plan:
+                    campaign.finish_plan("invalidated", "periodic_review", before)
+                    emit_plan_lifecycle()
+                before["campaign"] = campaign.context(before)
+                request_plan(before, step)
+                planned_this_step = True
+                before["campaign"] = campaign.context(before)
+                emit("review", step=step, executed_actions=report["executed_actions"])
             objective = before["campaign"]["active_objective"]
             if report.get("active_objective") != objective["id"]:
                 report["active_objective"] = objective["id"]
@@ -718,6 +760,7 @@ def main():
     ap.add_argument("--goal", default=DEFAULT_GAME_GOAL)
     ap.add_argument("--planner-mode", choices=("auto", "deepseek", "local"), default="auto")
     ap.add_argument("--planner-call-budget", type=int, default=200)
+    ap.add_argument("--review-every", type=int, default=40, help="Executed actions between periodic System Two reviews; 0 disables")
     ap.add_argument("--max-seconds", type=int, default=0)
     a = ap.parse_args()
 
@@ -742,6 +785,7 @@ def main():
                 max_recovery_attempts=a.max_recovery_attempts,
                 planner_mode=a.planner_mode,
                 planner_call_budget=a.planner_call_budget,
+                review_every=a.review_every,
                 max_seconds=a.max_seconds,
             ),
             indent=2,

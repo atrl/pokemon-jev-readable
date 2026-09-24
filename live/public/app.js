@@ -583,6 +583,10 @@ function eventSummary(event) {
         ? `System One 认为需要战略决策：交给 System Two 规划，本次按键已扣留（原答案 ${actionName(event.button_withheld)} 未执行）。`
         : `System One 选择自行处理（continue）；本次直接按键，不调用 System Two。`;
     }
+    case "scene_change":
+      return `场景从 ${event.from_scene} 变为 ${event.to_scene}：原计划作废，交给 System Two 重新规划。`;
+    case "review":
+      return `已执行 ${event.executed_actions} 个动作，进行周期复盘：交给 System Two 重新评估策略。`;
     case "planning_error":
       return `高层规划失败：${brief(event.error)}${event.http_status ? ` · HTTP ${event.http_status}` : ""}`;
     case "progress": {

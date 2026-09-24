@@ -443,6 +443,30 @@ class RuntimeTests(unittest.TestCase):
         self.assertTrue(any(e['type']=='holding' for e in rows))
         choose.assert_not_called()
 
+    def test_scene_change_replans_before_action(self):
+        from test_model_agency import raw, proposal
+        ow=raw(); bt=raw(); bt['scene']={'mode':'battle','verified':True}
+        bt['battle']={'active':True,'verified':True,'menu':'command','player':{'moves':[]}}
+        seq=iter([ow, bt, bt, bt])
+        world=Mock(); world.game=SimpleNamespace(frame_count=0); world.save.return_value=b'EXPLICIT OFFLINE STATE'
+        reader=Mock(); reader.snapshot.side_effect=lambda: deepcopy(next(seq))
+        calls=[]
+        def planner(situation,goal,**_):
+            calls.append(situation)
+            return normalize_plan(proposal(target_ref=None, success={'type':'state_changed'}), situation)
+        decision={'answer':{'choice':'a'},
+                  'plan_review':{'type':'choice','choice':'replan','confidence':1.0,
+                                 'probabilities':{'continue':0.0,'replan':1.0}},
+                  'source':'offline-test-double'}
+        with TemporaryDirectory() as tmp, \
+             patch.dict(os.environ,{'TYPESAFE_API_KEY':'fixture-jev','DEEPSEEK_API_KEY':'fixture-ds'}), \
+             patch('run.Emulator',return_value=world), patch('run.Reader',return_value=reader), \
+             patch('run.choose',Mock(return_value=decision)), patch('planning.call_planner',side_effect=planner):
+            run(Path('OFFLINE.gb'),Path(tmp)/'run',goal='g',steps=2,planner_mode='deepseek')
+            rows=[json.loads(x) for x in (Path(tmp)/'run/events.jsonl').read_text().splitlines()]
+        self.assertGreaterEqual(len(calls),2)
+        self.assertTrue(any(r['type']=='scene_change' for r in rows))
+
     def test_missing_required_key_does_not_start_game(self):
         with TemporaryDirectory() as tmp, patch.dict(os.environ,{'TYPESAFE_API_KEY':'fixture','DEEPSEEK_API_KEY':''}), patch('run.Emulator') as emulator:
             report=run(Path('OFFLINE.gb'),Path(tmp)/'run',goal='test',steps=1,planner_mode='deepseek')

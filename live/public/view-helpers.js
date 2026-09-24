@@ -64,6 +64,8 @@ export const eventNames = {
   planning_retry: "规划返回异常重试",
   plan_outcome: "计划完成／失败／到期",
   plan_review: "System One 决策",
+  scene_change: "场景切换 · 重新规划",
+  review: "周期复盘",
   planning_requested: "请求高层规划",
   plan: "接入模型规划",
   planning_skipped: "未配置规划模型",

@@ -119,9 +119,11 @@ def build_request(observation, goal, history):
         battle.get('verified') is True or battle.get('phase_verified') is True)
     criteria = dict(BUTTONS)
     navigation = campaign.get('navigation') or {}
+    policy = plan.get('policy')
     if battle_active:
         note = _battle_focus(battle)
-        current_focus = (f"{plan['intent']} " if plan.get('intent') else "") + note
+        current_focus = (f"{plan['intent']} " if plan.get('intent') else "")
+        current_focus += (f" 策略：{policy} " if policy else "") + note
         menu = battle.get('menu')
         if menu == 'command':
             criteria['a'] += " CURRENT: A selects the highlighted battle command (FIGHT / PKMN / ITEM / RUN)."
@@ -141,6 +143,8 @@ def build_request(observation, goal, history):
         criteria['wait'] += " CURRENT: waiting does not advance completed battle text or a battle menu."
     else:
         current_focus = plan.get('intent') or "No active System Two plan."
+        if policy:
+            current_focus += f" 策略：{policy}"
         coordinates = navigation.get('coordinates') or []
         step = None
         if len(coordinates) >= 2 and all(isinstance(c, list) and len(c) == 2 for c in coordinates[:2]):
