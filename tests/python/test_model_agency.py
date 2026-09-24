@@ -240,6 +240,18 @@ class ContractTests(unittest.TestCase):
             self.assertIn(ref, c['targets'])
             self.assertTrue(c['targets'][ref].get('frontier'))
 
+    def test_model_context_has_no_game_specific_ui_rules(self):
+        source = (POKEMON / "model_context.py").read_text()
+        for token in ("Choose a POK", "FIGHT", "PKMN", "RAGE", "top-left"):
+            self.assertNotIn(token, source)
+
+    def test_jev_request_avoids_duplicate_state(self):
+        from model_context import build_request
+        _,g,s=setup(); g["campaign"]={**s,"model_planning_enabled":False}
+        request=build_request(g,"goal",[])
+        self.assertNotIn("recent_actions", request["state"])
+        self.assertNotIn("current_map", request["state"]["campaign"]["memory"])
+
     def test_unsupported_fields_and_raw_coordinates_rejected(self):
         _,_,s=setup()
         for fields in ({'target_map_id':99},{'buttons':['a']},{'target_ref':'map:99'},{'success':{'type':'eval','code':'x'}}):
