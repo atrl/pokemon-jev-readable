@@ -350,10 +350,10 @@ function render(liveEvent = null) {
     renderObservation(list);
     renderDecision(list);
     renderCampaign(list, run);
-    renderNow(list, run);
     state.renderedEvents = signature;
   }
   renderTiming();
+  renderNow(list, run);
   renderComparison();
   const last = list.at(-1);
   if (last)
