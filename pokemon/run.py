@@ -501,14 +501,11 @@ def run(
             decision = decide(before, step)
             review = decision.get("plan_review") or {}
             wants_replan = review.get("choice") == "replan"
-            if (
-                wants_replan
-                and model_planning
-                and campaign.plan is not None
-                and campaign.planning_state.get("plan_execution_marker") == report["executed_actions"]
-            ):
-                # A fresh plan was just produced and no action has run; honoring
-                # another replan would deadlock without ever executing a button.
+            executed = report["executed_actions"]
+            since_plan = executed - (campaign.planning_state.get("plan_execution_marker") or 0)
+            if wants_replan and model_planning and campaign.plan is not None and since_plan < 5:
+                # System One may escalate, but not replace a fresh plan before it
+                # has produced any executed actions; otherwise it plans without acting.
                 wants_replan = False
                 emit("plan_review", step=step, answer=review, button_withheld=None,
                      withheld=False, forced_continue=True)

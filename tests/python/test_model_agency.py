@@ -357,6 +357,13 @@ class RuntimeTests(unittest.TestCase):
             rows=[json.loads(x) for x in (Path(tmp)/'run/events.jsonl').read_text().splitlines()]
             self.assertTrue(any(r['type']=='plan_review' and r.get('forced_continue') for r in rows))
 
+    def test_escalation_is_rate_limited_but_returns(self):
+        with TemporaryDirectory() as tmp:
+            reviews=('replan','continue','continue','continue','continue','continue','replan','continue')
+            report,world,upper,_=self.run_double(Path(tmp)/'run',reviews)
+            # A second escalation is honoured only after enough executed actions.
+            self.assertEqual(report['plans'],2); self.assertEqual(len(upper),2)
+
     def test_system_one_replan_withholds_parallel_button(self):
         with TemporaryDirectory() as tmp:
             report,world,_,_=self.run_double(Path(tmp)/'run',('replan','continue'))
