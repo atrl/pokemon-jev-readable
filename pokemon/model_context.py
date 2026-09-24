@@ -138,6 +138,10 @@ def build_request(observation, goal, history):
                           "resolve it before the retained plan can continue.")
         current_focus += (f" Cursor: menu={battle.get('menu')}, "
                           f"selected={battle.get('selected_command') or battle.get('selected_move_slot')}.")
+        confirmations = progress.get('repetitive_confirmations') or 0
+        if confirmations >= 6:
+            current_focus += (f" A has been confirmed {confirmations} times without advancing the battle; the "
+                              "selected option may be rejected, so move the cursor to another option instead of confirming again.")
         criteria['wait'] += " CURRENT: waiting does not advance completed text or choose a menu option."
 
     questions = {'button': {

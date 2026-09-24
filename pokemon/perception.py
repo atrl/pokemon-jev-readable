@@ -16,7 +16,8 @@ MODES = {'overworld', 'dialog', 'main_menu', 'battle', 'name_entry', 'species_pr
 FACTS = {'party_count', 'badge_count'}
 PROGRESS_FIELDS = ('loop_detected', 'loop_kind', 'same_position_steps', 'steps_since_new_tile',
                    'visited_tiles', 'total_steps', 'neighbor_visits', 'untried_directions',
-                   'direction_outcomes', 'repeated_interactions', 'repeated_text_observations')
+                   'direction_outcomes', 'repeated_interactions', 'repeated_text_observations',
+                   'repetitive_confirmations')
 
 
 def take(row, fields):

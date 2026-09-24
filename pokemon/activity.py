@@ -108,6 +108,10 @@ class StallMonitor:
             (after.get("scene") or {}).get("mode") == "battle"
             and progress.get("loop_kind") == "stationary_repetition"
         )
+        battle_selection_rejected = (
+            (after.get("scene") or {}).get("mode") == "battle"
+            and (progress.get("repetitive_confirmations") or 0) >= 6
+        )
         self.active_steps = self.active_steps + 1 if changes and not cycle else 0
         if (
             outcome.get("objective_changed")
@@ -119,6 +123,8 @@ class StallMonitor:
         reason = (
             "no_observable_effect"
             if self.no_effect_steps >= self.threshold
+            else "battle_selection_rejected"
+            if battle_selection_rejected
             else "battle_menu_repeat"
             if battle_menu_repeat and self.no_effect_steps >= 6
             else "blocked_direction_repeat"
