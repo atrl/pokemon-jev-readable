@@ -96,6 +96,7 @@ def run(
     consecutive_holds = 0
     last_review_step = 0
     last_scene = None
+    last_plan_attempt = None
     tracker = ProgressTracker()
     campaign = PlanManager()
     stall_monitor = StallMonitor(max_stalled_steps, max_recovery_attempts)
@@ -528,40 +529,54 @@ def run(
             plan_scene = ((campaign.plan or {}).get("baseline") or {}).get("scene")
             scene_changed = scene != last_scene
             last_scene = scene
-            needs_scene_plan = (
-                scene in DECISION_SCENES
-                and scene_changed
-                and (campaign.plan is None or plan_scene != scene)
-            )
-            if model_planning and (scene in KNOWN_SCENES and plan_scene in KNOWN_SCENES and plan_scene != scene
-                                   or needs_scene_plan):
-                # A new scene (or a plan authored for another scene) gets one
-                # brain-authored playbook before System One acts.
-                if campaign.plan:
-                    campaign.finish_plan("invalidated", "scene_changed_requires_replan", before,
-                                         {"from": plan_scene, "to": scene})
-                    emit_plan_lifecycle()
-                emit("scene_change", step=step, from_scene=plan_scene, to_scene=scene)
-                before["campaign"] = campaign.context(before)
-                request_plan(before, step)
-                planned_this_step = True
-                before["campaign"] = campaign.context(before)
-            elif (
+            # Code owns planning triggers. First signal: no active plan, bounded
+            # by a cooldown so it does not plan every step.
+            if (
                 model_planning
-                and review_every
-                and report["executed_actions"] - last_review_step >= review_every
+                and campaign.plan is None
+                and (last_plan_attempt is None
+                     or report["executed_actions"] - last_plan_attempt >= 5)
             ):
-                # Periodic review keeps the brain iterating on strategy, not only
-                # reacting to stalls.
-                last_review_step = report["executed_actions"]
-                if campaign.plan:
-                    campaign.finish_plan("invalidated", "periodic_review", before)
-                    emit_plan_lifecycle()
-                before["campaign"] = campaign.context(before)
+                last_plan_attempt = report["executed_actions"]
                 request_plan(before, step)
                 planned_this_step = True
                 before["campaign"] = campaign.context(before)
-                emit("review", step=step, executed_actions=report["executed_actions"])
+            if not planned_this_step:
+                needs_scene_plan = (
+                    scene in DECISION_SCENES
+                    and scene_changed
+                    and (campaign.plan is None or plan_scene != scene)
+                )
+                if model_planning and (
+                    scene in KNOWN_SCENES and plan_scene in KNOWN_SCENES and plan_scene != scene
+                    or needs_scene_plan
+                ):
+                    # A new scene (or a plan authored for another scene) gets one
+                    # brain-authored playbook before System One acts.
+                    if campaign.plan:
+                        campaign.finish_plan("invalidated", "scene_changed_requires_replan", before,
+                                             {"from": plan_scene, "to": scene})
+                        emit_plan_lifecycle()
+                    emit("scene_change", step=step, from_scene=plan_scene, to_scene=scene)
+                    before["campaign"] = campaign.context(before)
+                    request_plan(before, step)
+                    planned_this_step = True
+                    before["campaign"] = campaign.context(before)
+                elif (
+                    model_planning
+                    and review_every
+                    and report["executed_actions"] - last_review_step >= review_every
+                ):
+                    # Periodic review keeps the brain iterating on strategy.
+                    last_review_step = report["executed_actions"]
+                    if campaign.plan:
+                        campaign.finish_plan("invalidated", "periodic_review", before)
+                        emit_plan_lifecycle()
+                    before["campaign"] = campaign.context(before)
+                    request_plan(before, step)
+                    planned_this_step = True
+                    before["campaign"] = campaign.context(before)
+                    emit("review", step=step, executed_actions=report["executed_actions"])
             objective = before["campaign"]["active_objective"]
             if report.get("active_objective") != objective["id"]:
                 report["active_objective"] = objective["id"]
@@ -589,26 +604,30 @@ def run(
 
             rounds += 1
             decision = decide(before, step)
-            review = decision.get("plan_review") or {}
-            wants_replan = review.get("choice") == "replan"
+            fit = decision.get("plan_fit") or {}
+            if fit:
+                emit("plan_fit", step=step, answer=fit)
             executed = report["executed_actions"]
             marker = campaign.planning_state.get("plan_execution_marker")
             since_plan = None if marker is None else max(0, executed - marker)
-            if wants_replan and model_planning and since_plan is not None and since_plan < 8:
-                # System One may escalate, but not before a new plan has produced
-                # some executed actions; otherwise it plans without ever acting.
-                wants_replan = False
-                emit("plan_review", step=step, answer=review, button_withheld=None,
-                     withheld=False, forced_continue=True)
-            elif review:
-                emit("plan_review", step=step, answer=review,
-                     button_withheld=decision["answer"]["choice"], withheld=wants_replan)
-            if wants_replan and model_planning:
+            # Code owns escalation: a strong "contradicted" judgment plus a plan
+            # that has actually run. JEV never commands the workflow.
+            contradicted = fit.get("choice") == "contradicted" and (
+                fit.get("probabilities") or {}).get("contradicted", 0) >= 0.6
+            if (
+                model_planning
+                and campaign.plan is not None
+                and contradicted
+                and since_plan is not None
+                and since_plan >= 8
+            ):
                 report["jev_calls"] += 1
                 report["plan_review_requests"] += 1
                 write_json(output / f"{step - 1:04d}-decision.json", {**decision, "executed": False, "source": "jev"})
-                campaign.finish_plan("invalidated", "system1_requested_replan", before,
-                                     {"observation_id": before.get("observation_id"), "review": review})
+                emit("plan_escalated", step=step, reason="plan_fit_contradicted",
+                     probability=(fit.get("probabilities") or {}).get("contradicted"))
+                campaign.finish_plan("invalidated", "plan_fit_contradicted", before,
+                                     {"observation_id": before.get("observation_id"), "plan_fit": fit})
                 emit_plan_lifecycle()
                 # Refresh the context so the planner sees the outcome it is replacing.
                 before["campaign"] = campaign.context(before)

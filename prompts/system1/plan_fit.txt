@@ -1,0 +1,7 @@
+Judge whether the active System Two plan still fits the current observation. This is a state
+judgment, not a command: you do not decide what happens next.
+Choose applicable when the observation is consistent with the plan and it can be carried out.
+Choose contradicted when the observation contradicts the plan or shows it cannot be carried out.
+Choose unknown when there is not enough evidence to judge. Routine text, a battle, a menu or a
+revisited position alone is not a contradiction. Use retained outcomes, not unexplored game
+knowledge. Do not assume another question's answer is visible. This question authorizes no input.

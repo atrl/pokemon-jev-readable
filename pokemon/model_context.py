@@ -131,19 +131,20 @@ def build_request(observation, goal, history):
         'type': 'choice', 'criteria': criteria,
         'instructions': load_prompt('system1/button.txt'),
     }}
-    if campaign.get('model_planning_enabled'):
-        questions['plan_status'] = {
-            'type': 'choice', 'instructions': load_prompt('system1/plan_status.txt'),
+    if campaign.get('model_planning_enabled') and plan:
+        questions['plan_fit'] = {
+            'type': 'choice', 'instructions': load_prompt('system1/plan_fit.txt'),
             'criteria': {
-                'continue': 'Handle this step yourself. Valid with or without an active plan: use the current observation, retained memory and any active plan to choose the button. No System Two call is made.',
-                'replan': 'Escalate to System Two and wait for a new plan before any input. Your parallel button answer is withheld. Use it for a strategic decision, not a routine battle, menu or dialogue.',
+                'applicable': 'The current observation is consistent with the active plan and it can be carried out.',
+                'contradicted': 'The observation contradicts the active plan or shows it cannot be carried out.',
+                'unknown': 'There is not enough evidence to judge.',
             },
         }
     return {'model': os.environ.get('TYPESAFE_MODEL', 'jev-latest'),
             'state': {'goal': goal, 'game': game, 'campaign': campaign,
                       'current_focus': current_focus,
                       'feedback': progress,
-                      'input_policy': 'No ranked actions or default game strategy. A plan_status=replan answer withholds the parallel button answer.'},
+                      'input_policy': 'No ranked actions or default game strategy. plan_fit is a judgment; code decides whether to escalate to System Two.'},
             'questions': questions}
 
 

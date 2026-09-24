@@ -444,16 +444,12 @@ function renderNow(list, run) {
       ? "等待 System Two 规划"
       : "无活动计划";
   const decision = latest(list, (event) => event.type === "decision");
-  const review = latest(list, (event) => event.type === "plan_review");
+  const fit = latest(list, (event) => event.type === "plan_fit");
   const parts = [];
   if (decision)
     parts.push(`按键 ${actionName(decision.selected ?? decision.answer?.choice)}（${decision.source ?? "jev"}）`);
-  if (review)
-    parts.push(
-      review.forced_continue
-        ? "System One 想 replan，已强制自行处理"
-        : `plan_status=${review.answer?.choice ?? "?"}`,
-    );
+  if (fit)
+    parts.push(`plan_fit=${fit.answer?.choice ?? "?"}（${Math.round((fit.answer?.probabilities?.[fit.answer?.choice] ?? 0) * 100)}%）`);
   $("now-decision").textContent = parts.join(" · ") || "—";
   const plannerParts = [];
   const planEvent = latest(list, (event) => event.type === "plan");
@@ -575,14 +571,13 @@ function eventSummary(event) {
       return `计划 ${brief(event.plan?.subgoal)} · 验收 ${brief(event.plan?.success?.type)}${event.plan?.intent ? `\n${brief(event.plan.intent)}` : ""}`;
     case "plan_outcome":
       return `计划 ${brief(event.status)} · ${brief(event.reason)}${event.subgoal ? ` · ${brief(event.subgoal)}` : ""}`;
-    case "plan_review": {
-      if (event.forced_continue)
-        return "System One 想交回 System Two，但上一步刚生成计划且尚未执行动作；本次强制执行按键，避免只规划不行动。";
-      const choice = event.answer?.choice;
-      return choice === "replan"
-        ? `System One 认为需要战略决策：交给 System Two 规划，本次按键已扣留（原答案 ${actionName(event.button_withheld)} 未执行）。`
-        : `System One 选择自行处理（continue）；本次直接按键，不调用 System Two。`;
+    case "plan_fit": {
+      const answer = event.answer ?? {};
+      const probability = Math.round((answer.probabilities?.[answer.choice] ?? 0) * 100);
+      return `JEV 判断当前观测与计划的关系：${answer.choice ?? "?"}（${probability}%）。这是判断，是否升级由代码决定。`;
     }
+    case "plan_escalated":
+      return `代码依据 plan_fit 的 contradicted 概率升级给 System Two：本次按键已扣留并请求新计划。`;
     case "scene_change":
       return `场景从 ${event.from_scene} 变为 ${event.to_scene}：原计划作废，交给 System Two 重新规划。`;
     case "review":

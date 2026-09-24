@@ -18,7 +18,7 @@ from experience import Experience
 from plan_manager import PlanManager
 from plan_contract import normalize_plan
 from model_context import build_situation
-from jev import build_request, validate_plan_status, choose
+from jev import build_request, validate_plan_fit, choose
 from controls import BUTTONS
 from run import run
 import planning
@@ -68,11 +68,11 @@ def proposal(**changes):
     return value
 
 
-def response(button='right', review='continue'):
+def response(button='right', fit='applicable'):
     return {'answers': {'button': {'type': 'choice', 'choice': button, 'confidence': 1,
                                   'probabilities': {k: int(k == button) for k in BUTTONS}},
-                        'plan_status': {'type': 'choice', 'choice': review, 'confidence': 1,
-                                        'probabilities': {k: int(k == review) for k in ('continue', 'replan')}}}}
+                        'plan_fit': {'type': 'choice', 'choice': fit, 'confidence': 1,
+                                     'probabilities': {k: int(k == fit) for k in ('applicable', 'contradicted', 'unknown')}}}}
 
 
 def keys(value):
@@ -264,13 +264,15 @@ class ContractTests(unittest.TestCase):
         # No runtime auto-plan: the next step is System One's to decide.
         self.assertEqual(c['active_objective']['id'],'awaiting_model_plan')
 
-    def test_system_one_is_always_asked_when_a_planner_is_configured(self):
+    def test_plan_fit_is_requested_with_an_active_plan(self):
         from model_context import build_request
-        _,g,s=setup(); g['campaign']={**s, 'model_planning_enabled':True, 'plan':None,
-                                      'active_objective':{'id':'awaiting_model_plan'}}
+        _,g,s=setup(); g['campaign']={**s, 'model_planning_enabled':True,
+                                      'plan':{'subgoal':'x','intent':'go','policy':''},
+                                      'active_objective':{'id':'plan:x'}}
         request=build_request(g,'goal',[])
-        self.assertIn('plan_status',request['questions'])
-        self.assertEqual(set(request['questions']['plan_status']['criteria']),{'continue','replan'})
+        self.assertIn('plan_fit',request['questions'])
+        self.assertEqual(set(request['questions']['plan_fit']['criteria']),{'applicable','contradicted','unknown'})
+        self.assertNotIn('plan_fit', build_request({**g,'campaign':{**g['campaign'],'plan':None}}, 'goal', [])['questions'])
 
     def test_gameplay_risk_does_not_replace_model_plan(self):
         m,g,s=setup(); m.set_plan(normalize_plan(proposal(),s))
@@ -324,7 +326,7 @@ class ContractTests(unittest.TestCase):
 
 
 class RuntimeTests(unittest.TestCase):
-    def run_double(self, folder, reviews=('continue','continue')):
+    def run_double(self, folder, reviews=('applicable','applicable')):
         current=raw(); world=Mock(); world.game=SimpleNamespace(frame_count=100); world.save.return_value=b'EXPLICIT OFFLINE STATE'
         reader=Mock(); reader.snapshot.side_effect=lambda:deepcopy(current)
         def press(button,**_):
@@ -341,56 +343,32 @@ class RuntimeTests(unittest.TestCase):
         opener=Mock(); opener.open.side_effect=upper
         def lower(request,**_):
             body=json.loads(request.data); http_requests.append(body)
-            return io.BytesIO(json.dumps(response(review=next(turn))).encode())
+            return io.BytesIO(json.dumps(response(fit=next(turn))).encode())
         with (patch.dict(os.environ,{'TYPESAFE_API_KEY':'fixture-jev','DEEPSEEK_API_KEY':'fixture-ds'}),
               patch('run.Emulator',return_value=world),patch('run.Reader',return_value=reader),
               patch('urllib.request.build_opener',return_value=opener),patch('urllib.request.urlopen',side_effect=lower)):
             report=run(Path('OFFLINE.gb'),folder,goal='User supplied goal',steps=len(reviews),planner_mode='deepseek',max_seconds=5)
         return report,world,upper_requests,http_requests
 
-    def test_system_one_decides_and_no_auto_plan(self):
+    def test_code_triggers_a_bootstrap_plan_then_executes(self):
         with TemporaryDirectory() as tmp:
             report,world,upper,lower=self.run_double(Path(tmp)/'run')
             self.assertEqual(report['observation_policy'],'structured_player_v1'); self.assertEqual(report['executed_actions'],2)
-            # System One said continue: no planner call, both buttons executed.
-            self.assertEqual(report['planning_calls'],0); self.assertEqual(len(upper),0); self.assertEqual(len(lower),2)
+            # Code triggers the bootstrap plan; JEV never commands orchestration.
+            self.assertEqual(report['planning_calls'],1); self.assertEqual(len(upper),1); self.assertEqual(len(lower),2)
             for sent in lower:
-                self.assertIn('plan_status',sent['questions'])
                 self.assertTrue({'recommended_move','next_button','story_reference','story_objective','heal_party'}.isdisjoint(keys(sent)))
                 self.assertEqual(sent['questions']['button']['criteria'],BUTTONS)
             self.assertEqual(world.press.call_count,2)
 
-    def test_system_one_can_escalate_without_a_runtime_trigger(self):
+    def test_escalation_is_code_gated_by_contradiction_and_cooldown(self):
         with TemporaryDirectory() as tmp:
-            report,world,upper,_=self.run_double(Path(tmp)/'run',('replan','continue','continue','continue'))
-            self.assertEqual(report['planning_calls'],1); self.assertEqual(len(upper),1)
-            self.assertEqual(report['executed_actions'],3)
-
-    def test_repeated_replan_without_execution_cannot_deadlock(self):
-        with TemporaryDirectory() as tmp:
-            # Second replan right after a fresh plan is forced to continue, so a
-            # button is finally executed instead of chaining plan-only steps.
-            report,world,upper,_=self.run_double(Path(tmp)/'run',('replan','replan','continue'))
-            self.assertEqual(report['planning_calls'],1); self.assertEqual(len(upper),1)
-            self.assertEqual(report['plan_review_requests'],1); self.assertEqual(report['executed_actions'],2)
-            rows=[json.loads(x) for x in (Path(tmp)/'run/events.jsonl').read_text().splitlines()]
-            self.assertTrue(any(r['type']=='plan_review' and r.get('forced_continue') for r in rows))
-
-    def test_escalation_is_rate_limited_but_returns(self):
-        with TemporaryDirectory() as tmp:
-            reviews=('replan',)+('continue',)*8+('replan','continue')
-            report,world,upper,_=self.run_double(Path(tmp)/'run',reviews)
-            # A second escalation is honoured only after enough executed actions.
-            self.assertEqual(report['plans'],2); self.assertEqual(len(upper),2)
-
-    def test_system_one_replan_withholds_parallel_button(self):
-        with TemporaryDirectory() as tmp:
-            report,world,_,_=self.run_double(Path(tmp)/'run',('replan','continue'))
-            self.assertEqual(report['jev_calls'],2); self.assertEqual(report['executed_actions'],1)
-            self.assertEqual(report['plan_review_requests'],1); self.assertEqual(world.press.call_count,1)
-            rows=[json.loads(x) for x in (Path(tmp)/'run/events.jsonl').read_text().splitlines()]
-            self.assertTrue(any(r['type']=='plan_review' for r in rows))
-            self.assertEqual(sum(r['type']=='executing' for r in rows),1)
+            # JEV judges contradicted every step, but a fresh plan has not run 8
+            # actions, so code does not escalate yet and still executes buttons.
+            report,world,upper,_=self.run_double(Path(tmp)/'run',('contradicted',)*3)
+            self.assertEqual(report['planning_calls'],1)  # bootstrap plan only
+            self.assertEqual(report['plan_review_requests'],0)
+            self.assertGreaterEqual(report['executed_actions'],1)
 
     def test_malformed_planner_reply_is_retried_not_fatal(self):
         _,_,s=setup(); good=normalize_plan(proposal(),s); calls=[]
@@ -400,10 +378,7 @@ class RuntimeTests(unittest.TestCase):
             return good
         world=Mock(); world.game=SimpleNamespace(frame_count=0); world.save.return_value=b'EXPLICIT OFFLINE STATE'
         reader=Mock(); reader.snapshot.return_value=raw()
-        decision={'answer':{'choice':'wait'},
-                  'plan_review':{'type':'choice','choice':'replan','confidence':1.0,
-                                 'probabilities':{'continue':0.0,'replan':1.0}},
-                  'source':'offline-test-double'}
+        decision={'answer':{'choice':'wait'},'source':'offline-test-double'}
         with TemporaryDirectory() as tmp, \
              patch.dict(os.environ,{'TYPESAFE_API_KEY':'fixture-jev','DEEPSEEK_API_KEY':'fixture-ds'}), \
              patch('run.Emulator',return_value=world), patch('run.Reader',return_value=reader), \
@@ -468,17 +443,14 @@ class RuntimeTests(unittest.TestCase):
         from test_model_agency import raw, proposal
         ow=raw(); bt=raw(); bt['scene']={'mode':'battle','verified':True}
         bt['battle']={'active':True,'verified':True,'menu':'command','player':{'moves':[]}}
-        seq=iter([ow, bt, bt, bt])
+        seq=iter([ow, bt, bt, bt, bt, bt])
         world=Mock(); world.game=SimpleNamespace(frame_count=0); world.save.return_value=b'EXPLICIT OFFLINE STATE'
         reader=Mock(); reader.snapshot.side_effect=lambda: deepcopy(next(seq))
         calls=[]
         def planner(situation,goal,**_):
             calls.append(situation)
             return normalize_plan(proposal(target_ref=None, success={'type':'state_changed'}), situation)
-        decision={'answer':{'choice':'a'},
-                  'plan_review':{'type':'choice','choice':'replan','confidence':1.0,
-                                 'probabilities':{'continue':0.0,'replan':1.0}},
-                  'source':'offline-test-double'}
+        decision={'answer':{'choice':'a'},'source':'offline-test-double'}
         with TemporaryDirectory() as tmp, \
              patch.dict(os.environ,{'TYPESAFE_API_KEY':'fixture-jev','DEEPSEEK_API_KEY':'fixture-ds'}), \
              patch('run.Emulator',return_value=world), patch('run.Reader',return_value=reader), \
@@ -494,14 +466,14 @@ class RuntimeTests(unittest.TestCase):
             report=run(Path('OFFLINE.gb'),Path(tmp)/'run',goal='test',steps=1,planner_mode='deepseek')
         self.assertEqual(report['status'],'blocked_missing_planner_key'); emulator.assert_not_called()
 
-    def test_plan_review_response_must_be_complete(self):
-        for value in (None, {}, {'type':'choice','choice':'continue','probabilities':{'continue':1}}):
-            with self.assertRaises(ValueError): validate_plan_status({'answers':{'plan_status':value}})
-        self.assertEqual(validate_plan_status(response())['choice'],'continue')
+    def test_plan_fit_response_must_be_complete(self):
+        for value in (None, {}, {'type':'choice','choice':'applicable','probabilities':{'applicable':1}}):
+            with self.assertRaises(ValueError): validate_plan_fit({'answers':{'plan_fit':value}})
+        self.assertEqual(validate_plan_fit(response())['choice'],'applicable')
 
-    def test_wrong_review_or_provider_failure_never_executes_a_button(self):
+    def test_wrong_fit_or_provider_failure_never_executes_a_button(self):
         m,g,s=setup(); m.set_plan(normalize_plan(proposal(),s)); g['campaign']=m.context(g)
-        payload=response(); del payload['answers']['plan_status']
+        payload=response(); del payload['answers']['plan_fit']
         with (patch.dict(os.environ,{'TYPESAFE_API_KEY':'fixture'}),patch('jev.time.sleep'),
               patch('urllib.request.urlopen',side_effect=lambda *a,**k:io.BytesIO(json.dumps(payload).encode())) as network,
               self.assertRaises(ValueError)):

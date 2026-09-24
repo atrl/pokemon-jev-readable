@@ -29,17 +29,18 @@ def observation_for_model(observation):
     return project(observation)
 
 
-def validate_plan_status(response):
-    answer = response.get('answers', {}).get('plan_status')
+def validate_plan_fit(response):
+    """JEV judges whether the observation still fits the active plan; code decides escalation."""
+    answer = response.get('answers', {}).get('plan_fit')
     if not isinstance(answer, dict) or answer.get('type') != 'choice':
-        raise ValueError('Missing plan_status answer')
+        raise ValueError('Missing plan_fit answer')
     probs = answer.get('probabilities')
-    if not isinstance(probs, dict) or set(probs) != {'continue', 'replan'}:
-        raise ValueError('Invalid plan_status options')
+    if not isinstance(probs, dict) or set(probs) != {'applicable', 'contradicted', 'unknown'}:
+        raise ValueError('Invalid plan_fit options')
     if answer.get('choice') not in probs or any(type(v) not in (int, float) or not math.isfinite(v) or not 0 <= v <= 1 for v in [*probs.values(), answer.get('confidence')]):
-        raise ValueError('Invalid plan_status probabilities')
+        raise ValueError('Invalid plan_fit probabilities')
     if not math.isclose(sum(probs.values()), 1.0, abs_tol=0.02) or probs[answer['choice']] < max(probs.values()) - 1e-6:
-        raise ValueError('Inconsistent plan_status answer')
+        raise ValueError('Inconsistent plan_fit answer')
     return answer
 
 ENDPOINT = "https://api.typesafe.ai/v1/systemone"
@@ -218,7 +219,7 @@ def choose(
         )
         try:
             answer = validate_response(response)
-            plan_review = validate_plan_status(response) if 'plan_status' in body['questions'] else None
+            plan_fit = validate_plan_fit(response) if 'plan_fit' in body['questions'] else None
         except (ValueError, TypeError, AttributeError):
             emit("jev_error", attempt=attempt, error="invalid_response", phase="validation")
             if attempt < 3:
@@ -228,7 +229,7 @@ def choose(
         return redact_secrets(
             {
                 "answer": answer,
-                "plan_review": plan_review,
+                "plan_fit": plan_fit,
                 "request": body,
                 "response": response,
                 "latency_ms": round((time.monotonic() - started) * 1000),

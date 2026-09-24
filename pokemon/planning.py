@@ -1,6 +1,6 @@
 """System Two bridge: grounded situation -> short plan -> validated contract.
 
-System One decides when it needs a plan (its plan_status question); this module
+Code decides when a plan is needed from signals and the plan_fit judgment; this module
 only builds the situation and performs the request. No button execution lives
 here; network failure is reported by the caller and missing data stays unknown.
 """
