@@ -19,8 +19,8 @@ that is not listed. When baseline.position is null, map_changed and target_reach
 verified, so choose a null-safe predicate such as state_changed or dialog_closed instead.
 A portal target gives its observed location, NOT its unexplored destination. Remembered objects
 may move. Unknown paths are insufficient information, not proof of impossibility. A map transition
-edge is directed and does not imply a reverse route. situation.blocked_backtrack exits would
-immediately return to the map just left; they are withheld to prevent ping-pong, so choose a
+edge is directed and does not imply a reverse route. situation.blocked_backtrack withholds exits
+near the tile the agent just arrived on (the way back), to prevent immediate ping-pong; choose a
 different target until the recent transition ages out. Your pretrained game knowledge is a hypothesis,
 not evidence that this modified ROM behaves identically. Never invent map IDs or coordinates.
 System One chooses physical inputs; do not emit code, executable expressions or button scripts.

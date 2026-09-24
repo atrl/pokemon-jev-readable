@@ -189,22 +189,33 @@ class PlanManager:
                 'quality': 'observed_background_only', 'frontier': True,
                 'evidence_ref': f'memory:cell:{parts[1]}:{parts[2]}',
             }
-        # General anti-backtrack: do not offer a portal back to the map just left,
-        # so the agent cannot ping-pong across one connection. Released as the
-        # recent transition ages out.
+        # General anti-backtrack: a portal has no known destination, so instead of
+        # guessing, withhold targets near the tile the agent just arrived on (that
+        # is the return exit) for a short window. Released as the transition ages.
         blocked_backtrack = []
         current_map = point(game)
-        recent_from = None
-        if self.memory.transitions:
+        if current_map and self.memory.transitions:
             last = self.memory.transitions[-1]
-            if self.steps - last.get('step', -(10 ** 9)) <= 12:
-                recent_from = last.get('from_map')
-        if recent_from is not None and current_map and recent_from != current_map[0]:
-            for ref, entry in list(targets.items()):
-                destination = entry.get('destination_map_id')
-                if (entry.get('kind') in ('warp', 'connection') and destination == recent_from) or ref == f'map:{recent_from}':
-                    del targets[ref]
-                    blocked_backtrack.append(ref)
+            arrival = last.get('arrival')
+            if (
+                self.steps - last.get('step', -(10 ** 9)) <= 12
+                and last.get('to_map') == current_map[0]
+                and isinstance(arrival, list) and len(arrival) == 2
+            ):
+                ax, ay = arrival
+                for ref, entry in list(targets.items()):
+                    selector = entry.get('selector') or {}
+                    if entry.get('map_id') != current_map[0]:
+                        continue
+                    if ref == f'map:{last.get("from_map")}':
+                        del targets[ref]
+                        blocked_backtrack.append(ref)
+                        continue
+                    if type(selector.get('x')) is not int or type(selector.get('y')) is not int:
+                        continue
+                    if entry.get('kind') in ('coordinate', 'object') and abs(selector['x'] - ax) + abs(selector['y'] - ay) <= 1:
+                        del targets[ref]
+                        blocked_backtrack.append(ref)
         return {'knowledge_mode': 'observed', 'active_objective': objective,
                 'navigation': self.memory.path_to(game, (plan or {}).get('target')),
                 'plan': deepcopy(plan), 'plan_history': deepcopy(self.plan_history[-12:]),
