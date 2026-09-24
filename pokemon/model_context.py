@@ -99,10 +99,15 @@ def build_request(observation, goal, history):
     battle_active = battle.get('active') is True and (
         battle.get('verified') is True or battle.get('phase_verified') is True)
     criteria = dict(BUTTONS)
+    navigation = campaign.get('navigation') or {}
     if battle_active:
         note = _battle_focus(battle)
         current_focus = (f"{plan['intent']} " if plan.get('intent') else "") + note
-        if battle.get('menu') == 'move':
+        menu = battle.get('menu')
+        if menu == 'command':
+            criteria['a'] += " CURRENT: A selects the highlighted battle command (FIGHT / PKMN / ITEM / RUN)."
+            criteria['b'] += " CURRENT: B leaves the battle command menu where the game allows it."
+        elif menu == 'move':
             moves = (battle.get('player') or {}).get('moves') or []
             slot = battle.get('selected_move_slot')
             row = next((m for m in moves if m.get('slot') == slot), None)
@@ -111,12 +116,21 @@ def build_request(observation, goal, history):
                 criteria['a'] = (
                     f"Press A to confirm the selected move. CURRENT: selected move {name} has {row.get('pp')} PP; "
                     "if PP is 0 the game rejects it and no input advances, so move the cursor to a move with PP above 0 first.")
-                criteria['up'] += " CURRENT: moves the move cursor; use it to reach a move with PP above 0."
-                criteria['down'] += " CURRENT: moves the move cursor; use it to reach a move with PP above 0."
+            criteria['b'] += " CURRENT: B returns from the move list to the battle command menu."
+            for direction in ('up', 'down', 'left', 'right'):
+                criteria[direction] += " CURRENT: moves the battle menu cursor."
         criteria['wait'] += " CURRENT: waiting does not advance completed battle text or a battle menu."
     else:
-        current_focus = plan.get('intent') or (
-            "No active System Two plan. Use the nearby background grid, untried directions and retained memory to explore.")
+        current_focus = plan.get('intent') or "No active System Two plan."
+        coordinates = navigation.get('coordinates') or []
+        step = None
+        if len(coordinates) >= 2 and all(isinstance(c, list) and len(c) == 2 for c in coordinates[:2]):
+            step = {(0, -1): 'up', (0, 1): 'down', (-1, 0): 'left', (1, 0): 'right'}.get(
+                (coordinates[1][0] - coordinates[0][0], coordinates[1][1] - coordinates[0][1]))
+        if step:
+            current_focus += f" Deterministic path next waypoint is {coordinates[1]}; the next input toward it is {step}."
+        else:
+            current_focus += " Use the nearby background grid, untried directions and retained memory to explore."
     questions = {'button': {
         'type': 'choice', 'criteria': criteria,
         'instructions': load_prompt('system1/button.txt'),
@@ -126,7 +140,7 @@ def build_request(observation, goal, history):
             'type': 'choice', 'instructions': load_prompt('system1/plan_status.txt'),
             'criteria': {
                 'continue': 'Handle this step yourself. Valid with or without an active plan: use the current observation, retained memory and any active plan to choose the button. No System Two call is made.',
-                'replan': 'Escalate to System Two and wait for a new plan before any input. Your parallel button answer is withheld. Prefer it when several consecutive actions changed nothing or a strategic decision is needed.',
+                'replan': 'Escalate to System Two and wait for a new plan before any input. Your parallel button answer is withheld. Use it for a strategic decision, not a routine battle, menu or dialogue; escalate when several consecutive actions changed nothing and local input cannot progress.',
             },
         }
     return {'model': os.environ.get('TYPESAFE_MODEL', 'jev-latest'),
