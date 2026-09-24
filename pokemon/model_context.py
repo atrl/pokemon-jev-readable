@@ -150,6 +150,15 @@ def build_request(observation, goal, history):
             current_focus += f" Deterministic path next waypoint is {coordinates[1]}; the next input toward it is {step}."
         else:
             current_focus += " Use the nearby background grid, untried directions and retained memory to explore."
+        progress = take(observation.get('progress'), PROGRESS_FIELDS)
+        for direction, row in (progress.get('direction_outcomes') or {}).items():
+            if direction in criteria and isinstance(row, dict):
+                criteria[direction] += (
+                    f" CURRENT from this tile: moved={row.get('moved', 0)}, "
+                    f"blocked_or_turn_only={row.get('blocked_or_turn_only', 0)}, unknown={row.get('unknown', 0)}.")
+        untried = progress.get('untried_directions')
+        if untried:
+            current_focus += f" Untried directions here: {', '.join(untried)}."
     questions = {'button': {
         'type': 'choice', 'criteria': criteria,
         'instructions': load_prompt('system1/button.txt'),

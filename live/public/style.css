@@ -1124,7 +1124,7 @@ h1 {
 }
 .live-stage {
   display: grid;
-  grid-template-columns: minmax(0, 2fr) minmax(270px, 1fr);
+  grid-template-columns: minmax(0, 2fr) minmax(250px, 1fr) minmax(250px, 0.95fr);
   gap: 22px;
   margin: 0 0 24px;
   align-items: stretch;
@@ -2933,6 +2933,28 @@ progress::-moz-progress-bar {
 .campaign-map-panel h3 { margin: 0.4rem 0; }
 .campaign-map {
   display: block;
+  max-width: 100%;
+  height: auto;
+  background: #0d1117;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  image-rendering: pixelated;
+}
+
+.map-panel {
+  border: 1px solid #41513f;
+  border-radius: 10px;
+  padding: 16px;
+  background: #10160f;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.map-panel .section-header { margin-bottom: 2px; }
+.campaign-map {
+  display: block;
+  width: 100%;
   max-width: 100%;
   height: auto;
   background: #0d1117;

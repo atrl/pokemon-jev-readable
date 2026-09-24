@@ -113,7 +113,7 @@ function renderMap(record) {
   const origin = Array.isArray(spatial.origin) ? spatial.origin : [0, 0];
   const cols = Math.max(...rows.map((row) => row.length));
   const height = rows.length;
-  const cell = Math.max(3, Math.min(12, Math.floor(520 / Math.max(cols, height, 1))));
+  const cell = Math.max(4, Math.min(16, Math.floor(520 / Math.max(cols, height, 1))));
   canvas.width = cols * cell;
   canvas.height = height * cell;
   ctx.fillStyle = "#0d1117";
@@ -132,20 +132,36 @@ function renderMap(record) {
     }
   }
   const mapId = spatial.map_id;
-  const transitions = Array.isArray(memory.transitions) ? memory.transitions : [];
-  ctx.strokeStyle = "#f2cc60";
-  ctx.lineWidth = Math.max(1, cell / 4);
+  const transitions = (Array.isArray(memory.transitions) ? memory.transitions : []).filter(
+    (edge) => edge.from_map === mapId && Array.isArray(edge.from_position) && Array.isArray(edge.arrival),
+  );
+  ctx.strokeStyle = "rgba(120,150,200,0.3)";
+  ctx.lineWidth = Math.max(1, cell / 5);
   ctx.beginPath();
   let started = false;
   for (const edge of transitions) {
-    if (edge.from_map !== mapId || !Array.isArray(edge.from_position) || !Array.isArray(edge.arrival))
-      continue;
     const [x1, y1] = toPx(edge.from_position[0], edge.from_position[1]);
     const [x2, y2] = toPx(edge.arrival[0], edge.arrival[1]);
     if (!started) { ctx.moveTo(x1, y1); started = true; }
     ctx.lineTo(x2, y2);
   }
   ctx.stroke();
+  const recent = transitions.slice(-20);
+  recent.forEach((edge, index) => {
+    const frac = recent.length <= 1 ? 1 : (index + 1) / recent.length;
+    const [x1, y1] = toPx(edge.from_position[0], edge.from_position[1]);
+    const [x2, y2] = toPx(edge.arrival[0], edge.arrival[1]);
+    ctx.strokeStyle = `hsl(${220 - 175 * frac}, 90%, ${42 + 16 * frac}%)`;
+    ctx.lineWidth = Math.max(1.5, cell * (0.15 + 0.35 * frac));
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x2, y2);
+    ctx.stroke();
+    ctx.fillStyle = ctx.strokeStyle;
+    ctx.beginPath();
+    ctx.arc(x2, y2, Math.max(1.5, cell * 0.18), 0, Math.PI * 2);
+    ctx.fill();
+  });
   const navigation = campaignRecord(campaign.navigation) ? campaign.navigation : {};
   const coordinates = Array.isArray(navigation.coordinates) ? navigation.coordinates : [];
   if (coordinates.length > 1) {
@@ -174,8 +190,8 @@ function renderMap(record) {
     ctx.arc(px, py, Math.max(2, cell * 0.4), 0, Math.PI * 2);
     ctx.fill();
   }
-  note.textContent = `地图 ${mapId ?? "?"} · 窗口 ${cols}×${height} · 原点 (${origin.join(", ")}) · 黄线=已走过，红线=当前计划路径，绿点=玩家。`;
-  legend.textContent = "深灰=障碍/墙，浅青=已观察可走，近黑=未观察(?)；橙方块=已观察对象。";
+  note.textContent = `地图 ${mapId ?? "?"} · 窗口 ${cols}×${height} · 原点 (${origin.join(", ")}) · 最近 20 步由蓝→黄渐变，红线=当前计划路径，绿点=玩家。`;
+  legend.textContent = "深灰=障碍/墙，浅青=已观察可走，近黑=未观察(?)；橙方块=已观察对象；淡蓝=更早走过的路径。";
 }
 
 export function renderCampaign(list, run) {
