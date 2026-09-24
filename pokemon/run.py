@@ -56,7 +56,7 @@ def run(
     video: bool = False,
     checkpoint_every: int = 50,
     max_stalled_steps: int = 80,
-    max_recovery_attempts: int = 3,
+    max_recovery_attempts: int = 6,
     planner_mode: str = "auto",
     planner_call_budget: int = 200,
     review_every: int = 40,
@@ -796,7 +796,7 @@ def main():
     ap.add_argument(
         "--max-recovery-attempts",
         type=int,
-        default=3,
+        default=6,
         help="Re-observe and revise guidance before pausing a persistent loop; 0 disables recovery",
     )
     ap.add_argument("--visible", action="store_true")

@@ -46,6 +46,9 @@ Optional ui_steps: up to 6 buttons (up/down/left/right/a/b/start/select/wait) th
 order for the CURRENT scene only, while that scene is unchanged. Use it to navigate a menu or
 advance text that you can read from game.screen_text and the cursor fields, and stop before the
 predicate is met. It is not for overworld travel; keep input to the scene that is on screen now.
+When every visible option has been rejected and local input cannot change the state, do not keep
+confirming it: move to a different option with ui_steps, and if none can change the outcome, decide
+whether ending the battle is better than looping, using your own game knowledge rather than guessing.
 Success types: target_reached (a remembered map/current floor or adjacency to an observed object;
 NOT completed interaction), map_changed, scene_changed, state_changed, dialog_closed (an actual
 open/close episode), party_grew, balls_increased, new_tile, battle_finished (NOT necessarily won),
