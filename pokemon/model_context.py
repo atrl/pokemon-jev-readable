@@ -121,7 +121,9 @@ def build_request(observation, goal, history):
 
     battle = game.get('battle') or {}
     if battle.get('active') is True and (battle.get('verified') is True or battle.get('phase_verified') is True):
-        current_focus += " An active battle is described by game.battle and game.screen_text; resolve it before the retained plan can continue."
+        current_focus += (" An active battle is described by game.battle (menu, selected_command, "
+                          "selected_move_slot, awaiting_input) and game.screen_text (visible labels); "
+                          "resolve it before the retained plan can continue.")
         criteria['wait'] += " CURRENT: waiting does not advance completed text or choose a menu option."
 
     questions = {'button': {

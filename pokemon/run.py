@@ -487,10 +487,15 @@ def run(
         report["status"] = "running"
         save_report()
         # steps == 0 means no action budget: run until the story is completed
-        # or a bounded recovery pause is saved.
-        for i in (range(steps) if steps else itertools.count()):
+        # or a bounded recovery pause is saved. Non-interactive holds do not
+        # consume the decision-round budget.
+        rounds = 0
+        for i in itertools.count():
             if max_seconds and time.monotonic() - started >= max_seconds:
                 report["status"] = "time_budget_reached"
+                break
+            if steps and rounds >= steps:
+                report["status"] = "budget_reached"
                 break
             step = i + 1
             report["current_step"] = step
@@ -577,6 +582,7 @@ def run(
                 world.screenshot(output / f"{i:04d}-before.png") if screenshots else None
             )
 
+            rounds += 1
             decision = decide(before, step)
             review = decision.get("plan_review") or {}
             wants_replan = review.get("choice") == "replan"
@@ -678,8 +684,6 @@ def run(
                     reason=f"{activity['reason']} persisted after {stall_monitor.recovery_attempts} bounded recovery attempts; saved for review.",
                 )
                 break
-        else:
-            report["status"] = "budget_reached"
     except PlanningPause:
         pass  # A specific non-success status has already been recorded.
     except KeyboardInterrupt:

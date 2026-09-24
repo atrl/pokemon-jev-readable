@@ -449,7 +449,7 @@ class RuntimeTests(unittest.TestCase):
         self.assertTrue(any(e['type']=='planner_response' for e in seen))
         self.assertTrue(any(e['type']=='planner_validation_error' for e in seen))
 
-    def test_transition_state_holds_without_a_model_call(self):
+    def test_transition_state_holds_do_not_consume_the_budget(self):
         r=raw(); r['scene']={'mode':'unknown','verified':False}; r['battle']={'active':False,'verified':True}
         world=Mock(); world.game=SimpleNamespace(frame_count=0); world.save.return_value=b'EXPLICIT OFFLINE STATE'
         reader=Mock(); reader.snapshot.return_value=r
@@ -457,10 +457,12 @@ class RuntimeTests(unittest.TestCase):
         with TemporaryDirectory() as tmp, \
              patch.dict(os.environ,{'TYPESAFE_API_KEY':'fixture','DEEPSEEK_API_KEY':''}), \
              patch('run.Emulator',return_value=world), patch('run.Reader',return_value=reader), patch('run.choose',choose):
-            run(Path('X.gb'),Path(tmp)/'run',goal='g',steps=3)
+            report=run(Path('X.gb'),Path(tmp)/'run',goal='g',steps=1)
             rows=[json.loads(x) for x in (Path(tmp)/'run/events.jsonl').read_text().splitlines()]
         self.assertTrue(any(e['type']=='holding' for e in rows))
-        choose.assert_not_called()
+        # Frames advance during holds, but the one decision round still happens.
+        self.assertEqual(report['executed_actions'],1)
+        self.assertEqual(choose.call_count,1)
 
     def test_scene_change_suspends_instead_of_replanning(self):
         from test_model_agency import raw, proposal
