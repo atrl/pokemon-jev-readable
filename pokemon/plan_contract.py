@@ -140,9 +140,14 @@ def normalize_observed_plan(data, situation):
     if not isinstance(data, dict):
         raise ValueError('Plan must be a JSON object')
     allowed = {'subgoal', 'intent', 'reasoning', 'target_ref', 'success', 'policy',
-               'resource_policy', 'memory_updates', 'replan_when', 'expires_steps', 'max_no_effect_steps'}
+               'resource_policy', 'memory_updates', 'replan_when', 'expires_steps', 'max_no_effect_steps',
+               'ui_steps'}
     if set(data) - allowed:
         raise ValueError('Unknown plan fields; no coordinates or executable code')
+    from controls import BUTTONS as _BUTTONS
+    ui_steps = data.get('ui_steps', [])
+    if not isinstance(ui_steps, list) or len(ui_steps) > 6 or any(step not in _BUTTONS for step in ui_steps):
+        raise ValueError('ui_steps must be a list of up to 6 known buttons')
     catalog = situation.get('targets') or {}
     ref = data.get('target_ref')
     if ref is not None and (not isinstance(ref, str) or ref not in catalog):
@@ -244,7 +249,8 @@ def normalize_observed_plan(data, situation):
               'target_ref': ref, 'target': target, 'target_map_id': target['map_id'] if target else None,
               'success': deepcopy(success), 'baseline': base, 'policy': guidance,
               'resource_policy': deepcopy(policy), 'memory_updates': deepcopy(notes),
-              'replan_when': deepcopy(rules), 'expires_steps': data.get('expires_steps', 160),
+              'replan_when': deepcopy(rules), 'ui_steps': list(ui_steps),
+              'expires_steps': data.get('expires_steps', 160),
               'max_no_effect_steps': data.get('max_no_effect_steps', 24),
               'status': 'active', 'situation_id': situation.get('situation_id')}
     result['plan_id'] = hashlib.sha256(json.dumps(result, sort_keys=True).encode()).hexdigest()[:16]

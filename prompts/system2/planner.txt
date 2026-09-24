@@ -36,9 +36,14 @@ Return a JSON object with only the fields below. Choose actual refs from the inp
   "resource_policy": {},
   "memory_updates": [],
   "replan_when": [],
+  "ui_steps": [],
   "expires_steps": 160,
   "max_no_effect_steps": 24
 }
+Optional ui_steps: up to 6 buttons (up/down/left/right/a/b/start/select/wait) that code executes in
+order for the CURRENT scene only, while that scene is unchanged. Use it to navigate a menu or
+advance text that you can read from game.screen_text and the cursor fields, and stop before the
+predicate is met. It is not for overworld travel; keep input to the scene that is on screen now.
 Success types: target_reached (a remembered map/current floor or adjacency to an observed object;
 NOT completed interaction), map_changed, scene_changed, state_changed, dialog_closed (an actual
 open/close episode), party_grew, balls_increased, new_tile, battle_finished (NOT necessarily won),

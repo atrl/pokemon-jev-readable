@@ -40,6 +40,7 @@ class PlanManager:
             raise ValueError('Observed mode requires a validated observed-plan contract')
         self.plan = deepcopy(plan)
         self.plan['created_step'] = self.steps
+        self.plan['ui_step_index'] = 0
         self.memory.add_notes(self.plan.get('memory_updates', []), self.plan['plan_id'])
 
     def finish_plan(self, status, reason, observation=None, evidence=None):

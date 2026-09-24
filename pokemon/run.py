@@ -228,6 +228,20 @@ def run(
     def decide(before, step):
         """Request one decision, keeping the same observation during network outages."""
         nonlocal video_restarts
+        # Brain-authored scene steps: execute the plan's short input sequence in
+        # order while the scene it was written for is unchanged (no JEV call).
+        plan = campaign.plan or {}
+        steps = plan.get("ui_steps") or []
+        index = plan.get("ui_step_index", 0)
+        scene_now = (before.get("scene") or {}).get("mode")
+        if (
+            steps
+            and index < len(steps)
+            and scene_now == (plan.get("baseline") or {}).get("scene")
+            and steps[index] in ("up", "down", "left", "right", "a", "b", "start", "select", "wait")
+        ):
+            plan["ui_step_index"] = index + 1
+            return {"answer": {"choice": steps[index]}, "source": "plan_steps"}
         measured_attempts = set()
 
         def decision_event(event: dict) -> None:

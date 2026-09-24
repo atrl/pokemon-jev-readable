@@ -252,6 +252,13 @@ class ContractTests(unittest.TestCase):
         self.assertNotIn("recent_actions", request["state"])
         self.assertNotIn("current_map", request["state"]["campaign"]["memory"])
 
+    def test_ui_steps_are_validated(self):
+        _,_,s=setup()
+        for bad in (['teleport'], ['a']*7, 'a', [1, 2]):
+            with self.subTest(bad=bad), self.assertRaises(ValueError):
+                normalize_plan(proposal(ui_steps=bad), s)
+        self.assertEqual(normalize_plan(proposal(ui_steps=['down','a']), s)['ui_steps'], ['down','a'])
+
     def test_unsupported_fields_and_raw_coordinates_rejected(self):
         _,_,s=setup()
         for fields in ({'target_map_id':99},{'buttons':['a']},{'target_ref':'map:99'},{'success':{'type':'eval','code':'x'}}):
@@ -349,6 +356,22 @@ class RuntimeTests(unittest.TestCase):
               patch('urllib.request.build_opener',return_value=opener),patch('urllib.request.urlopen',side_effect=lower)):
             report=run(Path('OFFLINE.gb'),folder,goal='User supplied goal',steps=len(reviews),planner_mode='deepseek',max_seconds=5)
         return report,world,upper_requests,http_requests
+
+    def test_brain_ui_steps_execute_without_jev(self):
+        _,_,s=setup()
+        plan=normalize_plan(proposal(target_ref=None, success={'type':'state_changed'},
+                                     ui_steps=['down','a']), s)
+        world=Mock(); world.game=SimpleNamespace(frame_count=0); world.save.return_value=b'EXPLICIT OFFLINE STATE'
+        reader=Mock(); reader.snapshot.return_value=raw()
+        choose=Mock(return_value={'answer':{'choice':'wait'}})
+        with TemporaryDirectory() as tmp, \
+             patch.dict(os.environ,{'TYPESAFE_API_KEY':'fixture-jev','DEEPSEEK_API_KEY':'fixture-ds'}), \
+             patch('run.Emulator',return_value=world), patch('run.Reader',return_value=reader), \
+             patch('run.choose',choose), patch('planning.call_planner',return_value=plan):
+            report=run(Path('OFFLINE.gb'),Path(tmp)/'run',goal='g',steps=2,planner_mode='deepseek')
+        self.assertEqual(report['plans'],1)
+        self.assertEqual(report['executed_actions'],2)
+        choose.assert_not_called()
 
     def test_code_triggers_a_bootstrap_plan_then_executes(self):
         with TemporaryDirectory() as tmp:
