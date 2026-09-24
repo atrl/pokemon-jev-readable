@@ -174,6 +174,22 @@ class PlanManager:
         for ref in frontier:
             if ref in targets:
                 targets[ref]['frontier'] = True
+        # General anti-backtrack: do not offer a portal back to the map just left,
+        # so the agent cannot ping-pong across one connection. Released as the
+        # recent transition ages out.
+        blocked_backtrack = []
+        current_map = point(game)
+        recent_from = None
+        if self.transitions:
+            last = self.transitions[-1]
+            if self.steps - last.get('step', -(10 ** 9)) <= 12:
+                recent_from = last.get('from_map')
+        if recent_from is not None and current_map and recent_from != current_map[0]:
+            for ref, entry in list(targets.items()):
+                destination = entry.get('destination_map_id')
+                if (entry.get('kind') in ('warp', 'connection') and destination == recent_from) or ref == f'map:{recent_from}':
+                    del targets[ref]
+                    blocked_backtrack.append(ref)
                 continue
             # Frontier cells may sit outside the current viewport, so add them as
             # valid observed targets instead of letting the model invent one.
@@ -196,6 +212,7 @@ class PlanManager:
                 'frontier': sorted(frontier),
                 'failed_target_refs': failed_target_refs, 'target_failures': target_failures,
                 'resume_target': deepcopy(self.resume_target),
+                'blocked_backtrack': blocked_backtrack,
                 'recovery': deepcopy(self.recovery), 'model_planning_enabled': self.model_planning_enabled,
                 'plan_suspended': False, 'visited_map_ids': [int(k) for k in self.memory.maps],
                 'recorded_action_count': self.steps, 'migration': self.migration,
