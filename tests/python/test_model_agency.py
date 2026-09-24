@@ -220,6 +220,14 @@ class ContractTests(unittest.TestCase):
         p=normalize_plan(proposal(memory_updates=[{'text':'I know the future','evidence_refs':['unknown']}]),s)
         self.assertEqual(p['memory_updates'],[])
 
+    def test_ping_pong_is_detected(self):
+        from test_model_agency import raw
+        manager = PlanManager()
+        for mid in (60, 61, 60, 61):
+            manager.context(raw(mid=mid))
+        self.assertIsNotNone(manager.ping_pong)
+        self.assertEqual(sorted(manager.ping_pong['maps']), [60, 61])
+
     def test_memory_note_may_cite_a_target_ref(self):
         _,_,s=setup(); ref=next(iter(s['targets']))
         p=normalize_plan(proposal(memory_updates=[{'text':'considered','evidence_refs':[ref]}]), s)

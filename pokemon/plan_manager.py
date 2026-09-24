@@ -24,6 +24,8 @@ class PlanManager:
         self.plan_history = deepcopy(data.get('plan_history', []))[-32:]
         self.planning_state = deepcopy(data.get('planning_state', {'last_step': None, 'last_request_failed': False}))
         self.resume_target = deepcopy(data.get('resume_target'))
+        self.map_history = deepcopy(data.get('map_history', []))[-64:]
+        self.ping_pong = None
         self.model_planning_enabled = False
         self.recovery = None
         self.completion_evidence = None  # Independent evaluator, not model input/knowledge.
@@ -141,9 +143,29 @@ class PlanManager:
                     self.finish_plan('invalidated', 'planner_interrupt_condition', game, rule)
                     break
 
+    def _detect_ping_pong(self):
+        """Two maps crossed back and forth several times without settling."""
+        recent = [row['map_id'] for row in self.map_history[-5:]]
+        if len(recent) < 4 or len(set(recent)) != 2:
+            return None
+        switches = sum(1 for index in range(1, len(recent)) if recent[index] != recent[index - 1])
+        if switches < 3:
+            return None
+        return {'maps': sorted(set(recent)), 'switches': switches, 'current': recent[-1]}
+
     def context(self, observation):
         game = project(observation)
         self.memory.observe(game)
+        # Track map changes to detect ping-pong (crossing one connection back and
+        # forth without new terrain).
+        current_point = point(game)
+        if current_point:
+            if not self.map_history or self.map_history[-1].get('map_id') != current_point[0]:
+                self.map_history.append({'map_id': current_point[0], 'step': self.steps})
+                self.map_history = self.map_history[-64:]
+                self.ping_pong = self._detect_ping_pong()
+            else:
+                self.map_history[-1]['step'] = self.steps
         if self.plan and (self.plan.get('target') or {}).get('kind') == 'object':
             current = self.memory.catalog(game).get(self.plan.get('target_ref'))
             if current and current.get('currently_visible'):
@@ -217,6 +239,13 @@ class PlanManager:
                     if entry.get('kind') in ('coordinate', 'object') and abs(selector['x'] - ax) + abs(selector['y'] - ay) <= 1:
                         del targets[ref]
                         blocked_backtrack.append(ref)
+        # Ping-pong: withhold the whole other map so the planner must explore here.
+        if self.ping_pong and current_map:
+            for other in [m for m in self.ping_pong.get('maps', []) if m != current_map[0]]:
+                ref = f'map:{other}'
+                if ref in targets:
+                    del targets[ref]
+                    blocked_backtrack.append(ref)
         # A remembered resume target must stay selectable, or the planner citing it
         # fails validation and the run pauses.
         resume = self.resume_target or {}
@@ -240,6 +269,7 @@ class PlanManager:
                 'failed_target_refs': failed_target_refs, 'target_failures': target_failures,
                 'resume_target': deepcopy(self.resume_target),
                 'blocked_backtrack': blocked_backtrack,
+                'ping_pong': deepcopy(self.ping_pong),
                 'recovery': deepcopy(self.recovery), 'model_planning_enabled': self.model_planning_enabled,
                 'plan_suspended': False, 'visited_map_ids': [int(k) for k in self.memory.maps],
                 'recorded_action_count': self.steps, 'migration': self.migration,
@@ -251,4 +281,5 @@ class PlanManager:
         return {'manager': 'observed_v1', 'experience': self.memory.snapshot(),
                 'plan': deepcopy(self.plan), 'plan_history': deepcopy(self.plan_history),
                 'planning_state': deepcopy(self.planning_state),
-                'resume_target': deepcopy(self.resume_target)}
+                'resume_target': deepcopy(self.resume_target),
+                'map_history': deepcopy(self.map_history[-64:])}

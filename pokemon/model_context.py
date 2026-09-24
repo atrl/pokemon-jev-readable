@@ -72,6 +72,7 @@ def build_situation(observation, campaign, progress):
         'target_failures': deepcopy(campaign.get('target_failures') or []),
         'resume_target': deepcopy(campaign.get('resume_target')),
         'blocked_backtrack': deepcopy(campaign.get('blocked_backtrack') or []),
+        'ping_pong': deepcopy(campaign.get('ping_pong')),
         'baseline': {**baseline({**game, 'progress': progress}), 'scene': game['scene']['mode'],
                      'observation_id': game['observation_id']},
         'milestones': deepcopy(game.get('milestones') or {}),
