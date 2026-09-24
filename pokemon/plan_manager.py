@@ -167,6 +167,21 @@ class PlanManager:
         for ref in frontier:
             if ref in targets:
                 targets[ref]['frontier'] = True
+                continue
+            # Frontier cells may sit outside the current viewport, so add them as
+            # valid observed targets instead of letting the model invent one.
+            parts = ref.split(':')
+            if len(parts) != 3 or parts[0] != 'cell' or ',' not in parts[2]:
+                continue
+            x_text, y_text = parts[2].split(',', 1)
+            if not x_text.lstrip('-').isdigit() or not y_text.lstrip('-').isdigit():
+                continue
+            targets[ref] = {
+                'map_id': int(parts[1]), 'kind': 'coordinate', 'label': 'observed floor frontier',
+                'selector': {'kind': 'coordinate', 'x': int(x_text), 'y': int(y_text)},
+                'quality': 'observed_background_only', 'frontier': True,
+                'evidence_ref': f'memory:cell:{parts[1]}:{parts[2]}',
+            }
         return {'knowledge_mode': 'observed', 'active_objective': objective,
                 'navigation': self.memory.path_to(game, (plan or {}).get('target')),
                 'plan': deepcopy(plan), 'plan_history': deepcopy(self.plan_history[-12:]),

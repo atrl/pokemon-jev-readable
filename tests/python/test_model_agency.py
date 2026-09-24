@@ -233,6 +233,13 @@ class ContractTests(unittest.TestCase):
                                   memory_updates=[{'text':'seen','evidence_refs':['obs:abc123']}]), s)
         self.assertEqual(p['memory_updates'][0]['evidence_refs'],['obs:abc123'])
 
+    def test_frontier_cells_are_selectable_targets(self):
+        m,g,s=setup(); c=m.context(g)
+        self.assertTrue(c['frontier'])
+        for ref in c['frontier']:
+            self.assertIn(ref, c['targets'])
+            self.assertTrue(c['targets'][ref].get('frontier'))
+
     def test_unsupported_fields_and_raw_coordinates_rejected(self):
         _,_,s=setup()
         for fields in ({'target_map_id':99},{'buttons':['a']},{'target_ref':'map:99'},{'success':{'type':'eval','code':'x'}}):
