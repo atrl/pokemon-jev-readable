@@ -244,23 +244,40 @@
               ><span id="game-phase">等待游戏状态</span>
             </div>
           </div>
-          <section id="map-panel" class="map-panel" aria-label="已观察地图与路径">
-            <div class="section-header">
-              <div>
-                <span class="eyebrow">OBSERVED MAP</span>
-                <h2>地图与走过路径</h2>
+          <div class="live-sidebar">
+            <section id="map-panel" class="map-panel" aria-label="已观察地图与路径">
+              <div class="section-header">
+                <div>
+                  <span class="eyebrow">OBSERVED MAP</span>
+                  <h2>地图与走过路径</h2>
+                </div>
               </div>
-            </div>
-            <p id="campaign-map-note" class="campaign-copy"></p>
-            <canvas
-              id="campaign-map"
-              class="campaign-map"
-              width="520"
-              height="520"
-              aria-label="已观察地图与走过的路径"
-            ></canvas>
-            <p id="campaign-map-legend" class="campaign-copy"></p>
-          </section>
+              <p id="campaign-map-note" class="campaign-copy"></p>
+              <canvas
+                id="campaign-map"
+                class="campaign-map"
+                width="520"
+                height="520"
+                aria-label="已观察地图与走过的路径"
+              ></canvas>
+              <p id="campaign-map-legend" class="campaign-copy"></p>
+            </section>
+            <section id="current-panel" class="current-panel" aria-label="当前状态与决策">
+              <div class="section-header">
+                <div>
+                  <span class="eyebrow">NOW</span>
+                  <h2>当前状态与决策</h2>
+                </div>
+              </div>
+              <dl class="current-facts">
+                <div><dt>状态</dt><dd id="now-status">—</dd></div>
+                <div><dt>位置</dt><dd id="now-position">—</dd></div>
+                <div><dt>当前目标</dt><dd id="now-objective">—</dd></div>
+                <div><dt>计划</dt><dd id="now-plan">—</dd></div>
+                <div><dt>最近决策</dt><dd id="now-decision">—</dd></div>
+                <div><dt>System Two</dt><dd id="now-planner">—</dd></div>
+              </dl>
+            </section>
           <aside class="session-panel" aria-labelledby="session-title">
             <div class="section-header">
               <div>
@@ -303,6 +320,7 @@
               步数表示执行预算，不能换算为通关进度。模型等待时间计入实际耗时。游戏内推进时间只统计实际推进的模拟帧，等待 JEV 期间游戏暂停，因此它通常小于 JEV 累计耗时。
             </p>
           </aside>
+          </div>
         </section>
         <section class="metrics" aria-label="运行统计">
           <div class="metric">

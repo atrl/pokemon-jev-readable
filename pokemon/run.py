@@ -465,6 +465,9 @@ def run(
             report["progress_memory_source"] = "legacy_progress_not_imported; original_checkpoint_unchanged"
         # Previous unsuccessful HTTP attempts must not suppress planning after an explicit restart.
         campaign.planning_state["last_request_failed"] = False
+        # The escalation marker is session-relative: a restored value from an older
+        # run would make since_plan negative and block every escalation.
+        campaign.planning_state["plan_execution_marker"] = None
         first_frame = getattr(world.game, "frame_count", None) if hasattr(world, "game") else None
         if video:
             metadata = world.enable_video(output)
@@ -533,7 +536,7 @@ def run(
             wants_replan = review.get("choice") == "replan"
             executed = report["executed_actions"]
             marker = campaign.planning_state.get("plan_execution_marker")
-            since_plan = None if marker is None else executed - marker
+            since_plan = None if marker is None else max(0, executed - marker)
             if wants_replan and model_planning and since_plan is not None and since_plan < 8:
                 # System One may escalate, but not before a new plan has produced
                 # some executed actions; otherwise it plans without ever acting.

@@ -1,7 +1,7 @@
 // Page flow: receive recorded runs/events, select a run, update independent views.
 import { createRequestInspector } from "./request-inspector.js";
 import { createVideoPlayer } from "./video-player.js";
-import { renderCampaign } from "./campaign-panel.js";
+import { renderCampaign, latestCampaign } from "./campaign-panel.js";
 import { createControllerView } from "./controller-view.js";
 import {
   $,
@@ -350,6 +350,7 @@ function render(liveEvent = null) {
     renderObservation(list);
     renderDecision(list);
     renderCampaign(list, run);
+    renderNow(list, run);
     state.renderedEvents = signature;
   }
   renderTiming();
@@ -420,6 +421,47 @@ function renderRunActivity(run) {
             ? "本轮运行已结束 · 可查看已保留的视频片段与决策记录。"
             : `${statusNames[run.status] ?? "游戏运行中"} · 每次按键与执行结果会同步到下方时间线。`;
   }
+}
+function renderNow(list, run) {
+  if (!run) return;
+  const status = $("now-status");
+  status.textContent = runStatusLabel(run);
+  status.className = `now-value ${statusClass(run.status)}`;
+  const observation = latest(list, (event) => event.type === "observation")?.observation;
+  const player = observation?.player;
+  $("now-position").textContent = player
+    ? `地图 ${player.map_id ?? "?"} · (${player.x ?? "?"}, ${player.y ?? "?"})${player.facing ? ` · 朝 ${player.facing}` : ""}`
+    : "—";
+  const record = latestCampaign(list);
+  const objective = record?.campaign?.active_objective;
+  $("now-objective").textContent = objective
+    ? `${objective.id ?? "?"}：${objective.intent ?? "（暂无意图）"}`
+    : "—";
+  const plan = record?.campaign?.plan;
+  $("now-plan").textContent = plan
+    ? `${plan.subgoal ?? "?"} · 验收 ${plan.success?.type ?? "?"}`
+    : objective?.id === "awaiting_model_plan"
+      ? "等待 System Two 规划"
+      : "无活动计划";
+  const decision = latest(list, (event) => event.type === "decision");
+  const review = latest(list, (event) => event.type === "plan_review");
+  const parts = [];
+  if (decision)
+    parts.push(`按键 ${actionName(decision.selected ?? decision.answer?.choice)}（${decision.source ?? "jev"}）`);
+  if (review)
+    parts.push(
+      review.forced_continue
+        ? "System One 想 replan，已强制自行处理"
+        : `plan_status=${review.answer?.choice ?? "?"}`,
+    );
+  $("now-decision").textContent = parts.join(" · ") || "—";
+  const plannerParts = [];
+  const planEvent = latest(list, (event) => event.type === "plan");
+  if (planEvent) plannerParts.push(`最近计划 ${planEvent.plan?.subgoal ?? "?"}`);
+  const plannerError = latest(list, (event) => event.type === "planning_error");
+  if (plannerError) plannerParts.push(`规划失败 ${plannerError.error ?? "?"}`);
+  if (run.plan_review_requests != null) plannerParts.push(`升级 ${run.plan_review_requests} 次`);
+  $("now-planner").textContent = plannerParts.join(" · ") || "—";
 }
 function renderTiming() {
   const run = state.runs.get(state.selected);
