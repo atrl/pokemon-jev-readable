@@ -174,22 +174,6 @@ class PlanManager:
         for ref in frontier:
             if ref in targets:
                 targets[ref]['frontier'] = True
-        # General anti-backtrack: do not offer a portal back to the map just left,
-        # so the agent cannot ping-pong across one connection. Released as the
-        # recent transition ages out.
-        blocked_backtrack = []
-        current_map = point(game)
-        recent_from = None
-        if self.transitions:
-            last = self.transitions[-1]
-            if self.steps - last.get('step', -(10 ** 9)) <= 12:
-                recent_from = last.get('from_map')
-        if recent_from is not None and current_map and recent_from != current_map[0]:
-            for ref, entry in list(targets.items()):
-                destination = entry.get('destination_map_id')
-                if (entry.get('kind') in ('warp', 'connection') and destination == recent_from) or ref == f'map:{recent_from}':
-                    del targets[ref]
-                    blocked_backtrack.append(ref)
                 continue
             # Frontier cells may sit outside the current viewport, so add them as
             # valid observed targets instead of letting the model invent one.
@@ -205,6 +189,22 @@ class PlanManager:
                 'quality': 'observed_background_only', 'frontier': True,
                 'evidence_ref': f'memory:cell:{parts[1]}:{parts[2]}',
             }
+        # General anti-backtrack: do not offer a portal back to the map just left,
+        # so the agent cannot ping-pong across one connection. Released as the
+        # recent transition ages out.
+        blocked_backtrack = []
+        current_map = point(game)
+        recent_from = None
+        if self.memory.transitions:
+            last = self.memory.transitions[-1]
+            if self.steps - last.get('step', -(10 ** 9)) <= 12:
+                recent_from = last.get('from_map')
+        if recent_from is not None and current_map and recent_from != current_map[0]:
+            for ref, entry in list(targets.items()):
+                destination = entry.get('destination_map_id')
+                if (entry.get('kind') in ('warp', 'connection') and destination == recent_from) or ref == f'map:{recent_from}':
+                    del targets[ref]
+                    blocked_backtrack.append(ref)
         return {'knowledge_mode': 'observed', 'active_objective': objective,
                 'navigation': self.memory.path_to(game, (plan or {}).get('target')),
                 'plan': deepcopy(plan), 'plan_history': deepcopy(self.plan_history[-12:]),
