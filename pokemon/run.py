@@ -36,6 +36,7 @@ from artifacts import (
 
 
 KNOWN_SCENES = ("overworld", "battle", "dialog", "main_menu", "name_entry", "species_preview")
+DECISION_SCENES = ("battle", "dialog")
 
 
 class PlanningPause(RuntimeError):
@@ -94,6 +95,7 @@ def run(
     emitted_plan_outcomes = set()
     consecutive_holds = 0
     last_review_step = 0
+    last_scene = None
     tracker = ProgressTracker()
     campaign = PlanManager()
     stall_monitor = StallMonitor(max_stalled_steps, max_recovery_attempts)
@@ -524,17 +526,21 @@ def run(
             planned_this_step = False
             scene = (before.get("scene") or {}).get("mode")
             plan_scene = ((campaign.plan or {}).get("baseline") or {}).get("scene")
-            if (
-                model_planning
-                and scene in KNOWN_SCENES
-                and plan_scene in KNOWN_SCENES
-                and plan_scene != scene
-            ):
-                # The active plan was authored for another scene; ask the brain
-                # for a scene-appropriate plan before System One acts.
-                campaign.finish_plan("invalidated", "scene_changed_requires_replan", before,
-                                     {"from": plan_scene, "to": scene})
-                emit_plan_lifecycle()
+            scene_changed = scene != last_scene
+            last_scene = scene
+            needs_scene_plan = (
+                scene in DECISION_SCENES
+                and scene_changed
+                and (campaign.plan is None or plan_scene != scene)
+            )
+            if model_planning and (scene in KNOWN_SCENES and plan_scene in KNOWN_SCENES and plan_scene != scene
+                                   or needs_scene_plan):
+                # A new scene (or a plan authored for another scene) gets one
+                # brain-authored playbook before System One acts.
+                if campaign.plan:
+                    campaign.finish_plan("invalidated", "scene_changed_requires_replan", before,
+                                         {"from": plan_scene, "to": scene})
+                    emit_plan_lifecycle()
                 emit("scene_change", step=step, from_scene=plan_scene, to_scene=scene)
                 before["campaign"] = campaign.context(before)
                 request_plan(before, step)
