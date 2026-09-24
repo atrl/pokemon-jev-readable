@@ -290,6 +290,8 @@ class ProgressTracker:
         same_position = (
             self.same_position_steps if key == self.last_position and key is not None else 0
         )
+        scene = observation.get("scene") or {}
+        mode = scene.get("mode") if scene.get("verified") is True else "unknown"
         repetitive_buttons = self.stationary_buttons.get("a", 0) + self.stationary_buttons.get(
             "wait", 0
         )
@@ -305,10 +307,23 @@ class ProgressTracker:
             and sum(bool(effect.get("position_changed")) for effect in self.recent_effects) >= 6
             and len(set(recent_destinations)) <= 4
         )
-        loop = stationary_loop or moving_cycle
-        scene = observation.get("scene") or {}
-        mode = scene.get("mode") if scene.get("verified") is True else "unknown"
-        if moving_cycle and mode == "overworld":
+        # A direction that is repeatedly blocked while standing still is a wall
+        # loop, whether or not the player turns to face it.
+        blocked_direction = None
+        if mode == "overworld" and same_position >= 3:
+            for direction, row in (info.get("directions") or {}).items():
+                if (
+                    isinstance(row, dict)
+                    and row.get("moved", 0) == 0
+                    and row.get("blocked_or_turn_only", 0) >= 3
+                ):
+                    blocked_direction = direction
+                    break
+        blocked_repeat = blocked_direction is not None
+        loop = stationary_loop or moving_cycle or blocked_repeat
+        if blocked_repeat:
+            loop_kind = "blocked_repeat"
+        elif moving_cycle and mode == "overworld":
             loop_kind = "position_cycle"
         elif stationary_loop and repeated_interactions and mode in ("overworld", "dialog"):
             loop_kind = "repeated_interaction"
@@ -324,6 +339,8 @@ class ProgressTracker:
             focus = "Resolve the current dialog and check whether it closes or changes; preserve the overall goal."
         elif mode == "main_menu":
             focus = "Use the visible menu toward the overall goal, or leave it when no menu task is needed."
+        elif mode == "overworld" and blocked_repeat:
+            focus = f"The {blocked_direction} direction is blocked here; choose a different direction."
         elif mode == "overworld" and loop:
             focus = "Explore an untried neighbor and compare the result; avoid reopening the same completed interaction."
         elif mode == "overworld":
@@ -340,6 +357,7 @@ class ProgressTracker:
         return {
             "loop_detected": loop,
             "loop_kind": loop_kind,
+            "blocked_direction": blocked_direction,
             "same_position_steps": same_position,
             "steps_since_new_tile": self.steps_since_new_tile,
             "untried_directions": [

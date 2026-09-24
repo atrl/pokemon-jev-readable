@@ -119,6 +119,11 @@ def build_request(observation, goal, history):
     untried = progress.get('untried_directions')
     if untried:
         current_focus += f" Untried directions here: {', '.join(untried)}."
+    blocked = [direction for direction, row in (progress.get('direction_outcomes') or {}).items()
+               if isinstance(row, dict) and row.get('moved', 0) == 0
+               and row.get('blocked_or_turn_only', 0) >= 3]
+    if blocked:
+        current_focus += f" Directions already blocked at this tile: {', '.join(blocked)}."
 
     battle = game.get('battle') or {}
     if battle.get('active') is True and (battle.get('verified') is True or battle.get('phase_verified') is True):
