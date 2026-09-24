@@ -101,7 +101,8 @@ def _battle_ui(battle, rows):
                 "up/down changes the highlight. This is not the command menu; do not try RUN.")
     menu = battle.get('menu')
     if menu == 'command':
-        return "A battle command menu is open (FIGHT / PKMN / ITEM / RUN)."
+        return ("A battle command menu is open (FIGHT top-left, PKMN top-right, ITEM bottom-left, RUN "
+                f"bottom-right); the cursor is on {battle.get('selected_command') or 'unknown'}.")
     if menu == 'move':
         return "A battle move list is open."
     if battle.get('phase') == 'text_before_combatants_ready':
@@ -154,7 +155,14 @@ def build_request(observation, goal, history):
             criteria['down'] += " CURRENT: moves the party highlight down."
             criteria['b'] += " CURRENT: the party-selection prompt does not accept RUN; confirm a member with A."
         elif menu == 'command':
-            criteria['a'] += " CURRENT: A selects the highlighted battle command (FIGHT / PKMN / ITEM / RUN)."
+            current = battle.get('selected_command')
+            criteria['a'] += (
+                " CURRENT: command grid is FIGHT top-left, PKMN top-right, ITEM bottom-left, RUN "
+                f"bottom-right; cursor is on {current or 'unknown'}, A confirms the highlighted command.")
+            criteria['right'] += " CURRENT: right moves the command cursor horizontally (FIGHT<->PKMN, ITEM<->RUN)."
+            criteria['down'] += " CURRENT: down moves the command cursor vertically (FIGHT<->ITEM, PKMN<->RUN)."
+            criteria['left'] += " CURRENT: left moves the command cursor horizontally (PKMN<->FIGHT, RUN<->ITEM)."
+            criteria['up'] += " CURRENT: up moves the command cursor vertically (ITEM<->FIGHT, RUN<->PKMN)."
             criteria['b'] += " CURRENT: B leaves the battle command menu where the game allows it."
         elif menu == 'move':
             moves = (battle.get('player') or {}).get('moves') or []
