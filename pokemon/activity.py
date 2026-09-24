@@ -104,6 +104,10 @@ class StallMonitor:
             "menu_cycle",
         )
         blocked_repeat = progress.get("loop_kind") == "blocked_repeat"
+        battle_menu_repeat = (
+            (after.get("scene") or {}).get("mode") == "battle"
+            and progress.get("loop_kind") == "stationary_repetition"
+        )
         self.active_steps = self.active_steps + 1 if changes and not cycle else 0
         if (
             outcome.get("objective_changed")
@@ -115,6 +119,8 @@ class StallMonitor:
         reason = (
             "no_observable_effect"
             if self.no_effect_steps >= self.threshold
+            else "battle_menu_repeat"
+            if battle_menu_repeat and self.no_effect_steps >= 6
             else "blocked_direction_repeat"
             if blocked_repeat and self.no_strategic_progress_steps >= 4
             else "repeating_workflow"

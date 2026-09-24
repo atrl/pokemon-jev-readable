@@ -130,6 +130,8 @@ def build_request(observation, goal, history):
         current_focus += (" An active battle is described by game.battle (menu, selected_command, "
                           "selected_move_slot, awaiting_input) and game.screen_text (visible labels); "
                           "resolve it before the retained plan can continue.")
+        current_focus += (f" Cursor: menu={battle.get('menu')}, "
+                          f"selected={battle.get('selected_command') or battle.get('selected_move_slot')}.")
         criteria['wait'] += " CURRENT: waiting does not advance completed text or choose a menu option."
 
     questions = {'button': {
