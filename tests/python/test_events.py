@@ -102,7 +102,7 @@ class EventTests(unittest.TestCase):
             self.assertEqual(waiting[0]["retry_after_seconds"], 5)
             self.assertTrue(any(r["type"] == "jev_resumed" for r in rows))
             self.assertEqual(sleep.call_args_list, [call(1), call(2), call(5)])
-            world.press.assert_called_once_with("a", held=8, settle=32)
+            world.press.assert_called_once_with("a", held=8, settle=64)
             self.assertNotIn(TEST_KEY, json.dumps(rows))
 
     def test_interrupting_service_wait_preserves_zero_action_checkpoint(self):
@@ -252,7 +252,7 @@ class EventTests(unittest.TestCase):
                 report["model_ms"],
                 sum(row["latency_ms"] for row in rows if row["type"] == "jev_response"),
             )
-            world.press.assert_called_once_with("a", held=8, settle=32)
+            world.press.assert_called_once_with("a", held=8, settle=64)
             sleep.assert_called_once_with(1)
 
     def test_three_inconsistent_decisions_never_execute_or_become_accepted(self):

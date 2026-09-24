@@ -59,6 +59,7 @@ def run(
     planner_mode: str = "auto",
     planner_call_budget: int = 200,
     review_every: int = 40,
+    settle_frames: int = 64,
     max_seconds: int = 0,
 ) -> dict:
     if type(steps) is not int or not 0 <= steps <= 100_000:
@@ -79,6 +80,8 @@ def run(
         raise ValueError("max_seconds must be a nonnegative integer")
     if type(review_every) is not int or not 0 <= review_every <= 10000:
         raise ValueError("review_every must be an integer in 0..10000")
+    if type(settle_frames) is not int or not 16 <= settle_frames <= 240:
+        raise ValueError("settle_frames must be an integer in 16..240")
     model_planning = planner_mode != "local" and planning.planner_configured()
     output.mkdir(parents=True, exist_ok=True)
     if any(output.iterdir()):
@@ -349,7 +352,7 @@ def run(
         emit("executing", step=step, button=button, action=button)
         try:
             world.press(
-                button, held=16 if button in ("up", "down", "left", "right") else 8, settle=32
+                button, held=16 if button in ("up", "down", "left", "right") else 8, settle=settle_frames
             )
             report["executed_actions"] += 1
             save_report()
@@ -521,6 +524,7 @@ def run(
                 and scene in KNOWN_SCENES
                 and plan_scene in KNOWN_SCENES
                 and plan_scene != scene
+                and (campaign.plan or {}).get("status") != "suspended"
             ):
                 # The active plan was authored for another scene; ask the brain
                 # for a scene-appropriate plan before System One acts.
@@ -761,6 +765,7 @@ def main():
     ap.add_argument("--planner-mode", choices=("auto", "deepseek", "local"), default="auto")
     ap.add_argument("--planner-call-budget", type=int, default=200)
     ap.add_argument("--review-every", type=int, default=40, help="Executed actions between periodic System Two reviews; 0 disables")
+    ap.add_argument("--settle", type=int, default=64, help="Emulator frames advanced after each input (16..240)")
     ap.add_argument("--max-seconds", type=int, default=0)
     a = ap.parse_args()
 
@@ -786,6 +791,7 @@ def main():
                 planner_mode=a.planner_mode,
                 planner_call_budget=a.planner_call_budget,
                 review_every=a.review_every,
+                settle_frames=a.settle,
                 max_seconds=a.max_seconds,
             ),
             indent=2,

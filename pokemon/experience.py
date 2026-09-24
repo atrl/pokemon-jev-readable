@@ -202,6 +202,24 @@ class Experience:
                     parents[nxt] = at; queue.append(nxt)
         return {'status': 'unknown_path', 'meaning': 'insufficient retained geometry, not proof of unreachability'}
 
+    def frontier(self, game):
+        """Observed floor cells next to unknown terrain, for exploration targets."""
+        p = point(game)
+        if not p:
+            return []
+        mid = p[0]
+        cells = (self.maps.get(str(mid)) or {}).get('cells') or {}
+        out = []
+        for cell in cells.values():
+            if cell.get('glyph') != '.':
+                continue
+            x, y = cell.get('x'), cell.get('y')
+            if not isinstance(x, int) or not isinstance(y, int):
+                continue
+            if any(f'{x + dx},{y + dy}' not in cells for dx, dy in DIRECTIONS.values()):
+                out.append(f'cell:{mid}:{x},{y}')
+        return out[:12]
+
     def context(self, game):
         return {'policy': POLICY, 'current_map': self.spatial(game),
                 'maps': [{'map_id': int(k), 'observed_cells': len(v['cells']), 'last_seen_step': v['last_seen_step']}

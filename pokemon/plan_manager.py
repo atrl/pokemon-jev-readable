@@ -76,12 +76,27 @@ class PlanManager:
         age = self.steps - plan['created_step']
         kind = plan['success']['type']
         base = plan['baseline']
+        mode = game['scene']['mode']
+        baseline_scene = base.get('scene')
+        # A scene the plan was not written for (battle/dialog/menu) suspends a
+        # movement plan instead of discarding it; it resumes when that scene ends.
+        if plan.get('status') == 'suspended':
+            if mode == baseline_scene:
+                plan['status'] = 'active'
+                plan.pop('suspended_reason', None)
+            else:
+                return
+        elif baseline_scene == 'overworld' and mode in (
+                'battle', 'dialog', 'main_menu', 'name_entry', 'species_preview'):
+            plan['status'] = 'suspended'
+            plan['suspended_reason'] = 'scene_changed_to_' + mode
+            return
         evidence = None
         # A zero-action existing condition is never progress caused by this plan.
         if age > 0:
             if kind == 'map_changed' and point(game) and base.get('position') and point(game)[0] != base['position'][0]:
                 evidence = {'before': base['position'], 'after': point(game), 'scope': 'map_transition_not_story_completion'}
-            elif kind == 'scene_changed' and game['scene']['verified'] and game['scene']['mode'] != base.get('scene'):
+            elif kind == 'scene_changed' and game['scene']['verified'] and mode != baseline_scene:
                 evidence = {'scene': game['scene'], 'scope': 'ui_transition_only'}
             elif kind == 'state_changed' and game['observation_id'] != base.get('observation_id'):
                 evidence = {'observation_id': game['observation_id'], 'scope': 'observable_change_only'}
@@ -102,14 +117,19 @@ class PlanManager:
             for rule in plan.get('replan_when', []):
                 matched = False
                 if rule['type'] == 'scene_changed':
-                    matched = game['scene']['verified'] and game['scene']['mode'] != base.get('scene')
+                    matched = game['scene']['verified'] and mode != baseline_scene
                 elif rule['type'] == 'map_changed':
                     matched = bool(point(game) and base.get('position') and point(game)[0] != base['position'][0])
-                elif rule['type'] == 'party_hp_below':
+                elif rule['type'] == 'party_hp_below' and mode == 'overworld':
                     party = game.get('party')
                     if party and all(type(m.get('hp')) is int and type(m.get('max_hp')) is int and m['max_hp'] > 0 for m in party):
                         matched = sum(m['hp'] for m in party) / sum(m['max_hp'] for m in party) < rule['ratio']
                 if matched:
+                    if rule['type'] == 'scene_changed':
+                        # Keep exploration progress for when the scene returns.
+                        plan['status'] = 'suspended'
+                        plan['suspended_reason'] = 'scene_changed'
+                        return
                     self.finish_plan('invalidated', 'planner_interrupt_condition', game, rule)
                     break
 
@@ -143,10 +163,15 @@ class PlanManager:
             if ref in attempts:
                 entry['previous_attempts'] = attempts[ref]
                 entry['prefer_alternative'] = True
+        frontier = set(self.memory.frontier(game))
+        for ref in frontier:
+            if ref in targets:
+                targets[ref]['frontier'] = True
         return {'knowledge_mode': 'observed', 'active_objective': objective,
                 'navigation': self.memory.path_to(game, (plan or {}).get('target')),
                 'plan': deepcopy(plan), 'plan_history': deepcopy(self.plan_history[-12:]),
                 'memory': self.memory.context(game), 'targets': targets,
+                'frontier': sorted(frontier),
                 'failed_target_refs': failed_target_refs, 'target_failures': target_failures,
                 'recovery': deepcopy(self.recovery), 'model_planning_enabled': self.model_planning_enabled,
                 'plan_suspended': False, 'visited_map_ids': [int(k) for k in self.memory.maps],
