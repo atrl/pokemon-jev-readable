@@ -92,6 +92,92 @@ function campaignChips(target, values, emptyText) {
   for (const value of values)
     target.append(node("span", "campaign-chip", brief(value)));
 }
+function renderMap(record) {
+  const canvas = $("campaign-map");
+  if (!canvas) return;
+  const note = $("campaign-map-note");
+  const legend = $("campaign-map-legend");
+  const campaign = campaignRecord(record?.campaign) ? record.campaign : {};
+  const memory = campaignRecord(campaign.memory) ? campaign.memory : {};
+  const spatial = campaignRecord(memory.current_map) ? memory.current_map : {};
+  const observation = campaignRecord(record?.observation) ? record.observation : {};
+  const player = campaignRecord(observation.player) ? observation.player : {};
+  const rows = Array.isArray(spatial.rows) ? spatial.rows : null;
+  const ctx = canvas.getContext("2d");
+  if (!rows || !rows.length) {
+    note.textContent = "此记录未提供已观察地图窗口。";
+    legend.textContent = "";
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    return;
+  }
+  const origin = Array.isArray(spatial.origin) ? spatial.origin : [0, 0];
+  const cols = Math.max(...rows.map((row) => row.length));
+  const height = rows.length;
+  const cell = Math.max(3, Math.min(12, Math.floor(520 / Math.max(cols, height, 1))));
+  canvas.width = cols * cell;
+  canvas.height = height * cell;
+  ctx.fillStyle = "#0d1117";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  const toPx = (x, y) => [(x - origin[0]) * cell + cell / 2, (y - origin[1]) * cell + cell / 2];
+  for (let gy = 0; gy < height; gy++) {
+    const row = rows[gy] ?? "";
+    for (let gx = 0; gx < cols; gx++) {
+      const glyph = row[gx] ?? "?";
+      const color =
+        glyph === "#" ? "#3b4252" : glyph === "." ? "#8fbcbb" : glyph === "?" ? "#1b2230" : null;
+      if (color) {
+        ctx.fillStyle = color;
+        ctx.fillRect(gx * cell, gy * cell, cell - 1, cell - 1);
+      }
+    }
+  }
+  const mapId = spatial.map_id;
+  const transitions = Array.isArray(memory.transitions) ? memory.transitions : [];
+  ctx.strokeStyle = "#f2cc60";
+  ctx.lineWidth = Math.max(1, cell / 4);
+  ctx.beginPath();
+  let started = false;
+  for (const edge of transitions) {
+    if (edge.from_map !== mapId || !Array.isArray(edge.from_position) || !Array.isArray(edge.arrival))
+      continue;
+    const [x1, y1] = toPx(edge.from_position[0], edge.from_position[1]);
+    const [x2, y2] = toPx(edge.arrival[0], edge.arrival[1]);
+    if (!started) { ctx.moveTo(x1, y1); started = true; }
+    ctx.lineTo(x2, y2);
+  }
+  ctx.stroke();
+  const navigation = campaignRecord(campaign.navigation) ? campaign.navigation : {};
+  const coordinates = Array.isArray(navigation.coordinates) ? navigation.coordinates : [];
+  if (coordinates.length > 1) {
+    ctx.strokeStyle = "#bf616a";
+    ctx.lineWidth = Math.max(1, cell / 4);
+    ctx.beginPath();
+    const [sx, sy] = toPx(coordinates[0][0], coordinates[0][1]);
+    ctx.moveTo(sx, sy);
+    for (let index = 1; index < coordinates.length; index++)
+      { const [px, py] = toPx(coordinates[index][0], coordinates[index][1]); ctx.lineTo(px, py); }
+    ctx.stroke();
+  }
+  if (campaignRecord(memory.objects)) {
+    ctx.fillStyle = "#d08770";
+    for (const object of Object.values(memory.objects)) {
+      if (!object || typeof object.x !== "number" || typeof object.y !== "number" || object.visible === false)
+        continue;
+      const [px, py] = toPx(object.x, object.y);
+      ctx.fillRect(px - cell / 3, py - cell / 3, cell * 0.66, cell * 0.66);
+    }
+  }
+  if (typeof player.x === "number" && typeof player.y === "number") {
+    const [px, py] = toPx(player.x, player.y);
+    ctx.fillStyle = "#a3be8c";
+    ctx.beginPath();
+    ctx.arc(px, py, Math.max(2, cell * 0.4), 0, Math.PI * 2);
+    ctx.fill();
+  }
+  note.textContent = `地图 ${mapId ?? "?"} · 窗口 ${cols}×${height} · 原点 (${origin.join(", ")}) · 黄线=已走过，红线=当前计划路径，绿点=玩家。`;
+  legend.textContent = "深灰=障碍/墙，浅青=已观察可走，近黑=未观察(?)；橙方块=已观察对象。";
+}
+
 export function renderCampaign(list, run) {
   const record = latestCampaign(list);
   const panel = $("campaign-panel");
@@ -106,6 +192,7 @@ export function renderCampaign(list, run) {
   if (!available) {
     $("campaign-status").textContent = "尚无任务记录";
     $("campaign-status").className = "status-pill";
+    renderMap(null);
     return;
   }
   const objective = campaignRecord(campaign.active_objective)
@@ -319,4 +406,5 @@ export function renderCampaign(list, run) {
     $("campaign-connections").append(
       node("p", "empty-copy", "尚无观察到的跨地图连接。"),
     );
+  renderMap(record);
 }

@@ -2928,3 +2928,15 @@ progress::-moz-progress-bar {
     width: 29px;
   }
 }
+
+.campaign-map-panel { margin-top: 1rem; }
+.campaign-map-panel h3 { margin: 0.4rem 0; }
+.campaign-map {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  background: #0d1117;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  image-rendering: pixelated;
+}

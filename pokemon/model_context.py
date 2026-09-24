@@ -43,6 +43,24 @@ def _compact_memory(memory, *, transitions=8, dialogues=8, actions=6, notes=8):
     return result
 
 
+def _scene_guidance(game):
+    """Scene-appropriate success kinds, so one planner prompt fits every scene."""
+    battle = game.get('battle') or {}
+    if battle.get('active') is True:
+        return ('A battle is active. Use success battle_finished; do not plan overworld movement '
+                'or a UI predicate.')
+    mode = (game.get('scene') or {}).get('mode')
+    if mode == 'dialog':
+        return ('A dialog is open. Use success dialog_closed for the interaction, or a fact predicate, '
+                'rather than target_reached.')
+    if mode in ('main_menu', 'name_entry', 'species_preview'):
+        return 'A menu/entry screen is open. Use state_changed or the matching UI predicate.'
+    if mode == 'overworld':
+        return ('Overworld. Use target_reached/new_tile/map_changed for movement; do not use '
+                'battle_finished. For a portal, map_changed may be the true transition test.')
+    return 'The scene is uncertain. Use state_changed; do not assume a specific UI.'
+
+
 def build_situation(observation, campaign, progress):
     game = project(observation)
     memory = _compact_memory(campaign.get('memory') or {})
@@ -68,6 +86,7 @@ def build_situation(observation, campaign, progress):
         'suspended': False,
         'navigation_geometry': deepcopy(campaign.get('navigation')),
         'observed_action_definitions': dict(BUTTONS),
+        'scene_guidance': _scene_guidance(game),
     }
     result['situation_id'] = digest(result)
     return result
