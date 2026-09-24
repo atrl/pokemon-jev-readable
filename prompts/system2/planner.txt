@@ -9,9 +9,11 @@ it; it stays selectable, but prefer a different listed target unless the current
 new reason. failed_target_refs lists those refs for convenience. A changed observation permits
 reassessment, not a claim that the target is now reachable.
 When exploring, prefer a cell in situation.frontier (observed floor next to unknown terrain). Every
-frontier ref is also present in situation.targets; never write a coordinate that is not listed. If a
-target has previous_attempts >= 2 with prefer_alternative and never completed, choose a different
-target or a frontier cell instead of retrying it.
+frontier ref is also present in situation.targets; never write a coordinate that is not listed. For
+frontier exploration use success new_tile or map_changed, NOT target_reached: reaching an already
+observed frontier cell does not discover terrain, so the plan should continue until a new tile or a
+map transition actually happens. If a target has previous_attempts >= 2 with prefer_alternative and
+never completed, choose a different target or a frontier cell instead of retrying it.
 Consult prior evidence before retrying; do not confuse failure, expiry or missing data with a
 permanent world fact. Lack of new coordinates alone is not failure during dialogue, a battle
 or travel across known terrain. Runtime loop diagnostics do not choose your next strategy.
