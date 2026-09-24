@@ -696,6 +696,7 @@ def run(
             save_report()
             if activity["should_recover"]:
                 attempt = stall_monitor.begin_recovery()
+                tracker.stationary_buttons = {}
                 campaign.recover(
                     after, attempt=attempt, reason=activity["reason"], failed_button=button
                 )

@@ -370,7 +370,15 @@ class ProgressTracker:
             "current_focus": focus,
             "visited_tiles": len(self.visited),
             "repeated_interactions": repeated_interactions,
-            "repetitive_confirmations": self.stationary_buttons.get("a", 0),
+            "repetitive_confirmations": (
+                len(self.recent_effects)
+                if len(self.recent_effects) >= 6
+                and all(
+                    effect.get("button") == "a" and not effect.get("position_changed")
+                    for effect in self.recent_effects[-6:]
+                )
+                else 0
+            ),
             "repeated_text_observations": repeated_text,
             "total_steps": self.total_steps,
             "limitations": [
