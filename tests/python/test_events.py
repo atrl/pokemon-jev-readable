@@ -49,6 +49,8 @@ def observation():
         "party": [{"unverified": True}],
         "bag": [],
         "screen_text": {"rows": ["TEST DOUBLE"]},
+        "scene": {"mode": "overworld", "verified": True},
+        "world": {"source_match": True, "player_position_valid": True, "input_lock": {}},
         "battle_type_raw": 2,
     }
 

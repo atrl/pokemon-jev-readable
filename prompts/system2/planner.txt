@@ -38,6 +38,9 @@ Success types: target_reached (a remembered map/current floor or adjacency to an
 NOT completed interaction), map_changed, scene_changed, state_changed, dialog_closed (an actual
 open/close episode), party_grew, balls_increased, new_tile, battle_finished (NOT necessarily won),
 fact_true (add fact naming a currently provided fact). Select a predicate matching your intent.
+Prefer a checkable, non-trivial condition: target_reached for a chosen object/cell/exit, new_tile
+for exploration, battle_finished for a battle. Avoid state_changed unless no stronger predicate
+applies: it completes on any observation change and ends the plan almost immediately.
 For an unknown portal, map_changed is a possible transition test; target_reached tests only approach.
 state_changed is a weak UI/observation predicate, not story progress. None of these proves a win.
 Optional resource_policy fields: wild_battle=fight|run|catch, catch_species=observed species or null,

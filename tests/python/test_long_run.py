@@ -25,6 +25,8 @@ OBSERVATION = {
     "party": [],
     "bag": [],
     "screen_text": {"rows": ["OFFLINE TEST DOUBLE"]},
+    "scene": {"mode": "overworld", "verified": True},
+    "world": {"source_match": True, "player_position_valid": True, "input_lock": {}},
 }
 
 
@@ -236,7 +238,7 @@ ready = Path(sys.argv.pop(1))
 world = Mock()
 world.save.return_value = b'offline interrupted state'
 reader = Mock()
-reader.snapshot.return_value = {'errors': [], 'player': {}, 'party': [], 'bag': [], 'screen_text': {'rows': []}}
+reader.snapshot.return_value = {'errors': [], 'player': {}, 'party': [], 'bag': [], 'screen_text': {'rows': []}, 'scene': {'mode': 'overworld', 'verified': True}, 'world': {'source_match': True, 'player_position_valid': True, 'input_lock': {}}}
 def waiting(*args, **kwargs):
     ready.write_text('offline decision waiting')
     signal.pause()

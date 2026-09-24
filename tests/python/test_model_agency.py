@@ -359,7 +359,7 @@ class RuntimeTests(unittest.TestCase):
 
     def test_escalation_is_rate_limited_but_returns(self):
         with TemporaryDirectory() as tmp:
-            reviews=('replan','continue','continue','continue','continue','continue','replan','continue')
+            reviews=('replan',)+('continue',)*8+('replan','continue')
             report,world,upper,_=self.run_double(Path(tmp)/'run',reviews)
             # A second escalation is honoured only after enough executed actions.
             self.assertEqual(report['plans'],2); self.assertEqual(len(upper),2)
@@ -429,6 +429,19 @@ class RuntimeTests(unittest.TestCase):
             planning.call_planner(s,'goal',on_event=seen.append)
         self.assertTrue(any(e['type']=='planner_response' for e in seen))
         self.assertTrue(any(e['type']=='planner_validation_error' for e in seen))
+
+    def test_transition_state_holds_without_a_model_call(self):
+        r=raw(); r['scene']={'mode':'unknown','verified':False}; r['battle']={'active':False,'verified':True}
+        world=Mock(); world.game=SimpleNamespace(frame_count=0); world.save.return_value=b'EXPLICIT OFFLINE STATE'
+        reader=Mock(); reader.snapshot.return_value=r
+        choose=Mock(return_value={'answer':{'choice':'a'}})
+        with TemporaryDirectory() as tmp, \
+             patch.dict(os.environ,{'TYPESAFE_API_KEY':'fixture','DEEPSEEK_API_KEY':''}), \
+             patch('run.Emulator',return_value=world), patch('run.Reader',return_value=reader), patch('run.choose',choose):
+            run(Path('X.gb'),Path(tmp)/'run',goal='g',steps=3)
+            rows=[json.loads(x) for x in (Path(tmp)/'run/events.jsonl').read_text().splitlines()]
+        self.assertTrue(any(e['type']=='holding' for e in rows))
+        choose.assert_not_called()
 
     def test_missing_required_key_does_not_start_game(self):
         with TemporaryDirectory() as tmp, patch.dict(os.environ,{'TYPESAFE_API_KEY':'fixture','DEEPSEEK_API_KEY':''}), patch('run.Emulator') as emulator:

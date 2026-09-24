@@ -83,6 +83,7 @@ def run(
     first_frame = None
     video_restarts = 0
     emitted_plan_outcomes = set()
+    consecutive_holds = 0
     tracker = ProgressTracker()
     campaign = PlanManager()
     stall_monitor = StallMonitor(max_stalled_steps, max_recovery_attempts)
@@ -322,6 +323,20 @@ def run(
         view["errors"] = raw.get("errors", [])
         return view
 
+    def non_interactive(view):
+        """Detect a state where a model decision or button cannot change anything."""
+        battle = view.get("battle") or {}
+        if battle.get("active") is True:
+            return None
+        scene = view.get("scene") or {}
+        if scene.get("verified") is not True or scene.get("mode") == "unknown":
+            return "scene_transition"
+        if scene.get("mode") == "overworld":
+            lock = (view.get("world") or {}).get("input_lock") or {}
+            if lock.get("ignored_buttons_mask") == 255 or lock.get("scripted_movement_remaining", 0) > 0:
+                return "scripted_input_lock"
+        return None
+
     def execute(button, verified_before, step):
         """Execute exactly that button, then record a fresh RAM observation."""
         emit("executing", step=step, button=button, action=button)
@@ -470,6 +485,21 @@ def run(
             before = read_observation()
             if before["errors"]:
                 raise RuntimeError("Memory sanity check failed before action")
+            hold_reason = non_interactive(before)
+            if hold_reason:
+                consecutive_holds += 1
+                if consecutive_holds == 1:
+                    report.update(status="holding", holding_reason=hold_reason)
+                    save_report()
+                    emit("holding", step=step, reason=hold_reason)
+                if consecutive_holds <= 60:
+                    # Advance frames without a paid decision; no button can help yet.
+                    world.tick(30)
+                    report["hold_frames"] = report.get("hold_frames", 0) + 30
+                    continue
+                consecutive_holds = 0
+            else:
+                consecutive_holds = 0
             before["progress"] = tracker.context(before)
             before["campaign"] = campaign.context(before)
             emit_plan_lifecycle()
@@ -502,10 +532,11 @@ def run(
             review = decision.get("plan_review") or {}
             wants_replan = review.get("choice") == "replan"
             executed = report["executed_actions"]
-            since_plan = executed - (campaign.planning_state.get("plan_execution_marker") or 0)
-            if wants_replan and model_planning and campaign.plan is not None and since_plan < 5:
-                # System One may escalate, but not replace a fresh plan before it
-                # has produced any executed actions; otherwise it plans without acting.
+            marker = campaign.planning_state.get("plan_execution_marker")
+            since_plan = None if marker is None else executed - marker
+            if wants_replan and model_planning and since_plan is not None and since_plan < 8:
+                # System One may escalate, but not before a new plan has produced
+                # some executed actions; otherwise it plans without ever acting.
                 wants_replan = False
                 emit("plan_review", step=step, answer=review, button_withheld=None,
                      withheld=False, forced_continue=True)
