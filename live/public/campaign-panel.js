@@ -105,6 +105,11 @@ function renderMap(record) {
   const rows = Array.isArray(spatial.rows) ? spatial.rows : null;
   const ctx = canvas.getContext("2d");
   if (!rows || !rows.length) {
+    renderViewport(observation);
+    if (lastMapDrawn) {
+      note.textContent = "当前为战斗/菜单，画面见上方视频；下图保留上一次 overworld 观察。";
+      return;
+    }
     note.textContent = "此记录未提供已观察地图窗口。";
     legend.textContent = "";
     ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -191,7 +196,51 @@ function renderMap(record) {
     ctx.fill();
   }
   note.textContent = `地图 ${mapId ?? "?"} · 窗口 ${cols}×${height} · 原点 (${origin.join(", ")}) · 最近 20 步由蓝→黄渐变，红线=当前计划路径，绿点=玩家。`;
-  legend.textContent = "深灰=障碍/墙，浅青=已观察可走，近黑=未观察(?)；橙方块=已观察对象；淡蓝=更早走过的路径。";
+  legend.textContent = "深灰=障碍/墙，浅青=已观察可走，近黑=未观察(?)；橙方块=已观察对象；淡蓝=更早走过的路径。示意草图：不区分高地、台阶/悬崖与层数。";
+  lastMapDrawn = true;
+  renderViewport(observation);
+}
+
+let lastMapDrawn = false;
+
+function renderViewport(observation) {
+  const canvas = $("campaign-viewport");
+  if (!canvas) return;
+  const note = $("campaign-viewport-note");
+  const local = campaignRecord(observation?.local_map) ? observation.local_map : null;
+  const ctx = canvas.getContext("2d");
+  const rows = Array.isArray(local?.rows) ? local.rows : null;
+  if (!rows || !rows.length) {
+    note.textContent = "此观测没有当前视口（战斗/菜单/过渡中）。";
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    return;
+  }
+  const cell = Math.max(6, Math.min(28, Math.floor(Math.min(360, 324) / Math.max(rows.length, Math.max(...rows.map((r) => r.length)), 1))));
+  const cols = Math.max(...rows.map((row) => row.length));
+  canvas.width = cols * cell;
+  canvas.height = rows.length * cell;
+  ctx.fillStyle = "#0d1117";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  const center = local.player_cell || { x: 4, y: 4 };
+  const neighbors = local.neighbors || {};
+  const outcomes = (observation?.progress || {}).direction_outcomes || {};
+  const deltas = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
+  const anomalies = new Set();
+  for (const [direction, [dx, dy]] of Object.entries(deltas)) {
+    const passable = neighbors[direction]?.background_passable === true;
+    const blocked = (outcomes[direction]?.blocked_or_turn_only || 0) > 0;
+    if (passable && blocked) anomalies.add(`${center.x + dx},${center.y + dy}`);
+  }
+  for (let gy = 0; gy < rows.length; gy++) {
+    for (let gx = 0; gx < (rows[gy] ?? "").length; gx++) {
+      const glyph = rows[gy][gx];
+      const isPlayer = gx === center.x && gy === center.y;
+      const anomaly = anomalies.has(`${gx},${gy}`);
+      ctx.fillStyle = isPlayer ? "#a3be8c" : anomaly ? "#c678dd" : glyph === "#" ? "#3b4252" : glyph === "." ? "#8fbcbb" : "#1b2230";
+      ctx.fillRect(gx * cell, gy * cell, cell - 1, cell - 1);
+    }
+  }
+  note.textContent = `当前视口 ${cols}×${rows.length}（与视频同区域）· @ 玩家；紫色=背景可走但实际被挡（疑似台阶/单向）。`;
 }
 
 export function renderCampaign(list, run) {

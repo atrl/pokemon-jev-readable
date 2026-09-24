@@ -116,6 +116,11 @@ def build_request(observation, goal, history):
             criteria[direction] += (
                 f" CURRENT from this tile: moved={row.get('moved', 0)}, "
                 f"blocked_or_turn_only={row.get('blocked_or_turn_only', 0)}, unknown={row.get('unknown', 0)}.")
+            background_passable = ((game.get('local_map') or {}).get('neighbors') or {}).get(
+                direction, {}).get('background_passable')
+            if background_passable is True and row.get('blocked_or_turn_only', 0) > 0:
+                criteria[direction] += (" CURRENT: the background says this tile is passable but movement was "
+                                        "blocked here, so it may be a one-way ledge or cliff; do not keep pushing it.")
     untried = progress.get('untried_directions')
     if untried:
         current_focus += f" Untried directions here: {', '.join(untried)}."

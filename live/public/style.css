@@ -2995,3 +2995,14 @@ progress::-moz-progress-bar {
   border-radius: 6px;
   image-rendering: pixelated;
 }
+
+.campaign-viewport {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin-top: 4px;
+  background: #0d1117;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  image-rendering: pixelated;
+}
