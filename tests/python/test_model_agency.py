@@ -464,7 +464,7 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual(report['executed_actions'],1)
         self.assertEqual(choose.call_count,1)
 
-    def test_scene_change_suspends_instead_of_replanning(self):
+    def test_scene_change_triggers_a_scene_plan(self):
         from test_model_agency import raw, proposal
         ow=raw(); bt=raw(); bt['scene']={'mode':'battle','verified':True}
         bt['battle']={'active':True,'verified':True,'menu':'command','player':{'moves':[]}}
@@ -485,9 +485,9 @@ class RuntimeTests(unittest.TestCase):
              patch('run.choose',Mock(return_value=decision)), patch('planning.call_planner',side_effect=planner):
             run(Path('OFFLINE.gb'),Path(tmp)/'run',goal='g',steps=2,planner_mode='deepseek')
             rows=[json.loads(x) for x in (Path(tmp)/'run/events.jsonl').read_text().splitlines()]
-        # The overworld plan is suspended for the battle, not replaced.
-        self.assertEqual(len(calls),1)
-        self.assertFalse(any(r['type']=='scene_change' for r in rows))
+        # The scene change asks the brain for a scene plan, not a silent reuse.
+        self.assertGreaterEqual(len(calls),2)
+        self.assertTrue(any(r['type']=='scene_change' for r in rows))
 
     def test_missing_required_key_does_not_start_game(self):
         with TemporaryDirectory() as tmp, patch.dict(os.environ,{'TYPESAFE_API_KEY':'fixture','DEEPSEEK_API_KEY':''}), patch('run.Emulator') as emulator:

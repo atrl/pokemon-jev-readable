@@ -23,6 +23,7 @@ class PlanManager:
         self.plan = deepcopy(data.get('plan'))
         self.plan_history = deepcopy(data.get('plan_history', []))[-32:]
         self.planning_state = deepcopy(data.get('planning_state', {'last_step': None, 'last_request_failed': False}))
+        self.resume_target = deepcopy(data.get('resume_target'))
         self.model_planning_enabled = False
         self.recovery = None
         self.completion_evidence = None  # Independent evaluator, not model input/knowledge.
@@ -44,6 +45,12 @@ class PlanManager:
     def finish_plan(self, status, reason, observation=None, evidence=None):
         if not self.plan:
             return
+        if reason == 'scene_changed_requires_replan' and self.plan.get('target_ref'):
+            # Remember the interrupted destination so the next plan can resume it.
+            self.resume_target = {
+                'target_ref': self.plan.get('target_ref'), 'subgoal': self.plan.get('subgoal'),
+                'scene': (self.plan.get('baseline') or {}).get('scene'), 'reason': reason,
+            }
         game = project(observation) if observation is not None else {}
         self.plan_history.append({**take(self.plan, ('plan_id', 'subgoal', 'intent', 'reasoning', 'target_ref',
                                                     'target', 'success', 'policy', 'resource_policy')),
@@ -188,6 +195,7 @@ class PlanManager:
                 'memory': self.memory.context(game), 'targets': targets,
                 'frontier': sorted(frontier),
                 'failed_target_refs': failed_target_refs, 'target_failures': target_failures,
+                'resume_target': deepcopy(self.resume_target),
                 'recovery': deepcopy(self.recovery), 'model_planning_enabled': self.model_planning_enabled,
                 'plan_suspended': False, 'visited_map_ids': [int(k) for k in self.memory.maps],
                 'recorded_action_count': self.steps, 'migration': self.migration,
@@ -198,4 +206,5 @@ class PlanManager:
     def snapshot(self):
         return {'manager': 'observed_v1', 'experience': self.memory.snapshot(),
                 'plan': deepcopy(self.plan), 'plan_history': deepcopy(self.plan_history),
-                'planning_state': deepcopy(self.planning_state)}
+                'planning_state': deepcopy(self.planning_state),
+                'resume_target': deepcopy(self.resume_target)}

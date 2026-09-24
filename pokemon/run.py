@@ -529,7 +529,6 @@ def run(
                 and scene in KNOWN_SCENES
                 and plan_scene in KNOWN_SCENES
                 and plan_scene != scene
-                and (campaign.plan or {}).get("status") != "suspended"
             ):
                 # The active plan was authored for another scene; ask the brain
                 # for a scene-appropriate plan before System One acts.

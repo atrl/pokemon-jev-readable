@@ -46,6 +46,13 @@ no stronger predicate applies: it completes on any observation change and ends t
 immediately.
 For an unknown portal, map_changed is a possible transition test; target_reached tests only approach.
 state_changed is a weak UI/observation predicate, not story progress. None of these proves a win.
+policy is the rule set System One executes. Write it as concrete, ordered instructions for the
+CURRENT scene, referring to the exact supplied fields (game.screen_text rows, game.battle.menu,
+selected_command, selected_move_slot, awaiting_input, party moves and PP, game.local_map). If a
+menu or prompt is visible, describe the navigation: which option to reach, how the cursor moves,
+what to do when an option cannot be used, and when to stop. Name no option that is not visible.
+A battle policy names no best move; it says how to read the menu and when to confirm or back out.
+If resume_target is set and still makes sense, prefer resuming it after the current scene ends.
 Optional resource_policy fields: wild_battle=fight|run|catch, catch_species=observed species or null,
 heal_hp_ratio=0..1, max_party_size=1..6. Missing fields have NO strategic defaults. These express
 YOUR preferences to System One; the runtime does not auto-flee or auto-heal if a preference fails.

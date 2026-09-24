@@ -70,6 +70,7 @@ def build_situation(observation, campaign, progress):
         'frontier': deepcopy(campaign.get('frontier') or []),
         'failed_target_refs': deepcopy(campaign.get('failed_target_refs') or []),
         'target_failures': deepcopy(campaign.get('target_failures') or []),
+        'resume_target': deepcopy(campaign.get('resume_target')),
         'baseline': {**baseline({**game, 'progress': progress}), 'scene': game['scene']['mode'],
                      'observation_id': game['observation_id']},
         'milestones': deepcopy(game.get('milestones') or {}),
