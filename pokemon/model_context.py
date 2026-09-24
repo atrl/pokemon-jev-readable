@@ -87,9 +87,28 @@ def build_situation(observation, campaign, progress):
         'navigation_geometry': deepcopy(campaign.get('navigation')),
         'observed_action_definitions': dict(BUTTONS),
         'scene_guidance': _scene_guidance(game),
+        'battle_ui': _battle_ui(game.get('battle') or {}, (game.get('screen_text') or {}).get('rows')),
     }
     result['situation_id'] = digest(result)
     return result
+
+
+def _battle_ui(battle, rows):
+    """Factual battle UI description from the menu state and visible text."""
+    text = " ".join(str(row) for row in (rows or []))
+    if "Choose a POK" in text or "choose a POK" in text:
+        return ("A party-selection prompt is open: A confirms the highlighted party member and "
+                "up/down changes the highlight. This is not the command menu; do not try RUN.")
+    menu = battle.get('menu')
+    if menu == 'command':
+        return "A battle command menu is open (FIGHT / PKMN / ITEM / RUN)."
+    if menu == 'move':
+        return "A battle move list is open."
+    if battle.get('phase') == 'text_before_combatants_ready':
+        return "Battle intro text: A advances it."
+    if menu == 'text_or_animation':
+        return "Battle text/animation: A advances completed text; waiting does not."
+    return None
 
 
 def _battle_focus(battle):
@@ -121,11 +140,20 @@ def build_request(observation, goal, history):
     navigation = campaign.get('navigation') or {}
     policy = plan.get('policy')
     if battle_active:
-        note = _battle_focus(battle)
+        rows = (game.get('screen_text') or {}).get('rows')
+        note = _battle_ui(battle, rows) or _battle_focus(battle)
         current_focus = (f"{plan['intent']} " if plan.get('intent') else "")
         current_focus += (f" 策略：{policy} " if policy else "") + note
         menu = battle.get('menu')
-        if menu == 'command':
+        text = " ".join(str(row) for row in (rows or []))
+        if "Choose a POK" in text or "choose a POK" in text:
+            criteria['a'] = (
+                "Press A to confirm the highlighted party member. CURRENT: a party-selection prompt is open; "
+                "up/down changes the highlight. This is not the command menu; RUN is not available.")
+            criteria['up'] += " CURRENT: moves the party highlight up."
+            criteria['down'] += " CURRENT: moves the party highlight down."
+            criteria['b'] += " CURRENT: the party-selection prompt does not accept RUN; confirm a member with A."
+        elif menu == 'command':
             criteria['a'] += " CURRENT: A selects the highlighted battle command (FIGHT / PKMN / ITEM / RUN)."
             criteria['b'] += " CURRENT: B leaves the battle command menu where the game allows it."
         elif menu == 'move':
