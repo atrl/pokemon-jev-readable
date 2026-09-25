@@ -51,6 +51,14 @@ class JevUnavailable(RuntimeError):
     """Temporary service/network failure; no physical action was authorized."""
 
 
+class JevBlocked(RuntimeError):
+    """Non-retryable account condition (auth or billing); no action was authorized."""
+
+    def __init__(self, status):
+        super().__init__(f"Jev HTTP {status}; no action executed")
+        self.http_status = status
+
+
 def validate_response(response: dict) -> dict:
     if not isinstance(response, dict) or not isinstance(response.get("answers"), dict):
         raise ValueError("Jev returned an invalid response; nothing will execute")
@@ -166,6 +174,8 @@ def choose(
                 continue
             if status in TRANSIENT_HTTP_STATUSES:
                 raise JevUnavailable(f"Jev HTTP {status}; no action executed") from None
+            if status in (401, 402, 403):
+                raise JevBlocked(status) from None
             raise RuntimeError(f"Jev HTTP {status}; no action executed") from None
         except KeyboardInterrupt:
             emit("jev_error", attempt=attempt, error="interrupted", phase="request")

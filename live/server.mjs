@@ -20,6 +20,8 @@ const TERMINAL = new Set([
   "planner_budget_reached",
   "planner_unavailable",
   "blocked_missing_key",
+  "blocked_quota",
+  "blocked_auth",
   "blocked_missing_planner_key",
   "blocked_connection",
 ]);

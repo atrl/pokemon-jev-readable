@@ -33,6 +33,8 @@ export const statusNames = {
   planner_budget_reached: "规划调用达到上限 · 已存档暂停",
   planner_unavailable: "高层规划暂不可用 · 已存档暂停",
   holding: "过场/脚本中 · 未调用模型",
+  blocked_quota: "JEV 额度/计费受阻 · 已暂停",
+  blocked_auth: "JEV 授权失败 · 已暂停",
   blocked_missing_key: "缺少 Jev Key",
   blocked_missing_planner_key: "缺少规划 Key",
   blocked_connection: "游戏连接不可用",

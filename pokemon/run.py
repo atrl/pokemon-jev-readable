@@ -20,7 +20,7 @@ import time
 from emulator import Emulator
 from paths import default_rom
 from memory import Reader, load_profile
-from jev import choose, redact_secrets, DEFAULT_GAME_GOAL, JevUnavailable
+from jev import choose, redact_secrets, DEFAULT_GAME_GOAL, JevUnavailable, JevBlocked
 from progress import ProgressTracker
 from plan_manager import PlanManager
 from perception import project
@@ -733,6 +733,10 @@ def run(
         pass  # A specific non-success status has already been recorded.
     except KeyboardInterrupt:
         report["status"] = "interrupted"
+    except JevBlocked as exc:
+        status = "blocked_quota" if exc.http_status == 402 else "blocked_auth"
+        report.update(status=status, reason=f"JEV HTTP {exc.http_status}; no action executed")
+        emit("jev_error", error=status, phase="billing", http_status=exc.http_status)
     except Exception as exc:
         if report["status"] != "blocked_missing_key":
             # Arbitrary exception text can contain request credentials or bodies.
