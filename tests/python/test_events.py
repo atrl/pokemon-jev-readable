@@ -418,7 +418,7 @@ class EventTests(unittest.TestCase):
 
     def test_permanent_failure_and_interrupted_attempts_finish_without_fallback(self):
         permanent = urllib.error.HTTPError("https://example.invalid", 401, "unauthorized", {}, None)
-        for error, expected in [(permanent, "failed"), (KeyboardInterrupt(), "interrupted")]:
+        for error, expected in [(permanent, "blocked_auth"), (KeyboardInterrupt(), "interrupted")]:
             with self.subTest(expected=expected), tempfile.TemporaryDirectory() as directory:
                 path = Path(directory) / "run"
                 world = Mock()
@@ -432,11 +432,7 @@ class EventTests(unittest.TestCase):
                     patch("urllib.request.urlopen", side_effect=error),
                     patch("jev.time.sleep"),
                 ):
-                    if expected == "failed":
-                        with self.assertRaises(RuntimeError):
-                            run(Path("TEST-DOUBLE.gb"), path, goal="Explore", steps=1)
-                    else:
-                        run(Path("TEST-DOUBLE.gb"), path, goal="Explore", steps=1)
+                    run(Path("TEST-DOUBLE.gb"), path, goal="Explore", steps=1)
                 self.assertEqual(events(path)[-1]["status"], expected)
                 self.assertNotIn(TEST_KEY, (path / "events.jsonl").read_text())
                 world.press.assert_not_called()
