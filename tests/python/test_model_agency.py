@@ -379,6 +379,8 @@ class RuntimeTests(unittest.TestCase):
             report=run(Path('OFFLINE.gb'),Path(tmp)/'run',goal='g',steps=2,planner_mode='deepseek')
         self.assertEqual(report['plans'],1)
         self.assertEqual(report['executed_actions'],2)
+        self.assertEqual(report['jev_calls'],0)
+        self.assertEqual(report['plan_step_actions'],2)
         choose.assert_not_called()
 
     def test_unusable_planner_reply_does_not_pause_the_run(self):

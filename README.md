@@ -29,7 +29,7 @@ tests/                     统一测试入口
 docs/                      架构、变更决策和问题记录
 ```
 
-[当前架构](docs/ARCHITECTURE.md) · [架构变更记录](docs/DECISIONS.md) · [问题与解决方案](docs/TROUBLESHOOTING.md)
+[三组实验：Kev＋DS / DS-only / Recurrent PPO](docs/EXPERIMENTS.md) · [当前架构](docs/ARCHITECTURE.md) · [架构变更记录](docs/DECISIONS.md) · [问题与解决方案](docs/TROUBLESHOOTING.md)
 
 ## 安装与运行
 

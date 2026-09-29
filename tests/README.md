@@ -53,3 +53,7 @@ npm 包装器加载既有 `.env`，并优先使用 `.venv`/`POKEMON_PYTHON`。�
 `tests/python/test_model_agency.py` 检查观察权限、经验来源与真正的模型控制权，使用明确模拟数据/API，不是游戏成绩。
 
 `test:rom` 在脚本启动回归后还运行 `tests/integration/test_observed_memory.py`，对真实快照做过滤、隐藏字段反事实、记忆往返和两模型请求序列化；不调用模型。真正的双模型试跑仍需要显式 `--allow-model-calls` 和两把密钥。
+
+## 三组实验
+
+协议、预算、provider 和冻结 checkpoint 回归位于 `test_experiment*.py`。真实 ROM 和真实 PPO 更新/save/load/resume 的集成入口及依赖见 [实验验证](../docs/EXPERIMENTS.md#验证入口)。这些集成不调用付费模型；缺依赖/私有 suite 时明确跳过。
