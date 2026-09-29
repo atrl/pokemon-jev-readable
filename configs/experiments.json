@@ -1,0 +1,32 @@
+{
+  "protocol": "pokemon-three-arm-v1",
+  "environment": {
+    "held_frames": 8,
+    "settle_frames": 16,
+    "max_steps": 200,
+    "max_packet_bytes": 65536
+  },
+  "budget": {
+    "max_steps": 200,
+    "max_seconds": 300,
+    "max_requests": 60,
+    "max_tokens": 200000,
+    "max_same_state_requests": 6
+  },
+  "deepseek": {
+    "base_url": "https://api.deepseek.com",
+    "model": "deepseek-flash",
+    "api_key_env": "DEEPSEEK_API_KEY",
+    "timeout_seconds": 45,
+    "max_output_tokens": 1024,
+    "max_retries": 1
+  },
+  "kev": {
+    "base_url": "http://127.0.0.1:8009",
+    "model": "kev-latest",
+    "api_key_env": "KEV_API_KEY",
+    "timeout_seconds": 30,
+    "max_output_tokens": 256,
+    "max_retries": 1
+  }
+}

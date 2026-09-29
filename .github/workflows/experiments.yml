@@ -1,0 +1,39 @@
+name: Experiment environment and PPO checks
+on:
+  pull_request:
+    paths:
+      - 'pokemon/experiments/**'
+      - 'tests/**/test_experiment*.py'
+      - 'prompts/experiments/**'
+      - '.github/workflows/experiments.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  experiment-smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      SDL_VIDEODRIVER: dummy
+      SDL_AUDIODRIVER: dummy
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Install runtime and CPU learning dependencies
+        run: |
+          python3 -m venv /tmp/experiments-venv
+          /tmp/experiments-venv/bin/pip install 'torch>=2.3,<3' --index-url https://download.pytorch.org/whl/cpu
+          /tmp/experiments-venv/bin/pip install -r pokemon/requirements.txt -r pokemon/experiments/requirements-rl.txt
+      - name: Contracts and real ROM environment (no model requests)
+        run: |
+          /tmp/experiments-venv/bin/python -m unittest discover -s tests/python -p 'test_experiment*.py' -v
+          /tmp/experiments-venv/bin/python -m unittest discover -s tests/integration -p test_experiment_rom.py -v
+          /tmp/experiments-venv/bin/python tests/integration/test_rom.py
+          /tmp/experiments-venv/bin/python -m pokemon.experiments register --suite outputs/ci-suite/suite.json --id bedroom --family scripted-bedroom --split train --state pokemon/.work/bedroom.state --goal 'Explore the current room.' --success map_changed
+      - name: Actual PPO updates, save/load, frozen evaluation and resume
+        env:
+          POKEMON_EXPERIMENT_SUITE: outputs/ci-suite/suite.json
+        run: /tmp/experiments-venv/bin/python -m unittest discover -s tests/integration -p test_experiment_rl.py -v
+      - name: Preserve source hygiene
+        run: git diff --exit-code

@@ -327,7 +327,10 @@ def run(
 
     def record_decision(decision, step, screenshot_hash):
         """Publish the accepted choice before sending any input to the game."""
-        report["jev_calls"] += 1
+        if decision.get("source", "jev") == "jev":
+            report["jev_calls"] += 1
+        else:
+            report["plan_step_actions"] = report.get("plan_step_actions", 0) + 1
         button = decision["answer"]["choice"]
         # Keep legacy artifact indexing; streamed step numbers are 1-based.
         row = {"step": step - 1, "source": "jev", "screen_sha256": screenshot_hash, **decision}
